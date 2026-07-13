@@ -1,0 +1,2 @@
+Package responsável pela realização do fluxo direto da IA por grafos.
+Consome repository, guardrail e core somente.

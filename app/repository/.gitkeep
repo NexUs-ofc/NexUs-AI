@@ -1,0 +1,1 @@
+Package responsável por toda a comunicação com databases (PGSQL, MongoDB, Neo4J e Redis).

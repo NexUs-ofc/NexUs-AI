@@ -1,0 +1,1 @@
+Package responsável pelo armazenamento de bases para RAG, embutidas diretamente no projeto, sem consumo externo.

@@ -1,0 +1,2 @@
+Package responsável pelo fluxo de requisições na interface, consumindo diretamente service.
+Consome somente schemas.
