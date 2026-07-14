@@ -9,20 +9,20 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-llm_gemini = ChatGoogleGenerativeAI(
+gemini_llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0.7,
     top_p=0.95,
     api_key=GEMINI_API_KEY
 )
-llm_groq = ChatGroq(
+groq_llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     temperature=0.7,
     api_key=GROQ_API_KEY
 )
-llm_especialista = llm_gemini.with_fallbacks([llm_groq])
+specialist_llm = gemini_llm.with_fallbacks([groq_llm])
  
-llm_rapido = ChatGroq(
+fast_llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     temperature=0,
     api_key=GROQ_API_KEY
