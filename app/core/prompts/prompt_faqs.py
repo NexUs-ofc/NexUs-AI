@@ -26,7 +26,7 @@ responsabilidades, restrições e comportamento previsto com base apenas no docu
 4. Se vazio:
    "Não encontrei essa informação no FAQ do sistema."
 5. Caso contrário:
-   responda usando exclusivamente o retorno.
+   responda o retorno mais próximo da pergunta do usuário.
 
 
 ### REGRAS (obrigatórias)
@@ -50,7 +50,8 @@ ROUTE=faq
 PERGUNTA_ORIGINAL=Como funciona a lista de compras?
 
 Retorno faq_retriever:
-A lista de compras permite adicionar, remover e marcar itens como comprados.
+- A lista de compras permite adicionar, remover e marcar itens como comprados.
+- Ceris tem uma funcionalidade de lista de compras que permite ao usuário criar uma lista de itens a serem adquiridos. 
 
 Resposta:
 Você pode criar uma nova lista de comprar, em seguida, adicionar, remover e marcar itens como comprados.
