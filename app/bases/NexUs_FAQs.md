@@ -120,53 +120,50 @@ Não. Alterações somente ocorrem mediante solicitação ou autorização do us
 \#5. Privacidade e Segurança
 
 1. Meus dados estão protegidos?
-Sim. O sistema segue as diretrizes da LGPD.
+   Sim. O sistema segue as diretrizes da LGPD.
 2. Quem pode acessar meu estoque?
-Somente usuários autorizados da sua conta.
+   Somente usuários autorizados da sua conta.
 3. Minhas informações são compartilhadas com terceiros?
-Não, salvo quando autorizado pelo usuário ou exigido por lei.
+   Não, salvo quando autorizado pelo usuário ou exigido por lei.
 4. O aplicativo solicita minha senha durante uma conversa?
-Não. O assistente não solicita senhas nem códigos de autenticação.
+   Não. O assistente não solicita senhas nem códigos de autenticação.
 5. Posso excluir minha conta?
-Caso essa funcionalidade esteja disponível, ela poderá ser solicitada nas configurações da conta.
+   Caso essa funcionalidade esteja disponível, ela poderá ser solicitada nas configurações da conta.
 6. As informações da nota fiscal ficam armazenadas?
-Apenas as informações necessárias para funcionamento das funcionalidades do sistema.
+   Apenas as informações necessárias para funcionamento das funcionalidades do sistema.
 7. Posso controlar quais notificações recebo?
-Sim. As notificações podem ser configuradas nas preferências da conta.
+   Sim. As notificações podem ser configuradas nas preferências da conta.
 8. O Ceris acessa outros aplicativos do meu celular?
-Não diretamente, exceto quando houver autorização explícita para funcionalidades específicas, como fazer ligações para o número do NexUs, ou enviar emails tirando dúvidas para o NexUs.
+   Não diretamente, exceto quando houver autorização explícita para funcionalidades específicas, como fazer ligações para o número do NexUs, ou enviar emails tirando dúvidas para o NexUs.
 9. O Ceris realiza compras automaticamente?
-Não. Toda compra depende da ação do usuário.
+   Não. Toda compra depende da ação do usuário.
 10. Posso confiar nas informações fornecidas pela IA?
-As respostas são baseadas nas informações cadastradas no sistema e possuem caráter informativo, mas a IA pode cometer erros, ela é responsável por te auxiliar, não pela tomada de decisões.
+    As respostas são baseadas nas informações cadastradas no sistema e possuem caráter informativo, mas a IA pode cometer erros, ela é responsável por te auxiliar, não pela tomada de decisões.
 11. Qual é o email de suporte do NexUs?
+    O email de suporte do NexUs é nexus.inter2026@gmail.com
+12. Qual é o telefone de suporte do NexUs?
+    O telefone de suporte do NexUs é +55 11 98673-2740
 
-&#x20;   O email de suporte do NexUs é nexus.inter2026@gmail.com
-
-12\. Qual é o telefone de suporte do NexUs?
-
-&#x20;   Os telefone de suporte do NexUs é +55 11 98673-2740
 
 \#6. Problemas Comuns
 
 1. O código de barras não foi reconhecido. O que faço?
-Verifique a iluminação, a qualidade da câmera ou realize o cadastro manual.
+   Verifique a iluminação, a qualidade da câmera ou realize o cadastro manual.
 2. A nota fiscal não foi lida corretamente.
-Confirme se a imagem está legível e contém todas as informações necessárias, então faça a leitura novamente, e sempre confira se os dados estão corretos.
+   Confirme se a imagem está legível e contém todas as informações necessárias, então faça a leitura novamente, e sempre confira se os dados estão corretos.
 3. Não recebi notificações.
-Verifique se as notificações estão habilitadas nas configurações do aplicativo e do dispositivo.
+   Verifique se as notificações estão habilitadas nas configurações do aplicativo e do dispositivo.
 4. Meu estoque está incorreto.
-Revise os produtos cadastrados e atualize as quantidades quando necessário.
+   Revise os produtos cadastrados e atualize as quantidades quando necessário.
 5. Não consigo fazer login.
-Confira seu e-mail, senha e conexão com a internet. Caso necessário, utilize a recuperação de senha.
+   Confira seu e-mail, senha e conexão com a internet. Caso necessário, utilize a recuperação de senha.
 6. As receitas sugeridas não utilizam todos os meus produtos.
-As sugestões priorizam os ingredientes mais adequados disponíveis no momento.
+   As sugestões priorizam os ingredientes mais adequados disponíveis no momento.
 7. O aplicativo está lento.
-Verifique sua conexão com a internet e mantenha o aplicativo atualizado.
+   Verifique sua conexão com a internet e mantenha o aplicativo atualizado.
 8. Um produto apareceu duplicado.
-Remova um dos registros ou edite suas informações para manter o estoque organizado.
+   Remova um dos registros ou edite suas informações para manter o estoque organizado.
 9. Não encontrei meu produto na pesquisa.
-Cadastre-o manualmente ou verifique se ele já está registrado com outro nome.
+   Cadastre-o manualmente ou verifique se ele já está registrado com outro nome.
 10. A IA respondeu algo diferente do esperado.
-Reformule sua pergunta com mais detalhes ou forneça informações adicionais para que o assistente compreenda melhor sua solicitação.
-
+    Reformule sua pergunta com mais detalhes ou forneça informações adicionais para que o assistente compreenda melhor sua solicitação.
