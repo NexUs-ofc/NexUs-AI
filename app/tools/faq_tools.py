@@ -47,5 +47,3 @@ def faq_retriever(question: str) -> str:
             respostas_formatadas.append(f"- {texto_limpo}")
 
     return "\n".join(respostas_formatadas)
-
-print(faq_retriever.invoke({"question": "Qual é o email de suporte do NexUs?"}))
