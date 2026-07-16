@@ -1,0 +1,238 @@
+[
+  {
+    "pergunta": "Como faço meu cadastro no Ceris?",
+    "resposta": "Basta informar os dados solicitados na tela de cadastro e criar uma senha. Após isso, sua conta estará pronta para uso."
+  },
+  {
+    "pergunta": "Esqueci minha senha. Como recuperá-la?",
+    "resposta": "Na tela de login, selecione a opção \"Esqueci minha senha\" e siga as instruções para redefini-la."
+  },
+  {
+    "pergunta": "Posso alterar minhas informações pessoais?",
+    "resposta": "Sim. Acesse seu perfil e edite os dados desejados."
+  },
+  {
+    "pergunta": "Posso alterar minha senha?",
+    "resposta": "Sim. Nas configurações da conta existe a opção de alteração de senha."
+  },
+  {
+    "pergunta": "Posso utilizar minha conta em mais de um dispositivo?",
+    "resposta": "Sim, desde que realize o login utilizando suas credenciais."
+  },
+  {
+    "pergunta": "Como são divididos os perfils?",
+    "resposta": "Cada perfil representa uma casa em nosso sistema, os dados não são de um usuário específico e sim de sua casa."
+  },
+  {
+    "pergunta": "Como adiciono um produto ao estoque?",
+    "resposta": "Você pode cadastrar manualmente, utilizar o leitor de código de barras, pedir para o chat especialista realizar o cadastro para você ou ir na tela e tirar uma foto da nota fiscal de suas compras (se a adição for por que você realizou uma nova compra)."
+  },
+  {
+    "pergunta": "Posso editar um produto cadastrado?",
+    "resposta": "Sim. Basta acessar o produto e selecionar a opção de edição."
+  },
+  {
+    "pergunta": "Como removo um produto?",
+    "resposta": "Acesse o produto desejado e escolha a opção \"Remover\"."
+  },
+  {
+    "pergunta": "Posso controlar a quantidade dos produtos?",
+    "resposta": "Sim. O sistema permite atualizar a quantidade disponível de cada item."
+  },
+  {
+    "pergunta": "Como informar que utilizei um produto?",
+    "resposta": "Você pode reduzir sua quantidade ou marcá-lo como consumido."
+  },
+  {
+    "pergunta": "O aplicativo atualiza meu estoque automaticamente?",
+    "resposta": "Não. O estoque é atualizado conforme as ações realizadas pelo usuário ou autorizadas por ele."
+  },
+  {
+    "pergunta": "Como visualizar produtos próximos do vencimento?",
+    "resposta": "Na área de estoque existe um filtro para visualizar produtos com validade próxima."
+  },
+  {
+    "pergunta": "Posso pesquisar um produto específico?",
+    "resposta": "Sim. Utilize a barra de pesquisa disponível no estoque."
+  },
+  {
+    "pergunta": "Posso cadastrar produtos sem código de barras?",
+    "resposta": "Sim. O cadastro manual está disponível para qualquer produto."
+  },
+  {
+    "pergunta": "Posso cadastrar produtos utilizando uma nota fiscal?",
+    "resposta": "Sim. O Ceris pode utilizar as informações da nota fiscal para facilitar o cadastro automático dos produtos."
+  },
+  {
+    "pergunta": "Como é feito o cadastro da data de validade?",
+    "resposta": "O usuário deve informar a data de validade de seus produtos manualmente, e selecionar se os outros carregam a mesma data."
+  },
+  {
+    "pergunta": "Como criar uma lista de compras?",
+    "resposta": "Acesse a área de listas e selecione \"Nova Lista\"."
+  },
+  {
+    "pergunta": "Como adiciono um item?",
+    "resposta": "Selecione \"Adicionar Item\" e informe o produto desejado."
+  },
+  {
+    "pergunta": "Posso remover itens da lista?",
+    "resposta": "Sim. Os itens podem ser removidos a qualquer momento."
+  },
+  {
+    "pergunta": "Posso marcar um item como comprado?",
+    "resposta": "Sim. Basta selecionar o item e marcar como concluído."
+  },
+  {
+    "pergunta": "O estoque pode sugerir itens para compra?",
+    "resposta": "Sim. Produtos com quantidade baixa podem ser sugeridos."
+  },
+  {
+    "pergunta": "Posso criar várias listas?",
+    "resposta": "Sim. Não há limite para criação de listas."
+  },
+  {
+    "pergunta": "Posso editar uma lista existente?",
+    "resposta": "Sim. É possível adicionar, remover ou alterar itens."
+  },
+  {
+    "pergunta": "Posso utilizar uma lista em um evento?",
+    "resposta": "Sim. As listas podem ser utilizadas para auxiliar no planejamento de eventos."
+  },
+  {
+    "pergunta": "Posso compartilhar minha lista?",
+    "resposta": "Você pode exporta-la como texto, e enviar para quem você quiser."
+  },
+  {
+    "pergunta": "A lista é atualizada automaticamente após uma compra?",
+    "resposta": "Ela poderá ser atualizada conforme confirmação do usuário."
+  },
+  {
+    "pergunta": "Como funciona o leitor de código de barras?",
+    "resposta": "Ele identifica o código do produto para facilitar seu cadastro."
+  },
+  {
+    "pergunta": "Como funciona a leitura de nota fiscal?",
+    "resposta": "O sistema identifica os produtos presentes na nota fiscal e auxilia no cadastro do estoque."
+  },
+  {
+    "pergunta": "Como funcionam as notificações de validade?",
+    "resposta": "O Ceris compara a data cadastrada com a data atual e envia lembretes antes do vencimento."
+  },
+  {
+    "pergunta": "Como funcionam os alertas de estoque baixo?",
+    "resposta": "Quando um produto atinge uma quantidade reduzida, o sistema poderá emitir uma notificação, caso o produto seja marcado como importante."
+  },
+  {
+    "pergunta": "Como são sugeridas receitas?",
+    "resposta": "As sugestões utilizam os produtos cadastrados no estoque."
+  },
+  {
+    "pergunta": "Como funcionam os eventos?",
+    "resposta": "O usuário informa os dados do evento e o sistema auxilia no planejamento dos produtos necessários."
+  },
+  {
+    "pergunta": "Como o sistema evita desperdícios?",
+    "resposta": "Priorizando produtos próximos do vencimento nas sugestões de receitas."
+  },
+  {
+    "pergunta": "Posso pedir para a IA organizar meu estoque?",
+    "resposta": "Sim. A IA pode auxiliar na organização das informações do estoque conforme autorização do usuário."
+  },
+  {
+    "pergunta": "Posso conversar normalmente com a IA?",
+    "resposta": "Sim. O assistente compreende linguagem natural para responder dúvidas e auxiliar na utilização do sistema."
+  },
+  {
+    "pergunta": "A IA altera meus dados sozinha?",
+    "resposta": "Não. Alterações somente ocorrem mediante solicitação ou autorização do usuário."
+  },
+  {
+    "pergunta": "Meus dados estão protegidos?",
+    "resposta": "Sim. O sistema segue as diretrizes da LGPD."
+  },
+  {
+    "pergunta": "Quem pode acessar meu estoque?",
+    "resposta": "Somente usuários autorizados da sua conta."
+  },
+  {
+    "pergunta": "Minhas informações são compartilhadas com terceiros?",
+    "resposta": "Não, salvo quando autorizado pelo usuário ou exigido por lei."
+  },
+  {
+    "pergunta": "O aplicativo solicita minha senha durante uma conversa?",
+    "resposta": "Não. O assistente não solicita senhas nem códigos de autenticação."
+  },
+  {
+    "pergunta": "Posso excluir minha conta?",
+    "resposta": "Caso essa funcionalidade esteja disponível, ela poderá ser solicitada nas configurações da conta."
+  },
+  {
+    "pergunta": "As informações da nota fiscal ficam armazenadas?",
+    "resposta": "Apenas as informações necessárias para funcionamento das funcionalidades do sistema."
+  },
+  {
+    "pergunta": "Posso controlar quais notificações recebo?",
+    "resposta": "Sim. As notificações podem ser configuradas nas preferências da conta."
+  },
+  {
+    "pergunta": "O Ceris acessa outros aplicativos do meu celular?",
+    "resposta": "Não diretamente, exceto quando houver autorização explícita para funcionalidades específicas, como fazer ligações para o número do NexUs, ou enviar emails tirando dúvidas para o NexUs."
+  },
+  {
+    "pergunta": "O Ceris realiza compras automaticamente?",
+    "resposta": "Não. Toda compra depende da ação do usuário."
+  },
+  {
+    "pergunta": "Posso confiar nas informações fornecidas pela IA?",
+    "resposta": "As respostas são baseadas nas informações cadastradas no sistema e possuem caráter informativo, mas a IA pode cometer erros, ela é responsável por te auxiliar, não pela tomada de decisões."
+  },
+  {
+    "pergunta": "Qual é o email de suporte?",
+    "resposta": "O email de suporte do NexUs é nexus.inter2026@gmail.com"
+  },
+  {
+    "pergunta": "Qual é o telefone de suporte?",
+    "resposta": "O telefone de suporte do NexUs é +55 11 98673-2740"
+  },
+  {
+    "pergunta": "O código de barras não foi reconhecido. O que faço?",
+    "resposta": "Verifique a iluminação, a qualidade da câmera ou realize o cadastro manual."
+  },
+  {
+    "pergunta": "A nota fiscal não foi lida corretamente.",
+    "resposta": "Confirme se a imagem está legível e contém todas as informações necessárias, então faça a leitura novamente, e sempre confira se os dados estão corretos."
+  },
+  {
+    "pergunta": "Não recebi notificações.",
+    "resposta": "Verifique se as notificações estão habilitadas nas configurações do aplicativo e do dispositivo."
+  },
+  {
+    "pergunta": "Meu estoque está incorreto.",
+    "resposta": "Revise os produtos cadastrados e atualize as quantidades quando necessário."
+  },
+  {
+    "pergunta": "Não consigo fazer login.",
+    "resposta": "Confira seu e-mail, senha e conexão com a internet. Caso necessário, utilize a recuperação de senha."
+  },
+  {
+    "pergunta": "As receitas sugeridas não utilizam todos os meus produtos.",
+    "resposta": "As sugestões priorizam os ingredientes mais adequados disponíveis no momento."
+  },
+  {
+    "pergunta": "O aplicativo está lento.",
+    "resposta": "Verifique sua conexão com a internet e mantenha o aplicativo atualizado."
+  },
+  {
+    "pergunta": "Um produto apareceu duplicado.",
+    "resposta": "Remova um dos registros ou edite suas informações para manter o estoque organizado."
+  },
+  {
+    "pergunta": "Não encontrei meu produto na pesquisa.",
+    "resposta": "Cadastre-o manualmente ou verifique se ele já está registrado com outro nome."
+  },
+  {
+    "pergunta": "A IA respondeu algo diferente do esperado.",
+    "resposta": "Reformule sua pergunta com mais detalhes ou forneça informações adicionais para que o assistente compreenda melhor sua solicitação."
+  }
+]
