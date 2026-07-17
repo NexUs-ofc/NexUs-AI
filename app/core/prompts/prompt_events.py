@@ -36,7 +36,7 @@ EVENTS_PROMPT = f'''
     - Pergunte todos os dados necessários para usar uma ferramenta antes de seu uso
     - Ferramentas disponíveis:
         - create_event: Ferramenta para a criação de eventos;
-        - get_events: Ferramente utilizada para consultar os eventos, que pode receber filtros como intervalo de datas, tipo do evento, quantidade de participantes e receitas utilizadas em eventos;
+        - get_events: Ferramente utilizada para consultar os eventos, que pode receber filtros como intervalo de datas, tipo do evento, quantidade mínima de participantes e receitas utilizadas em eventos;
         - postpone_event: Ferramenta utilizada para adiar eventos;
         - recomend_recipe: Ferramenta utilizada para recomendar receitas com base no tipo do evento e quantidade de participantes;
         - add_recipe: Ferramenta utilizada para adicionar receitas a um evento;
