@@ -7,6 +7,6 @@ class State(TypedDict):
     rota: str
     resposta_agente: str
     resposta_final: str
-    guardrail_entrada: bool
-    guardrail_saida: bool
+    entrada_aprovada: bool
+    saida_aprovada: bool
     mapa_pii: dict

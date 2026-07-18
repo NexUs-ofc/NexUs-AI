@@ -14,10 +14,10 @@ def guardrail_entrada(state: State) -> State:
 
     resultado = checar_entrada(texto_anonimizado)
     if resultado["bloqueado"]:
-        state["guardrail_entrada"] = False
+        state["entrada_aprovada"] = False
         state["resposta_agente"] = resultado["mensagem"]
     else:
-        state["guardrail_entrada"] = True
+        state["entrada_aprovada"] = True
 
     return state
 
@@ -81,12 +81,12 @@ def guardrail_saida(state: State) -> State:
     mapa = state.get("mapa_pii", {})
     resultado = checar_saida(state["resposta_final"], mapa)
     state["resposta_final"] = resultado["conteudo"]
-    state["guardrail_saida"] = True
+    state["saida_aprovada"] = True
     return state
 
 
 def decidir_pos_guardrail_entrada(state: State) -> str:
-    if not state["guardrail_entrada"]:
+    if not state["entrada_aprovada"]:
         return "orquestrador"
     return "roteador"
 
@@ -96,7 +96,7 @@ def decidir_rota(state: State) -> str:
 
 
 def decidir_pos_guardrail_saida(state: State) -> str:
-    if not state["guardrail_saida"]:
+    if not state["saida_aprovada"]:
         return "orquestrador"
     return END
 
