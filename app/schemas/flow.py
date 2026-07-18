@@ -3,6 +3,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from .state import State
 from app.core.llms import fast_llm
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
+from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 
 
 def guardrail_entrada(state: State) -> State:
@@ -48,7 +49,20 @@ def agente_eventos(state: State) -> State:
 
 
 def orquestrador(state: State) -> State:
-    state["resposta_final"] = state.get("resposta_agente", "")
+    resposta_agente = state.get("resposta_agente", "")
+    rota = state.get("rota", "fallback")
+
+    mensagem_usuario = (
+        f"Rota: {rota}\n"
+        f"Resposta do agente: \"{resposta_agente}\""
+    )
+
+    resposta = fast_llm.invoke([
+        SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
+        HumanMessage(content=mensagem_usuario),
+    ])
+
+    state["resposta_final"] = resposta.content.strip()
     return state
 
 
