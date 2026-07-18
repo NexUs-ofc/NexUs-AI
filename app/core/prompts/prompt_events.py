@@ -38,11 +38,11 @@ EVENTS_PROMPT = f'''
         - create_event: Ferramenta para a criação de eventos;
         - get_events: Ferramente utilizada para consultar os eventos, que pode receber filtros como intervalo de datas, tipo do evento, quantidade mínima de participantes e receitas utilizadas em eventos;
         - postpone_event: Ferramenta utilizada para adiar eventos;
+        - update_description: Ferramenta utilizada para atualizar a descrição de um evento;
+        - cancel_event: Ferramenta utilizada para cancelar eventos;
         - recomend_recipe: Ferramenta utilizada para recomendar receitas com base no tipo do evento e quantidade de participantes;
         - add_recipe: Ferramenta utilizada para adicionar receitas a um evento;
         - remove_recipe: Ferramenta utilizada para remover receitas de um evento;
-        - update_description: Ferramenta utilizada para atualizar a descrição de um evento;
-        - cancel_event: Ferramenta utilizada para cancelar eventos;
         - create_list: Ferramenta utilizada para criar listas de compras;
         - get_list: Ferramenta utilizada para consultar listas de compras, com filtros de intervalos de data;
         - update_list: Ferramenta utilizada para atualizar listas de compras;
