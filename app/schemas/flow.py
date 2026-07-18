@@ -4,10 +4,21 @@ from .state import State
 from app.core.llms import fast_llm
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
+from app.guardrails.guardrails import anonimizar, checar_entrada, checar_saida
 
 
 def guardrail_entrada(state: State) -> State:
-    state["guardrail_entrada"] = True
+    texto_anonimizado, mapa = anonimizar(state["mensagem"])
+    state["mensagem"] = texto_anonimizado
+    state["mapa_pii"] = mapa
+
+    resultado = checar_entrada(texto_anonimizado)
+    if resultado["bloqueado"]:
+        state["guardrail_entrada"] = False
+        state["resposta_agente"] = resultado["mensagem"]
+    else:
+        state["guardrail_entrada"] = True
+
     return state
 
 
@@ -67,6 +78,9 @@ def orquestrador(state: State) -> State:
 
 
 def guardrail_saida(state: State) -> State:
+    mapa = state.get("mapa_pii", {})
+    resultado = checar_saida(state["resposta_final"], mapa)
+    state["resposta_final"] = resultado["conteudo"]
     state["guardrail_saida"] = True
     return state
 

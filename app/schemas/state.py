@@ -9,3 +9,4 @@ class State(TypedDict):
     resposta_final: str
     guardrail_entrada: bool
     guardrail_saida: bool
+    mapa_pii: dict
