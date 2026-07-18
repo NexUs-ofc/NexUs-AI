@@ -241,7 +241,7 @@ EVENTS_SHOTS_CUT = (
     "Considere apenas as próximas mensagens."
 )
  
-FAQ_PROMPT_COMPLETO = (
+EVENTS_PROMPT_COMPLETO = (
     EVENTS_PROMPT      + "\n\n" +
     EVENTS_SHOT_OPEN  + "\n\n" +
     EVENTS_SHOT_1      + "\n\n" +
