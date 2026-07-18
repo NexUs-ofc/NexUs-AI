@@ -64,3 +64,52 @@ def get_events(
         recipes_titles=titulo_receitas
     )
 
+@tool("postpone_event")
+def postpone_event(
+    event: Event,
+    new_date: datetime
+) -> Event | None:
+    """
+    Adia um evento existente para uma nova data.
+
+    Parâmetros:
+        - event: Evento que será atualizado.
+        - new_date: Nova data do evento.
+    """
+
+    event.date = new_date
+
+    return events_repository.update_event(event)
+
+
+@tool("update_description")
+def update_description(
+    event: Event,
+    new_description: str
+) -> Event | None:
+    """
+    Atualiza a descrição de um evento existente.
+
+    Parâmetros:
+        - event: Evento que será atualizado.
+        - new_description: Nova descrição do evento.
+    """
+
+    event.description = new_description
+
+    return events_repository.update_event(event)
+
+
+@tool("cancel_event")
+def cancel_event(
+    event: Event
+) -> bool:
+    """
+    Remove definitivamente um evento do banco de dados.
+
+    Parâmetros:
+        - event: Evento que será cancelado.
+    """
+
+    return events_repository.delete_event(event.id)
+
