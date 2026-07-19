@@ -5,8 +5,8 @@ def main():
     historico = []
 
     while True:
-        mensagem = input("\nVocê: ")
-        if mensagem.lower() in ("sair", "exit", "quit"):
+        mensagem = input("\n >>: ")
+        if mensagem.lower() in ("sari", "exit", "quit"):
             break
 
         resultado = app.invoke({
@@ -15,9 +15,11 @@ def main():
             "rota": "",
             "resposta_agente": "",
             "resposta_final": "",
-            "guardrail_entrada": False,
-            "guardrail_saida": False,
+            "entrada_aprovada": False,
+            "saida_aprovada": False,
             "mapa_pii": {},
+            "household_account_id": 1,
+            "account_id": 1,
         })
 
         resposta = resultado["resposta_final"]
