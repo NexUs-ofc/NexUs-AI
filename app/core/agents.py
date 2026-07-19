@@ -10,8 +10,18 @@ from ..tools.mongodb_tools import (
     update_description,
     cancel_event
 )
+from ..tools.pg_tools import (
+    add_product,
+    remove_product,
+    get_stock,
+    get_missing_products,
+    get_expired_products,
+    get_category_info,
+    get_brand_info
+)
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
+from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
 
 load_dotenv('.env')
 
@@ -34,3 +44,16 @@ events_app = create_agent(
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
 
+stock_app = create_agent(
+    model=specialist_llm,
+    tools=[
+        add_product,
+        remove_product,
+        get_stock,
+        get_missing_products,
+        get_expired_products,
+        get_category_info,
+        get_brand_info
+    ],
+    system_prompt=ESTOQUE_PROMPT_COMPLETO
+)
