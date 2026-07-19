@@ -4,7 +4,10 @@ from .state import State
 from app.core.llms import fast_llm
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
+from app.core.prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from app.guardrails.guardrails import anonimizar, checar_entrada, checar_saida
+from app.tools.pg_tools import consultar_estoque, consultar_itens_proximos_vencimento
+from app.tools.mongo_recipe_tools import buscar_receitas_usuario
 
 
 def guardrail_entrada(state: State) -> State:
@@ -45,7 +48,30 @@ def agente_faq(state: State) -> State:
 
 
 def agente_receitas(state: State) -> State:
-    state["resposta_agente"] = ""
+    household_id = state.get("household_account_id", 0)
+    account_id = state.get("account_id", 0)
+
+    estoque = consultar_estoque.invoke({"household_account_id": household_id})
+    itens_vencendo = consultar_itens_proximos_vencimento.invoke({"household_account_id": household_id})
+    receitas_salvas = buscar_receitas_usuario.invoke({"account_id": account_id})
+
+    historico = state.get("historico", [])
+
+    mensagem_usuario = (
+        f"ROUTE=receitas\n"
+        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+        f"ESTOQUE=\n{estoque}\n"
+        f"ITENS_PROXIMOS_VENCIMENTO=\n{itens_vencendo}\n"
+        f"RECEITAS_SALVAS=\n{receitas_salvas}\n"
+        f"HISTORICO={historico}"
+    )
+
+    resposta = fast_llm.invoke([
+        SystemMessage(content=RECEITAS_PROMPT_COMPLETO),
+        HumanMessage(content=mensagem_usuario),
+    ])
+
+    state["resposta_agente"] = resposta.content.strip()
     return state
 
 

@@ -10,3 +10,5 @@ class State(TypedDict):
     entrada_aprovada: bool
     saida_aprovada: bool
     mapa_pii: dict
+    household_account_id: int
+    account_id: int
