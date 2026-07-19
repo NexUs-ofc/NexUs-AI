@@ -38,14 +38,13 @@ STOCK_PROMPT = f"""
         - get_missing_products: Retorna produtos em falta, para indicar para o usuário compras;
         - get_category_info: Retora relatório por categoria de produtos;
         - get_brand_info: Retorna relatório de quantidade de produtos por marca no estoque;
-        - get_shopping_product: Retorna relatório de quantidade de compras por produto;
 
     
     ### FLUXO (encenado, mas não exato)
     1. Leia PERGUNTA_ORIGINAL.
     2. Com base em sua interpretação sobre a pergunta, utilize as ferramentas adequadas para responde-la.
     3. Caso a pergunta peça atualização do estoque, liste o estoque, veja produtos próximos ao vencimento, os produtos em falta, e colete informações até atualizar tudo.
-    4. Caso a pergunta peça indicações de compra, utilize as 3 ferramentas de relatório para deduzir o que ele vai gostar de comprar com base em marcas de produto, categorias e compras anteriores;
+    4. Caso a pergunta peça indicações de compra, utilize as 2 ferramentas de relatório para deduzir o que ele vai gostar de comprar com base em marcas de produto e categorias;
     5. Retorne o JSON com base no resultado da ferramenta, ou com base na sua interpretação da pergunta original caso não seja necessário usar uma ferramenta.
     - No caso da atualização geral do estoque, se o usuário solicitar:
         1. Consulte imediatamente o estoque atual.
