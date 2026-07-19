@@ -17,7 +17,8 @@ from ..tools.pg_tools import (
     get_missing_products,
     get_expired_products,
     get_category_info,
-    get_brand_info
+    get_brand_info,
+    get_foods
 )
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
@@ -53,7 +54,8 @@ stock_app = create_agent(
         get_missing_products,
         get_expired_products,
         get_category_info,
-        get_brand_info
+        get_brand_info,
+        get_foods
     ],
     system_prompt=ESTOQUE_PROMPT_COMPLETO
 )

@@ -38,6 +38,7 @@ STOCK_PROMPT = f"""
         - get_missing_products: Retorna produtos em falta, para indicar para o usuário compras;
         - get_category_info: Retora relatório por categoria de produtos;
         - get_brand_info: Retorna relatório de quantidade de produtos por marca no estoque;
+        - get_foods: Retorna alimentos do sistema para o preenchimento do campo "food_id";
 
     
     ### FLUXO (encenado, mas não exato)

@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -94,7 +94,7 @@ class StockRepository:
                 .where(
                     Pantry_Item.household_account_id == household_account_id,
                     (
-                        (Pantry_Item.expiry_date <= func.current_date()) |
+                        (Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")) |
                         (Pantry_Item.is_expired.is_(True))
                     )
                 )

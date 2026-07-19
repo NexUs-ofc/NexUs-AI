@@ -4,8 +4,10 @@ from decimal import Decimal
 from langchain.tools import tool
 
 from ..repository.pgsql.config import SessionLocal
-from ..repository.entities.pgsql import Pantry_Item
+from ..repository.entities.pgsql.pantry_item import Pantry_Item
+from ..repository.entities.pgsql.food import Food
 from ..repository.pgsql.stock import StockRepository
+from ..repository.pgsql.food import FoodRepository
 
 
 @tool("add_product")
@@ -19,6 +21,13 @@ def add_product(
 ) -> Pantry_Item | None:
     """
     Adiciona um produto ao estoque do usuário.
+
+    Parâmetros:
+        - household_account_id: Id do usuário;
+        - food_id: Id do alimento a ser adicionado;
+        - quantity: Quantidade em decimal;
+        - expiry_date: data de expiração em datetime;
+        - minimum_quantity: Quantidade mínima em estoque antes de apitar falta do produto;
     """
 
     with SessionLocal() as session:
@@ -41,8 +50,11 @@ def remove_product(
     pantry_item_id: int
 ) -> bool:
     """
-    Remove um produto do estoque do usuário.
-    """
+        Remove um produto do estoque do usuário.
+
+        Parâmetros:
+            - pantry_item_id: Identificador do item no estoque.
+"""
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -60,7 +72,10 @@ def get_stock(
     household_account_id: int
 ) -> list[Pantry_Item]:
     """
-    Lista todos os produtos presentes no estoque do usuário.
+    Lista todo o estoque do usuário.
+
+    Parâmetros:
+        - household_account_id: Identificador da conta do usuário.
     """
 
     with SessionLocal() as session:
@@ -75,6 +90,9 @@ def get_expired_products(
 ) -> list[Pantry_Item]:
     """
     Lista produtos vencidos ou próximos do vencimento.
+
+    Parâmetros:
+        - household_account_id: Identificador da conta do usuário.
     """
 
     with SessionLocal() as session:
@@ -91,6 +109,9 @@ def get_missing_products(
 ):
     """
     Lista produtos cuja quantidade está abaixo do mínimo configurado.
+
+    Parâmetros:
+        - household_account_id: Identificador da conta do usuário.
     """
 
     with SessionLocal() as session:
@@ -106,7 +127,10 @@ def get_category_info(
     household_account_id: int
 ):
     """
-    Retorna um relatório contendo a quantidade de produtos por categoria.
+    Retorna um relatório de produtos agrupados por categoria.
+
+    Parâmetros:
+        - household_account_id: Identificador da conta do usuário.
     """
 
     with SessionLocal() as session:
@@ -123,6 +147,9 @@ def get_brand_info(
 ):
     """
     Retorna um relatório contendo a quantidade de produtos por marca.
+
+    Parâmetros:
+        - household_account_id: Identificador da conta do usuário.
     """
 
     with SessionLocal() as session:
@@ -131,3 +158,21 @@ def get_brand_info(
         return repository.get_brand_info(
             household_account_id
         )
+    
+
+@tool("get_foods")
+def get_foods() -> list[Food]:
+    """
+    Lista todos os alimentos cadastrados.
+
+    Utilize esta ferramenta antes de adicionar um produto ao estoque
+    quando for necessário descobrir qual é o food_id correspondente.
+
+    Parâmetros:
+        Nenhum.
+    """
+
+    with SessionLocal() as session:
+        repository = FoodRepository(session)
+
+        return repository.get_foods()
