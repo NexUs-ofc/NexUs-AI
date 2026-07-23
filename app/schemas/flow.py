@@ -7,7 +7,7 @@ from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from app.guardrails.guardrails import anonimizar, checar_entrada, checar_saida
 from app.tools.pg_tools import consultar_estoque, consultar_itens_proximos_vencimento
-from app.tools.mongo_recipe_tools import buscar_receitas_usuario
+from app.repository.mongodb.recipes import RecipesRepository
 
 
 def guardrail_entrada(state: State) -> State:
@@ -53,7 +53,12 @@ def agente_receitas(state: State) -> State:
 
     estoque = consultar_estoque.invoke({"household_account_id": household_id})
     itens_vencendo = consultar_itens_proximos_vencimento.invoke({"household_account_id": household_id})
-    receitas_salvas = buscar_receitas_usuario.invoke({"account_id": account_id})
+
+    receitas_salvas = RecipesRepository.get_user_recipes(account_id)
+    if receitas_salvas:
+        receitas_txt = "\n".join([f"- {r.title}" for r in receitas_salvas])
+    else:
+        receitas_txt = "Nenhuma receita salva para este usuário."
 
     historico = state.get("historico", [])
 
@@ -62,7 +67,7 @@ def agente_receitas(state: State) -> State:
         f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
         f"ESTOQUE=\n{estoque}\n"
         f"ITENS_PROXIMOS_VENCIMENTO=\n{itens_vencendo}\n"
-        f"RECEITAS_SALVAS=\n{receitas_salvas}\n"
+        f"RECEITAS_SALVAS=\n{receitas_txt}\n"
         f"HISTORICO={historico}"
     )
 
