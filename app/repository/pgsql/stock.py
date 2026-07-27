@@ -64,6 +64,7 @@ class StockRepository:
 
             return False
 
+
     def get_stock(self, household_account_id: int) -> list[Pantry_Item]:
         try:
             logger.info("Buscando estoque do usuário")
@@ -79,7 +80,6 @@ class StockRepository:
 
         except SQLAlchemyError:
             logger.exception("Erro ao listar estoque")
-
             return []
 
     def get_expired_products(
@@ -156,10 +156,8 @@ class StockRepository:
             stmt = (
                 select(
                     Category.category_name,
-                    func.sum(Pantry_Item.quantity).label(
-                        "total_products"
-                    )
-                )
+                    func.sum(Pantry_Item.quantity).label("total_products")
+                )   
                 .join(
                     Food,
                     Pantry_Item.food_id == Food.id
@@ -171,9 +169,7 @@ class StockRepository:
                 .where(
                     Pantry_Item.household_account_id == household_account_id
                 )
-                .group_by(
-                    Category.category_name
-                )
+                .group_by(Category.category_name)
             )
 
             return self.session.execute(stmt).all()
