@@ -2,12 +2,10 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import SystemMessage, HumanMessage
 from .state import State
 from app.core.llms import fast_llm
+inofrom app.core.agents import faq_app, recipe_app, stock_app, events_app
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
-from app.core.prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from app.guardrails.guardrails import anonimizar, checar_entrada, checar_saida
-from app.tools.pg_tools import consultar_estoque, consultar_itens_proximos_vencimento
-from app.repository.mongodb.recipes import RecipesRepository
 
 
 def guardrail_entrada(state: State) -> State:
@@ -42,51 +40,72 @@ def roteador(state: State) -> State:
     return state
 
 
+def _invocar_agente(agent, mensagem: str, historico: list) -> str:
+    """Invoca um agente ReAct e extrai a resposta final."""
+    messages = []
+    for msg in historico:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=msg["content"]))
+    messages.append(HumanMessage(content=mensagem))
+
+    resultado = agent.invoke({"messages": messages})
+
+    mensagens_saida = resultado.get("messages", [])
+    if mensagens_saida:
+        return mensagens_saida[-1].content
+    return ""
+
+
 def agente_faq(state: State) -> State:
-    state["resposta_agente"] = ""
+    historico = state.get("historico", [])
+    mensagem = (
+        f"ROUTE=faq\n"
+        f"PERGUNTA_ORIGINAL={state['mensagem']}"
+    )
+
+    state["resposta_agente"] = _invocar_agente(faq_app, mensagem, historico)
     return state
 
 
 def agente_receitas(state: State) -> State:
+    historico = state.get("historico", [])
     household_id = state.get("household_account_id", 0)
     account_id = state.get("account_id", 0)
 
-    estoque = consultar_estoque.invoke({"household_account_id": household_id})
-    itens_vencendo = consultar_itens_proximos_vencimento.invoke({"household_account_id": household_id})
-
-    receitas_salvas = RecipesRepository.get_user_recipes(account_id)
-    if receitas_salvas:
-        receitas_txt = "\n".join([f"- {r.title}" for r in receitas_salvas])
-    else:
-        receitas_txt = "Nenhuma receita salva para este usuário."
-
-    historico = state.get("historico", [])
-
-    mensagem_usuario = (
+    mensagem = (
         f"ROUTE=receitas\n"
         f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"ESTOQUE=\n{estoque}\n"
-        f"ITENS_PROXIMOS_VENCIMENTO=\n{itens_vencendo}\n"
-        f"RECEITAS_SALVAS=\n{receitas_txt}\n"
-        f"HISTORICO={historico}"
+        f"HOUSEHOLD_ACCOUNT_ID={household_id}\n"
+        f"ACCOUNT_ID={account_id}"
     )
 
-    resposta = fast_llm.invoke([
-        SystemMessage(content=RECEITAS_PROMPT_COMPLETO),
-        HumanMessage(content=mensagem_usuario),
-    ])
-
-    state["resposta_agente"] = resposta.content.strip()
+    state["resposta_agente"] = _invocar_agente(recipe_app, mensagem, historico)
     return state
 
 
 def agente_estoque(state: State) -> State:
-    state["resposta_agente"] = ""
+    historico = state.get("historico", [])
+    household_id = state.get("household_account_id", 0)
+
+    mensagem = (
+        f"ROUTE=stock\n"
+        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+        f"HOUSEHOLD_ACCOUNT_ID={household_id}"
+    )
+
+    state["resposta_agente"] = _invocar_agente(stock_app, mensagem, historico)
     return state
 
 
 def agente_eventos(state: State) -> State:
-    state["resposta_agente"] = ""
+    historico = state.get("historico", [])
+
+    mensagem = (
+        f"ROUTE=events\n"
+        f"PERGUNTA_ORIGINAL={state['mensagem']}"
+    )
+
+    state["resposta_agente"] = _invocar_agente(events_app, mensagem, historico)
     return state
 
 
@@ -170,4 +189,4 @@ graph.add_conditional_edges("guardrail_saida", decidir_pos_guardrail_saida, {
     END: END,
 })
 
-app = graph.compile()
+ceris_workflow = graph.compile()
