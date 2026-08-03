@@ -8,6 +8,8 @@ from app.core.prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from app.guardrails.guardrails import anonimizar, checar_entrada, checar_saida
 from app.tools.pg_tools import consultar_estoque, consultar_itens_proximos_vencimento
 from app.repository.mongodb.recipes import RecipesRepository
+from app.repository.mongodb.conversations import ConversationsRepository
+
 
 
 def guardrail_entrada(state: State) -> State:
@@ -132,6 +134,39 @@ def decidir_pos_guardrail_saida(state: State) -> str:
     return END
 
 
+def executar_chat(
+        mensagem: str,
+        session_id: str | None,
+        household_account_id: int,
+        account_id: int
+) -> dict:
+    """Função pública que encapsula a execução do workflow."""
+
+    if session_id:
+        historico = ConversationsRepository.get_historico(session_id)
+    else:
+        session_id = ConversationsRepository.create_session(account_id)
+        historico = []
+
+    resultado = ceris_workflow.invoke({
+        "mensagem": mensagem,
+        "historico": historico,
+        "rota": "",
+        "resposta_agente": "",
+        "resposta_final": "",
+        "entrada_aprovada": False,
+        "saida_aprovada": False,
+        "mapa_pii": {},
+        "household_account_id": household_account_id,
+        "account_id": account_id,
+    })
+
+    resposta = resultado["resposta_final"]
+
+    ConversationsRepository.append_messages(session_id, mensagem, resposta)
+
+    return {"resposta": resposta, "session_id": session_id}
+
 graph = StateGraph(State)
 
 graph.add_node("guardrail_entrada", guardrail_entrada)
@@ -171,3 +206,4 @@ graph.add_conditional_edges("guardrail_saida", decidir_pos_guardrail_saida, {
 })
 
 app = graph.compile()
+

@@ -1,29 +1,74 @@
+from bson import ObjectId
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 from dotenv import load_dotenv
+from datetime import datetime
 import os
+
+from ...controller.config import logging
 
 load_dotenv()
 
-class ConversationRepository:
-    client = MongoClient(os.getenv("MONGODB_URI"))
+logger = logging.getLogger(__name__)
+
+class ConversationsRepository:
+    uri = os.getenv("MONGODB_URI")
+
+    client = MongoClient(uri)
     db = client.get_database("db_ceris")
-    collection = db.get_collection("")
+    conversations_collection = db.get_collection("conversations")
 
     @staticmethod
-    def get_history(account_id: int, limite: int = 20) -> list[dict]:
-        doc = ConversationRepository.collection.find_one(
-            {"account_id": account_id}
-        )
-        if not doc:
+    def create_session(account_id: int) -> str:
+        try:
+            result = ConversationsRepository.conversations_collection.insert_one({
+                "account_id": account_id,
+                "historico": [],
+                "created_at": datetime.now(),
+                "updated_at": datetime.now(),
+            })
+
+            logger.info(f"Sessão criada: {result.inserted_id}")
+
+            return str(result.inserted_id)
+
+        except PyMongoError:
+            logger.exception("Erro ao criar sessão")
+            return None
+
+    @staticmethod
+    def get_historico(session_id: str) -> list[dict]:
+        try:
+            doc = ConversationsRepository.conversations_collection.find_one(
+                {"_id": ObjectId(session_id)}
+            )
+
+            if doc is None:
+                return []
+
+            return doc.get("historico", [])
+
+        except PyMongoError:
+            logger.exception("Erro ao buscar histórico")
             return []
-        return doc.get("messages", [])[-limite:]
-
-
 
     @staticmethod
-    def append_messages(account_id: int, messages: list[dict]):
-        ConversationRepository.collection.update_one(
-            {"account_id": account_id},
-            {"$push": {"messages": {"$each": messages}}},
-            upsert=True,  # se não existir, cria
-        )
+    def append_messages(session_id: str, user_msg: str, assistant_msg: str):
+        try:
+            ConversationsRepository.conversations_collection.update_one(
+                {"_id": ObjectId(session_id)},
+                {
+                    "$push": {
+                        "historico": {
+                            "$each": [
+                                {"role": "user", "content": user_msg},
+                                {"role": "assistant", "content": assistant_msg},
+                            ]
+                        }
+                    },
+                    "$set": {"updated_at": datetime.now()}
+                }
+            )
+
+        except PyMongoError:
+            logger.exception("Erro ao salvar mensagens")
