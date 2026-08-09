@@ -12,8 +12,10 @@ app = FastAPI()
 
 @app.get("/")
 def check():
+
     logger.info("Requisição em \"/\" feita com sucesso!")
+
     return {
-        "status": 200,
-        "msg": "Ceris rodando com sucesso!"
+        "status":200,
+        "msg":"Ceris rodando com sucesso!"
     }
