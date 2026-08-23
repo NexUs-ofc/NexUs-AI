@@ -1,11 +1,10 @@
-from datetime import datetime
-from decimal import Decimal
+from datetime import date
 
 from langchain.tools import tool
 
 from ..repository.pgsql.config import SessionLocal
-from ..repository.entities.pgsql.pantry_item import Pantry_Item
-from ..repository.entities.pgsql.food import Food
+from ..model.pgsql.pantry_item import Pantry_Item
+from ..model.pgsql.food import Food
 
 from ..repository.pgsql.stock import StockRepository
 from ..repository.pgsql.food import FoodRepository
@@ -13,35 +12,29 @@ from ..repository.pgsql.food import FoodRepository
 
 @tool("add_product")
 def add_product(
-    household_account_id: int,
+    profile_id: int,
     food_id: int,
-    quantity: Decimal,
-    expiry_date: datetime,
-    minimum_quantity: Decimal,
-    is_expired: bool = False,
+    quantity: int,
+    expiry_date: date,
 ) -> Pantry_Item | None:
     """
     Adiciona um produto ao estoque do usuário.
 
     Parâmetros:
-        - household_account_id: Id da conta do usuário.
+        - profile_id: Id do perfil do usuário.
         - food_id: Id do alimento.
         - quantity: Quantidade disponível.
         - expiry_date: Data de vencimento.
-        - minimum_quantity: Quantidade mínima antes de sinalizar falta.
-        - is_expired: Indica se o item já está vencido.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
         pantry_item = Pantry_Item(
-            household_account_id=household_account_id,
+            profile_id=profile_id,
             food_id=food_id,
             quantity=quantity,
             expiry_date=expiry_date,
-            minimum_quantity=minimum_quantity,
-            is_expired=is_expired,
         )
 
         return repository.save(pantry_item)
@@ -71,94 +64,94 @@ def remove_product(
 
 @tool("get_stock")
 def get_stock(
-    household_account_id: int,
+    profile_id: int,
 ) -> list[Pantry_Item]:
     """
     Lista todo o estoque do usuário.
 
     Parâmetros:
-        - household_account_id: Identificador da conta do usuário.
+        - profile_id: Identificador do perfil do usuário.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
-        return repository.get_stock(household_account_id)
+        return repository.get_stock(profile_id)
 
 
 @tool("get_expired_products")
 def get_expired_products(
-    household_account_id: int,
+    profile_id: int,
 ) -> list[Pantry_Item]:
     """
     Lista produtos vencidos ou próximos do vencimento.
 
     Parâmetros:
-        - household_account_id: Identificador da conta do usuário.
+        - profile_id: Identificador do perfil do usuário.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
         return repository.get_expired_products(
-            household_account_id
+            profile_id
         )
 
 
 @tool("get_missing_products")
 def get_missing_products(
-    household_account_id: int,
+    profile_id: int,
 ):
     """
     Lista produtos cuja quantidade está abaixo do mínimo configurado.
 
     Parâmetros:
-        - household_account_id: Identificador da conta do usuário.
+        - profile_id: Identificador do perfil do usuário.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
         return repository.get_missing_products(
-            household_account_id
+            profile_id
         )
 
 
 @tool("get_category_info")
 def get_category_info(
-    household_account_id: int,
+    profile_id: int,
 ):
     """
     Retorna um relatório de produtos agrupados por categoria.
 
     Parâmetros:
-        - household_account_id: Identificador da conta do usuário.
+        - profile_id: Identificador do perfil do usuário.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
         return repository.get_category_info(
-            household_account_id
+            profile_id
         )
 
 
 @tool("get_brand_info")
 def get_brand_info(
-    household_account_id: int,
+    profile_id: int,
 ):
     """
     Retorna um relatório de produtos agrupados por marca.
 
     Parâmetros:
-        - household_account_id: Identificador da conta do usuário.
+        - profile_id: Identificador do perfil do usuário.
     """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
 
         return repository.get_brand_info(
-            household_account_id
+            profile_id
         )
 
 

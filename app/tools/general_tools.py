@@ -1,9 +1,9 @@
 from langchain_core.tools import tool
-from ..core.agents import recipe_app
+
 
 @tool("recomend_recipe")
 def recomendar_receita(
-    description:str,
+    description: str,
 ) -> str:
     """
     Recomenda uma receita com agente de receitas com base na descrição fornecida.
@@ -15,6 +15,8 @@ def recomendar_receita(
         - Retorna a recomendação de receita em formato JSON estruturado, contendo título, ingredientes (com quantidade escalada para qtd_pessoas), instruções e campo "ingredientes_faltantes" com o que não tem no estoque.
     """
 
+    from ..core.agents import recipe_app
+
     request = f"""
         ROUTE=receitas
         CHAMADO_POR=events
@@ -22,8 +24,7 @@ def recomendar_receita(
     """
 
     response = recipe_app.invoke({
-        "messages": [{"role":"ai", "content":request}]
+        "messages": [{"role": "ai", "content": request}]
     })
 
     return response["messages"][-1].content
-
