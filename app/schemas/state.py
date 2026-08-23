@@ -12,3 +12,6 @@ class State(TypedDict):
     mapa_pii: dict
     household_account_id: int
     account_id: int
+    trace_id: str
+    input_tokens: int
+    output_tokens: int
