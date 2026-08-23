@@ -49,7 +49,10 @@ class RecipesRepository:
             doc = RecipesRepository.recipes_collection.find_one({"_id": recipe_id})
 
             if doc is None:
+                logger.info(f"Receita {recipe_id} não encontrada")
                 return None
+
+            logger.info(f"Receita {recipe_id} encontrada com sucesso")
 
             return Recipe.from_dict(doc)
 
@@ -68,15 +71,18 @@ class RecipesRepository:
             recipe_ids = [v["id_recipe"] for v in vinculos]
 
             if not recipe_ids:
+                logger.info("Nenhuma receita vinculada ao usuário")
                 return []
 
             docs = RecipesRepository.recipes_collection.find(
                 {"_id": {"$in": recipe_ids}}
             ).limit(limite)
 
-            logger.info("Receitas listadas com sucesso")
+            receitas = [Recipe.from_dict(doc) for doc in docs]
 
-            return [Recipe.from_dict(doc) for doc in docs]
+            logger.info(f"Receitas listadas com sucesso, {len(receitas)} receitas encontradas")
+
+            return receitas
 
         except PyMongoError:
             logger.exception("Erro ao buscar receitas do usuário")
