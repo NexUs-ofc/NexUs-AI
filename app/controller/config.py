@@ -1,6 +1,5 @@
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+from app.observability.logging_config import configure_logging
+
+configure_logging()
