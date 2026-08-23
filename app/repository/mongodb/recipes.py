@@ -1,22 +1,17 @@
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from dotenv import load_dotenv
 from datetime import datetime
-import os
 
-from ..entities.mongodb.recipe import Recipe
+from ...model.mongodb.recipe import Recipe
+from ...config import MONGODB_URI
 from ...controller.config import logging
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
 class RecipesRepository:
-    uri = os.getenv("MONGODB_URI")
-
-    client = MongoClient(uri)
+    client = MongoClient(MONGODB_URI)
     db = client.get_database("db_ceris")
     recipes_collection = db.get_collection("recipes")
     recipe_accounts_collection = db.get_collection("recipe_accounts")
@@ -41,6 +36,25 @@ class RecipesRepository:
 
         except PyMongoError:
             logger.exception("Erro ao inserir receita no MongoDB")
+            return None
+
+    @staticmethod
+    def get_recipe_by_id(recipe_id: str | ObjectId) -> Recipe | None:
+        try:
+            logger.info(f"Buscando receita {recipe_id}")
+
+            if isinstance(recipe_id, str):
+                recipe_id = ObjectId(recipe_id)
+
+            doc = RecipesRepository.recipes_collection.find_one({"_id": recipe_id})
+
+            if doc is None:
+                return None
+
+            return Recipe.from_dict(doc)
+
+        except PyMongoError:
+            logger.exception(f"Erro ao buscar receita {recipe_id}")
             return None
 
     @staticmethod

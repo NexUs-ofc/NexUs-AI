@@ -3,9 +3,10 @@ from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ..entities.pgsql.category import Category
-from ..entities.pgsql.food import Food
-from ..entities.pgsql.pantry_item import Pantry_Item
+from ...model.pgsql.category import Category
+from ...model.pgsql.food import Food
+from ...model.pgsql.pantry_item import Pantry_Item
+from ...model.pgsql.pantry_product_setting import Pantry_Product_Setting
 from ...controller.config import logging
 
 logger = logging.getLogger(__name__)
@@ -64,14 +65,14 @@ class StockRepository:
 
             return False
 
-    def get_stock(self, household_account_id: int) -> list[Pantry_Item]:
+    def get_stock(self, profile_id: int) -> list[Pantry_Item]:
         try:
             logger.info("Buscando estoque do usuário")
 
             stmt = (
                 select(Pantry_Item)
                 .where(
-                    Pantry_Item.household_account_id == household_account_id
+                    Pantry_Item.profile_id == profile_id
                 )
             )
 
@@ -84,7 +85,7 @@ class StockRepository:
 
     def get_expired_products(
         self,
-        household_account_id: int
+        profile_id: int
     ) -> list[Pantry_Item]:
         try:
             logger.info("Buscando produtos vencidos")
@@ -92,11 +93,8 @@ class StockRepository:
             stmt = (
                 select(Pantry_Item)
                 .where(
-                    Pantry_Item.household_account_id == household_account_id,
-                    (
-                        (Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")) |
-                        (Pantry_Item.is_expired.is_(True))
-                    )
+                    Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")
                 )
             )
 
@@ -109,7 +107,7 @@ class StockRepository:
 
     def get_missing_products(
         self,
-        household_account_id: int
+        profile_id: int
     ) -> list[Row]:
         try:
             logger.info("Buscando produtos em falta")
@@ -117,24 +115,24 @@ class StockRepository:
             stmt = (
                 select(
                     Pantry_Item.food_id,
-                    func.max(Pantry_Item.household_account_id).label(
-                        "household_account_id"
-                    ),
-                    func.sum(Pantry_Item.quantity).label(
-                        "quantity"
-                    )
+                    func.sum(Pantry_Item.quantity).label("quantity"),
+                    Pantry_Product_Setting.minimum_quantity,
+                )
+                .join(
+                    Pantry_Product_Setting,
+                    (Pantry_Product_Setting.food_id == Pantry_Item.food_id)
+                    & (Pantry_Product_Setting.profile_id == Pantry_Item.profile_id)
                 )
                 .where(
-                    Pantry_Item.household_account_id == household_account_id,
-                    Pantry_Item.is_expired.is_(False)
+                    Pantry_Item.profile_id == profile_id
                 )
                 .group_by(
                     Pantry_Item.food_id,
-                    Pantry_Item.minimum_quantity
+                    Pantry_Product_Setting.minimum_quantity
                 )
                 .having(
                     func.sum(Pantry_Item.quantity)
-                    < Pantry_Item.minimum_quantity
+                    < Pantry_Product_Setting.minimum_quantity
                 )
             )
 
@@ -147,7 +145,7 @@ class StockRepository:
 
     def get_category_info(
         self,
-        household_account_id: int
+        profile_id: int
     ) -> list[Row]:
         try:
             logger.info("Gerando relatório por categoria")
@@ -168,7 +166,7 @@ class StockRepository:
                     Food.category_id == Category.id
                 )
                 .where(
-                    Pantry_Item.household_account_id == household_account_id
+                    Pantry_Item.profile_id == profile_id
                 )
                 .group_by(
                     Category.category_name
@@ -184,7 +182,7 @@ class StockRepository:
 
     def get_brand_info(
         self,
-        household_account_id: int
+        profile_id: int
     ) -> list[Row]:
         try:
             logger.info("Gerando relatório por marca")
@@ -201,7 +199,7 @@ class StockRepository:
                     Pantry_Item.food_id == Food.id
                 )
                 .where(
-                    Pantry_Item.household_account_id == household_account_id
+                    Pantry_Item.profile_id == profile_id
                 )
                 .group_by(
                     Food.product_brand

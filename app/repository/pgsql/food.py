@@ -1,12 +1,14 @@
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from ..entities.pgsql.food import Food
+from ...model.pgsql.food import Food
 from ...controller.config import logging
 
 logger = logging.getLogger(__name__)
 
 class FoodRepository:
-    
+
+    def __init__(self, session):
+        self.session = session
 
     def get_foods(self) -> list[Food]:
 
