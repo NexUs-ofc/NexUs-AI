@@ -50,6 +50,18 @@ Mensagem: "Qual é o sentido da vida?"
 Resposta: fallback
 """
 
+ROTEADOR_SHOT_6 = """
+Histórico: []
+Mensagem: "Quem sou eu?"
+Resposta: fallback
+"""
+
+ROTEADOR_SHOT_7 = """
+Histórico: []
+Mensagem: "Qual é o meu nome / email / telefone cadastrado?"
+Resposta: fallback
+"""
+
 ROTEADOR_SHOTS_CUT = (
     "Fim dos exemplos. "
     "Considere apenas as próximas mensagens."
@@ -63,5 +75,7 @@ ROTEADOR_PROMPT_COMPLETO = (
     ROTEADOR_SHOT_3     + "\n\n" +
     ROTEADOR_SHOT_4     + "\n\n" +
     ROTEADOR_SHOT_5     + "\n\n" +
+    ROTEADOR_SHOT_6     + "\n\n" +
+    ROTEADOR_SHOT_7     + "\n\n" +
     ROTEADOR_SHOTS_CUT
 )

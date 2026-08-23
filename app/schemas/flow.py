@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from .state import State
 from app.core.llms import fast_llm
@@ -77,6 +77,10 @@ def _invocar_agente(
             messages.append(
                 HumanMessage(content=msg["content"])
             )
+        elif msg["role"] == "assistant":
+            messages.append(
+                AIMessage(content=msg["content"])
+            )
 
     messages.append(
         HumanMessage(content=mensagem)
@@ -129,7 +133,7 @@ def agente_receitas(state: State) -> State:
     mensagem = (
         f"ROUTE=receitas\n"
         f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"HOUSEHOLD_ACCOUNT_ID={household_id}\n"
+        f"PROFILE_ID={household_id}\n"
         f"ACCOUNT_ID={account_id}"
     )
 
@@ -155,7 +159,7 @@ def agente_estoque(state: State) -> State:
     mensagem = (
         f"ROUTE=stock\n"
         f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"HOUSEHOLD_ACCOUNT_ID={household_id}"
+        f"PROFILE_ID={household_id}"
     )
 
     state["resposta_agente"] = _invocar_agente(
@@ -185,7 +189,8 @@ def agente_eventos(state: State) -> State:
     mensagem = (
         f"ROUTE=events\n"
         f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"HOUSEHOLD_ACCOUNT_ID={household_id}\n"
+        f"HOUSEHOLD_ID={household_id}\n"
+        f"PROFILE_ID={household_id}\n"
         f"ACCOUNT_ID={account_id}"
     )
 

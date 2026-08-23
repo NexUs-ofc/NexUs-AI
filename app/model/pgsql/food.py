@@ -3,7 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .config import Base
 from decimal import Decimal
 
-UNIT_OF_MEASURE_VALUES = ("kg", "g", "l", "ml", "un")
+UNIT_OF_MEASURE_VALUES = ("kg", "g", "l", "ml", "unit")
 
 
 class Food(Base):

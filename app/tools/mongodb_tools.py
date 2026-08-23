@@ -1,3 +1,4 @@
+import json
 import re
 from langchain.tools import tool
 from datetime import datetime
@@ -73,7 +74,7 @@ def get_events(
     tipo: str = None,
     qtd_min: int = None,
     titulo_receitas: list[str] = None,
-) -> list[Event]:
+) -> str:
     """
     Busca eventos no banco de dados com base ou não nos seguintes filtros opcionais fornecidos:
         - household_id: Identificador da conta/casa dona dos eventos (obrigatório);
@@ -84,13 +85,25 @@ def get_events(
         - titulo_receitas: Receitas que o evento deve ter;
     """
 
-    return events_repository.get_events(
+    eventos = events_repository.get_events(
         household_id=household_id,
         start=inicio,
         end=fim,
         type=tipo,
         qtd_min=qtd_min,
         recipes_titles=titulo_receitas
+    )
+
+    if not eventos:
+        return "Nenhum evento encontrado com os filtros informados."
+
+    return json.dumps(
+        [
+            {**evento.to_dict(), "_id": str(evento.id)}
+            for evento in eventos
+        ],
+        ensure_ascii=False,
+        default=str,
     )
 
 

@@ -11,6 +11,12 @@ STOCK_PROMPT = f"""
     Você recebe o protocolo de encaminhamento do Roteador no formato:
     ROUTE=stock
     PERGUNTA_ORIGINAL=[Solicitações do usuário sobre o estoque]
+    PROFILE_ID=[identificador do usuário]
+
+    PROFILE_ID é o identificador do usuário logado, já disponível na entrada.
+    Você NUNCA deve perguntar ao usuário por esse identificador — use sempre o
+    valor recebido em PROFILE_ID como argumento "profile_id" em toda chamada
+    de ferramenta que exigir esse parâmetro.
 
 
     ### OBJETIVO
@@ -58,6 +64,7 @@ STOCK_PROMPT = f"""
 
 
     ### REGRAS
+    - Sempre use o valor de PROFILE_ID recebido na entrada como argumento "profile_id" ao chamar qualquer ferramenta que peça esse parâmetro. Nunca peça esse dado ao usuário.
     - Nunca invente dados sobre o estoque do usuário, sempre use as ferramentas para obte-los.
     - Responda APENAS com o JSON abaixo, sem markdown, sem texto extra.
     - Não tente alterar o estoque do usuário sem sua autorização.
@@ -86,6 +93,9 @@ STOCK_SHOT_1 = """
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL= Quero atualizar meu estoque.
+PROFILE_ID=7
+
+(Chamada de ferramenta: get_stock(profile_id=7))
 
 Resposta:
 {

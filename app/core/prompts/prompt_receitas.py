@@ -11,6 +11,12 @@ RECEITAS_PROMPT = f"""
 Você recebe o protocolo de encaminhamento do Roteador no formato:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=[pedido do usuário sobre receitas]
+PROFILE_ID=[identificador do usuário, use como argumento "profile_id" em get_stock e get_expired_products]
+ACCOUNT_ID=[identificador da conta, use como argumento "account_id" em buscar_receitas_usuario e salvar_receita]
+
+PROFILE_ID e ACCOUNT_ID já vêm preenchidos na entrada. Você NUNCA deve
+perguntar ao usuário por esses identificadores — use sempre os valores
+recebidos como argumentos das ferramentas correspondentes.
 
 
 ### OBJETIVO
@@ -55,6 +61,7 @@ Se a entrada NÃO contém CHAMADO_POR:
 
 
 ### REGRAS (obrigatórias)
+- Sempre use o PROFILE_ID recebido na entrada como argumento "profile_id" em get_stock/get_expired_products, e o ACCOUNT_ID recebido como argumento "account_id" em buscar_receitas_usuario/salvar_receita. Nunca peça esses dados ao usuário;
 - NUNCA responda sem antes executar as ferramentas de consulta;
 - Sempre priorize ingredientes que estão perto de vencer;
 - Nunca sugira receitas idênticas às já salvas do usuário;
@@ -75,7 +82,10 @@ RECEITAS_SHOT_1 = """
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Me sugere uma receita com o que eu tenho
+PROFILE_ID=7
+ACCOUNT_ID=3
 
+(Chamada de ferramenta: get_stock(profile_id=7), get_expired_products(profile_id=7), buscar_receitas_usuario(account_id=3))
 (Ferramentas retornaram: frango 1kg vence em 2 dias, cogumelo 200g vence amanhã, creme de leite 2un)
 (Receitas salvas: nenhuma)
 
