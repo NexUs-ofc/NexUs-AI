@@ -46,7 +46,10 @@ class ShoppingListsRepository:
             )
 
             if doc is None:
+                logger.info(f"Lista de compras {list_id} não encontrada")
                 return None
+
+            logger.info(f"Lista de compras {list_id} encontrada com sucesso")
 
             return ShoppingList.from_dict(doc)
 
