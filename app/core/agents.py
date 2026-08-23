@@ -1,15 +1,23 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain_classic.agents import AgentExecutor
+
 from .llms import fast_llm, specialist_llm
+
 from ..tools.faq_tools import faq_retriever
+
+from ..tools.mongo_recipe_tools import (
+    buscar_receitas_usuario,
+    salvar_receita,
+)
+
 from ..tools.mongodb_tools import (
     add_event,
     get_events,
     postpone_event,
     update_description,
-    cancel_event
+    cancel_event,
 )
+
 from ..tools.pg_tools import (
     add_product,
     remove_product,
@@ -18,32 +26,61 @@ from ..tools.pg_tools import (
     get_expired_products,
     get_category_info,
     get_brand_info,
-    get_foods
+    get_foods,
 )
+
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
+from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
 
-load_dotenv('.env')
+
+load_dotenv(".env")
+
 
 
 faq_app = create_agent(
     model=fast_llm,
-    tools=[faq_retriever],
+    tools=[
+        faq_retriever,
+    ],
     system_prompt=FAQ_PROMPT_COMPLETO,
 )
+
+
+
+recipe_app = create_agent(
+    model=specialist_llm,
+    tools=[
+        buscar_receitas_usuario,
+        salvar_receita,
+        get_stock,
+        get_expired_products,
+    ],
+    system_prompt=RECEITAS_PROMPT_COMPLETO,
+)
+
+
+# =========================
+# EVENTOS
+# =========================
 
 events_app = create_agent(
     model=specialist_llm,
     tools=[
-            add_event,
-            get_events,
-            postpone_event,
-            update_description,
-            cancel_event,
-        ],
+        add_event,
+        get_events,
+        postpone_event,
+        update_description,
+        cancel_event,
+    ],
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
+
+
+# =========================
+# ESTOQUE
+# =========================
 
 stock_app = create_agent(
     model=specialist_llm,
@@ -55,7 +92,7 @@ stock_app = create_agent(
         get_expired_products,
         get_category_info,
         get_brand_info,
-        get_foods
+        get_foods,
     ],
-    system_prompt=ESTOQUE_PROMPT_COMPLETO
+    system_prompt=ESTOQUE_PROMPT_COMPLETO,
 )

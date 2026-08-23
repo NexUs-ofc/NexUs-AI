@@ -6,6 +6,7 @@ from langchain.tools import tool
 from ..repository.pgsql.config import SessionLocal
 from ..repository.entities.pgsql.pantry_item import Pantry_Item
 from ..repository.entities.pgsql.food import Food
+
 from ..repository.pgsql.stock import StockRepository
 from ..repository.pgsql.food import FoodRepository
 
@@ -17,17 +18,18 @@ def add_product(
     quantity: Decimal,
     expiry_date: datetime,
     minimum_quantity: Decimal,
-    is_expired: bool = False
+    is_expired: bool = False,
 ) -> Pantry_Item | None:
     """
     Adiciona um produto ao estoque do usuário.
 
     Parâmetros:
-        - household_account_id: Id do usuário;
-        - food_id: Id do alimento a ser adicionado;
-        - quantity: Quantidade em decimal;
-        - expiry_date: data de expiração em datetime;
-        - minimum_quantity: Quantidade mínima em estoque antes de apitar falta do produto;
+        - household_account_id: Id da conta do usuário.
+        - food_id: Id do alimento.
+        - quantity: Quantidade disponível.
+        - expiry_date: Data de vencimento.
+        - minimum_quantity: Quantidade mínima antes de sinalizar falta.
+        - is_expired: Indica se o item já está vencido.
     """
 
     with SessionLocal() as session:
@@ -39,7 +41,7 @@ def add_product(
             quantity=quantity,
             expiry_date=expiry_date,
             minimum_quantity=minimum_quantity,
-            is_expired=is_expired
+            is_expired=is_expired,
         )
 
         return repository.save(pantry_item)
@@ -47,14 +49,14 @@ def add_product(
 
 @tool("remove_product")
 def remove_product(
-    pantry_item_id: int
+    pantry_item_id: int,
 ) -> bool:
     """
-        Remove um produto do estoque do usuário.
+    Remove um produto do estoque do usuário.
 
-        Parâmetros:
-            - pantry_item_id: Identificador do item no estoque.
-"""
+    Parâmetros:
+        - pantry_item_id: Identificador do item no estoque.
+    """
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -69,7 +71,7 @@ def remove_product(
 
 @tool("get_stock")
 def get_stock(
-    household_account_id: int
+    household_account_id: int,
 ) -> list[Pantry_Item]:
     """
     Lista todo o estoque do usuário.
@@ -86,7 +88,7 @@ def get_stock(
 
 @tool("get_expired_products")
 def get_expired_products(
-    household_account_id: int
+    household_account_id: int,
 ) -> list[Pantry_Item]:
     """
     Lista produtos vencidos ou próximos do vencimento.
@@ -105,7 +107,7 @@ def get_expired_products(
 
 @tool("get_missing_products")
 def get_missing_products(
-    household_account_id: int
+    household_account_id: int,
 ):
     """
     Lista produtos cuja quantidade está abaixo do mínimo configurado.
@@ -124,7 +126,7 @@ def get_missing_products(
 
 @tool("get_category_info")
 def get_category_info(
-    household_account_id: int
+    household_account_id: int,
 ):
     """
     Retorna um relatório de produtos agrupados por categoria.
@@ -143,10 +145,10 @@ def get_category_info(
 
 @tool("get_brand_info")
 def get_brand_info(
-    household_account_id: int
+    household_account_id: int,
 ):
     """
-    Retorna um relatório contendo a quantidade de produtos por marca.
+    Retorna um relatório de produtos agrupados por marca.
 
     Parâmetros:
         - household_account_id: Identificador da conta do usuário.
@@ -158,7 +160,7 @@ def get_brand_info(
         return repository.get_brand_info(
             household_account_id
         )
-    
+
 
 @tool("get_foods")
 def get_foods() -> list[Food]:

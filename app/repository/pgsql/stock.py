@@ -83,8 +83,13 @@ class StockRepository:
             return []
 
     def get_expired_products(
+<<<<<<< HEAD
+            self,
+            household_account_id: int
+=======
         self,
         household_account_id: int
+>>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
     ) -> list[Pantry_Item]:
         try:
             logger.info("Buscando produtos vencidos")
@@ -94,8 +99,13 @@ class StockRepository:
                 .where(
                     Pantry_Item.household_account_id == household_account_id,
                     (
+<<<<<<< HEAD
+                            (Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")) |
+                            (Pantry_Item.is_expired.is_(True))
+=======
                         (Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")) |
                         (Pantry_Item.is_expired.is_(True))
+>>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
                     )
                 )
             )
@@ -107,10 +117,16 @@ class StockRepository:
 
             return []
 
+<<<<<<< HEAD
+    def get_missing_products(
+            self,
+            household_account_id: int
+=======
 
     def get_missing_products(
         self,
         household_account_id: int
+>>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
     ) -> list[Row]:
         try:
             logger.info("Buscando produtos em falta")
@@ -147,8 +163,13 @@ class StockRepository:
             return []
 
     def get_category_info(
+<<<<<<< HEAD
+            self,
+            household_account_id: int
+=======
         self,
         household_account_id: int
+>>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
     ) -> list[Row]:
         try:
             logger.info("Gerando relatório por categoria")
@@ -184,8 +205,13 @@ class StockRepository:
             return []
 
     def get_brand_info(
+<<<<<<< HEAD
+            self,
+            household_account_id: int
+=======
         self,
         household_account_id: int
+>>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
     ) -> list[Row]:
         try:
             logger.info("Gerando relatório por marca")
