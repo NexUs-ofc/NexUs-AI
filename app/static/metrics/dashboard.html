@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Ceris.AI — ms-ia — Observabilidade</title>
+<link rel="stylesheet" href="/static/metrics/dashboard.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="dashboard-content" id="dashboard-content">
+
+<header>
+  <h1>Ceris.AI — ms-ia</h1>
+  <p>Métricas de Observabilidade</p>
+</header>
+
+<div class="cards">
+  <div class="card active" data-metric="requests_per_minute">
+    <div class="label">Requests/min</div>
+    <div class="value" id="card-requests_per_minute">-</div>
+  </div>
+  <div class="card" data-metric="avg_latency_ms">
+    <div class="label">Latência Média</div>
+    <div class="value" id="card-avg_latency_ms">-</div>
+  </div>
+  <div class="card" data-metric="error_rate_pct">
+    <div class="label">Taxa de Erro</div>
+    <div class="value" id="card-error_rate_pct">-</div>
+  </div>
+  <div class="card" data-metric="tool_calls_per_minute">
+    <div class="label">Tool Calls</div>
+    <div class="value" id="card-tool_calls_per_minute">-</div>
+  </div>
+  <div class="card status">
+    <div class="label">Status</div>
+    <div class="value" id="card-status">Online</div>
+  </div>
+</div>
+
+<div class="chart-panel">
+  <div class="chart-label" id="chart-label">Requests por minuto — últimos 5 min</div>
+  <canvas id="chart" height="90"></canvas>
+</div>
+
+<div class="cost-panel">
+  <div class="cost-panel-title">Custos &amp; ROI — últimos 7 dias</div>
+
+  <div class="cost-inputs">
+    <label>
+      Requests/usuário/semana
+      <input type="number" id="input-requests-per-user" value="20" min="0">
+    </label>
+    <label>
+      Valor por resolução (US$)
+      <input type="number" id="input-value-per-resolution" value="0" min="0" step="0.01">
+    </label>
+  </div>
+
+  <div class="cost-cards">
+    <div class="cost-card">
+      <div class="label">Custo estimado / semana (100 usuários)</div>
+      <div class="value" id="cost-100">-</div>
+    </div>
+    <div class="cost-card">
+      <div class="label">Custo estimado / semana (1000 usuários)</div>
+      <div class="value" id="cost-1000">-</div>
+    </div>
+    <div class="cost-card">
+      <div class="label">Custo por resolução</div>
+      <div class="value" id="cost-per-resolution">-</div>
+    </div>
+    <div class="cost-card">
+      <div class="label">ROI</div>
+      <div class="value" id="cost-roi">-</div>
+    </div>
+    <div class="cost-card">
+      <div class="label">Custo total (7d)</div>
+      <div class="value" id="cost-total">-</div>
+    </div>
+    <div class="cost-card">
+      <div class="label">Tokens (7d)</div>
+      <div class="value" id="cost-tokens">-</div>
+    </div>
+  </div>
+</div>
+
+<footer>Atualização automática a cada 5 segundos — clique em um card para ver o histórico</footer>
+
+</div>
+
+<script src="/static/metrics/dashboard.js"></script>
+
+</body>
+</html>
