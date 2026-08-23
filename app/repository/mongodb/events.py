@@ -44,7 +44,10 @@ class EventsRepository:
             doc = EventsRepository.events_collection.find_one({"_id": event_id})
 
             if doc is None:
+                logger.info(f"Evento {event_id} não encontrado")
                 return None
+
+            logger.info(f"Evento {event_id} encontrado com sucesso")
 
             return Event.from_dict(doc)
 
