@@ -11,12 +11,19 @@ from ..tools.mongo_recipe_tools import (
 )
 
 from ..tools.mongodb_tools import (
-    add_event,
+    create_event,
     get_events,
     postpone_event,
     update_description,
     cancel_event,
+    add_recipe,
+    remove_recipe,
+    create_list,
+    get_list,
+    update_list,
 )
+
+from ..tools.general_tools import recomendar_receita
 
 from ..tools.pg_tools import (
     add_product,
@@ -61,26 +68,25 @@ recipe_app = create_agent(
 )
 
 
-# =========================
-# EVENTOS
-# =========================
-
 events_app = create_agent(
     model=specialist_llm,
     tools=[
-        add_event,
+        create_event,
         get_events,
         postpone_event,
         update_description,
         cancel_event,
+        recomendar_receita,
+        add_recipe,
+        remove_recipe,
+        create_list,
+        get_list,
+        update_list,
     ],
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
 
 
-# =========================
-# ESTOQUE
-# =========================
 
 stock_app = create_agent(
     model=specialist_llm,

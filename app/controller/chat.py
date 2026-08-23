@@ -1,19 +1,12 @@
-from pydantic import BaseModel
-from .config import app
 from app.schemas.flow import executar_chat
+from fastapi import APIRouter
+from ..model.dto.chat_request import ChatRequest
+from ..model.dto.chat_response import ChatResponse
 
-class ChatRequest(BaseModel):
-    mensagem: str
-    session_id: str | None = None
-    household_account_id: int = 1
-    account_id: int = 1
+router = APIRouter(prefix="/chat")
 
-class ChatResponse(BaseModel):
-    resposta: str
-    session_id: str
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+@router.post("/", response_model=ChatResponse)
+def send_message(request: ChatRequest):
     resultado = executar_chat(
         mensagem=request.mensagem,
         session_id=request.session_id,

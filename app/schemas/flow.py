@@ -172,9 +172,21 @@ def agente_estoque(state: State) -> State:
 def agente_eventos(state: State) -> State:
     historico = state.get("historico", [])
 
+    household_id = state.get(
+        "household_account_id",
+        0,
+    )
+
+    account_id = state.get(
+        "account_id",
+        0,
+    )
+
     mensagem = (
         f"ROUTE=events\n"
-        f"PERGUNTA_ORIGINAL={state['mensagem']}"
+        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+        f"HOUSEHOLD_ACCOUNT_ID={household_id}\n"
+        f"ACCOUNT_ID={account_id}"
     )
 
     state["resposta_agente"] = _invocar_agente(
@@ -276,7 +288,7 @@ def executar_chat(
     resultado = ceris_workflow.invoke({
         "mensagem": mensagem,
         "historico": historico,
-        "rota": "",
+        "rota": "fallback",
         "resposta_agente": "",
         "resposta_final": "",
         "entrada_aprovada": False,
