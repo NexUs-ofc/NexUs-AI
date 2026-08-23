@@ -20,7 +20,11 @@ class FoodRepository:
                 .order_by(Food.name)
             )
 
-            return list(self.session.scalars(stmt).all())
+            foods = list(self.session.scalars(stmt).all())
+
+            logger.info(f"Alimentos listados com sucesso, {len(foods)} alimentos encontrados")
+
+            return foods
 
         except SQLAlchemyError:
             logger.exception("Erro ao listar alimentos")
