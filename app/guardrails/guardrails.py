@@ -1,6 +1,6 @@
 import re
 import uuid
-from app.core.llms import fast_llm
+from app.core.llms import get_fast_llm
 
 
 PII = [
@@ -101,7 +101,7 @@ def checar_entrada(mensagem_anonimizada):
         if kw in texto_lower:
             return _bloquear("acesso_dados_internos", "Não tenho como compartilhar informações internas do sistema.")
 
-    resposta = fast_llm.invoke(
+    resposta = get_fast_llm().invoke(
         _PROMPT_CLASSIFICADOR.format(mensagem=mensagem_anonimizada)
     ).content
 
@@ -144,7 +144,7 @@ def checar_saida(resposta, mapa_pii):
 
     resposta = desanonimizar(resposta, mapa_pii)
 
-    saida = fast_llm.invoke(
+    saida = get_fast_llm().invoke(
         _PROMPT_SAIDA.format(resposta=resposta)
     ).content.strip()
 
