@@ -1,18 +1,11 @@
-from pydantic import BaseModel
-from .config import app
+from fastapi import APIRouter
+
+from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.flow import executar_chat
 
-class ChatRequest(BaseModel):
-    mensagem: str
-    session_id: str | None = None
-    household_account_id: int = 1
-    account_id: int = 1
+router = APIRouter()
 
-class ChatResponse(BaseModel):
-    resposta: str
-    session_id: str
-
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     resultado = executar_chat(
         mensagem=request.mensagem,
@@ -21,7 +14,4 @@ def chat(request: ChatRequest):
         account_id=request.account_id,
     )
 
-    return ChatResponse(
-        resposta=resultado["resposta"],
-        session_id=resultado["session_id"],
-    )
+    return ChatResponse(**resultado)
