@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+from app.controller.config import logging
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
@@ -21,41 +24,74 @@ from app.guardrails.guardrails import (
 )
 
 from app.repository.mongodb.conversations import ConversationsRepository
+from app.observability.tracing import generate_trace_id, span
+from app.observability.tool_logging_callback import ToolLoggingCallback
+from app.repository.mongodb.metrics import MetricsRepository
+from app.repository.mongodb.tool_metrics import ToolMetricsRepository
+from app.observability.cost import extrair_tokens, estimate_cost_usd
+
+logger = logging.getLogger(__name__)
 
 
 
 def guardrail_entrada(state: State) -> State:
-    texto_anonimizado, mapa = anonimizar(state["mensagem"])
+    with span(state["trace_id"], "guardrail_entrada"):
+        texto_anonimizado, mapa = anonimizar(state["mensagem"])
 
-    state["mensagem"] = texto_anonimizado
-    state["mapa_pii"] = mapa
+        state["mensagem"] = texto_anonimizado
+        state["mapa_pii"] = mapa
 
-    resultado = checar_entrada(texto_anonimizado)
+        resultado = checar_entrada(texto_anonimizado)
 
-    if resultado["bloqueado"]:
-        state["entrada_aprovada"] = False
-        state["resposta_agente"] = resultado["mensagem"]
-    else:
-        state["entrada_aprovada"] = True
+        if resultado["bloqueado"]:
+            state["entrada_aprovada"] = False
+            state["resposta_agente"] = resultado["mensagem"]
+        else:
+            state["entrada_aprovada"] = True
+
+        logger.info(
+            "guardrail_entrada avaliado",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "input",
+                "mensagem_anonimizada": texto_anonimizado,
+                "entrada_aprovada": state["entrada_aprovada"],
+            },
+        )
 
     return state
 
 
 
 def roteador(state: State) -> State:
-    historico = state.get("historico", [])
+    with span(state["trace_id"], "roteador"):
+        historico = state.get("historico", [])
 
-    mensagem_usuario = (
-        f"Histórico: {historico}\n"
-        f"Mensagem: \"{state['mensagem']}\""
-    )
+        mensagem_usuario = (
+            f"Histórico: {historico}\n"
+            f"Mensagem: \"{state['mensagem']}\""
+        )
 
-    resposta = fast_llm.invoke([
-        SystemMessage(content=ROTEADOR_PROMPT_COMPLETO),
-        HumanMessage(content=mensagem_usuario),
-    ])
+        resposta = fast_llm.invoke([
+            SystemMessage(content=ROTEADOR_PROMPT_COMPLETO),
+            HumanMessage(content=mensagem_usuario),
+        ])
 
-    state["rota"] = resposta.content.strip().lower()
+        state["rota"] = resposta.content.strip().lower()
+
+        input_tokens, output_tokens = extrair_tokens(resposta)
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "roteador decidiu rota",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem_usuario,
+                "rota": state["rota"],
+            },
+        )
 
     return state
 
@@ -65,7 +101,8 @@ def _invocar_agente(
     agent,
     mensagem: str,
     historico: list,
-) -> str:
+    trace_id: str,
+) -> tuple[str, int, int]:
     """
     Invoca um agente e extrai sua resposta final.
     """
@@ -86,62 +123,104 @@ def _invocar_agente(
         HumanMessage(content=mensagem)
     )
 
-    resultado = agent.invoke({
-        "messages": messages
-    })
+    resultado = agent.invoke(
+        {"messages": messages},
+        config={
+            "callbacks": [ToolLoggingCallback()],
+            "metadata": {"trace_id": trace_id},
+        },
+    )
 
     mensagens_saida = resultado.get("messages", [])
 
-    if mensagens_saida:
-        return mensagens_saida[-1].content
+    input_tokens = 0
+    output_tokens = 0
 
-    return ""
+    for msg in mensagens_saida:
+        tokens_in, tokens_out = extrair_tokens(msg)
+        input_tokens += tokens_in
+        output_tokens += tokens_out
+
+    if mensagens_saida:
+        return mensagens_saida[-1].content, input_tokens, output_tokens
+
+    return "", input_tokens, output_tokens
 
 
 
 def agente_faq(state: State) -> State:
-    historico = state.get("historico", [])
+    with span(state["trace_id"], "faq"):
+        historico = state.get("historico", [])
 
-    mensagem = (
-        f"ROUTE=faq\n"
-        f"PERGUNTA_ORIGINAL={state['mensagem']}"
-    )
+        mensagem = (
+            f"ROUTE=faq\n"
+            f"PERGUNTA_ORIGINAL={state['mensagem']}"
+        )
 
-    state["resposta_agente"] = _invocar_agente(
-        faq_app,
-        mensagem,
-        historico,
-    )
+        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+            faq_app,
+            mensagem,
+            historico,
+            state["trace_id"],
+        )
+        state["resposta_agente"] = resposta_agente
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "agente_faq respondeu",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem,
+                "resposta_agente": state["resposta_agente"],
+            },
+        )
 
     return state
 
 
 
 def agente_receitas(state: State) -> State:
-    historico = state.get("historico", [])
+    with span(state["trace_id"], "receitas"):
+        historico = state.get("historico", [])
 
-    household_id = state.get(
-        "household_account_id",
-        0,
-    )
+        household_id = state.get(
+            "household_account_id",
+            0,
+        )
 
-    account_id = state.get(
-        "account_id",
-        0,
-    )
+        account_id = state.get(
+            "account_id",
+            0,
+        )
 
-    mensagem = (
-        f"ROUTE=receitas\n"
-        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"PROFILE_ID={household_id}\n"
-        f"ACCOUNT_ID={account_id}"
-    )
+        mensagem = (
+            f"ROUTE=receitas\n"
+            f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+            f"PROFILE_ID={household_id}\n"
+            f"ACCOUNT_ID={account_id}"
+        )
 
-    state["resposta_agente"] = _invocar_agente(
-        recipe_app,
-        mensagem,
-        historico,
-    )
+        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+            recipe_app,
+            mensagem,
+            historico,
+            state["trace_id"],
+        )
+        state["resposta_agente"] = resposta_agente
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "agente_receitas respondeu",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem,
+                "resposta_agente": state["resposta_agente"],
+            },
+        )
 
     return state
 
@@ -149,24 +228,39 @@ def agente_receitas(state: State) -> State:
 
 
 def agente_estoque(state: State) -> State:
-    historico = state.get("historico", [])
+    with span(state["trace_id"], "estoque"):
+        historico = state.get("historico", [])
 
-    household_id = state.get(
-        "household_account_id",
-        0,
-    )
+        household_id = state.get(
+            "household_account_id",
+            0,
+        )
 
-    mensagem = (
-        f"ROUTE=stock\n"
-        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"PROFILE_ID={household_id}"
-    )
+        mensagem = (
+            f"ROUTE=stock\n"
+            f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+            f"PROFILE_ID={household_id}"
+        )
 
-    state["resposta_agente"] = _invocar_agente(
-        stock_app,
-        mensagem,
-        historico,
-    )
+        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+            stock_app,
+            mensagem,
+            historico,
+            state["trace_id"],
+        )
+        state["resposta_agente"] = resposta_agente
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "agente_estoque respondeu",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem,
+                "resposta_agente": state["resposta_agente"],
+            },
+        )
 
     return state
 
@@ -174,31 +268,46 @@ def agente_estoque(state: State) -> State:
 
 
 def agente_eventos(state: State) -> State:
-    historico = state.get("historico", [])
+    with span(state["trace_id"], "eventos"):
+        historico = state.get("historico", [])
 
-    household_id = state.get(
-        "household_account_id",
-        0,
-    )
+        household_id = state.get(
+            "household_account_id",
+            0,
+        )
 
-    account_id = state.get(
-        "account_id",
-        0,
-    )
+        account_id = state.get(
+            "account_id",
+            0,
+        )
 
-    mensagem = (
-        f"ROUTE=events\n"
-        f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-        f"HOUSEHOLD_ID={household_id}\n"
-        f"PROFILE_ID={household_id}\n"
-        f"ACCOUNT_ID={account_id}"
-    )
+        mensagem = (
+            f"ROUTE=events\n"
+            f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+            f"HOUSEHOLD_ID={household_id}\n"
+            f"PROFILE_ID={household_id}\n"
+            f"ACCOUNT_ID={account_id}"
+        )
 
-    state["resposta_agente"] = _invocar_agente(
-        events_app,
-        mensagem,
-        historico,
-    )
+        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+            events_app,
+            mensagem,
+            historico,
+            state["trace_id"],
+        )
+        state["resposta_agente"] = resposta_agente
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "agente_eventos respondeu",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem,
+                "resposta_agente": state["resposta_agente"],
+            },
+        )
 
     return state
 
@@ -206,45 +315,61 @@ def agente_eventos(state: State) -> State:
 
 
 def orquestrador(state: State) -> State:
-    resposta_agente = state.get(
-        "resposta_agente",
-        "",
-    )
+    with span(state["trace_id"], "orquestrador"):
+        resposta_agente = state.get(
+            "resposta_agente",
+            "",
+        )
 
-    rota = state.get(
-        "rota",
-        "fallback",
-    )
+        rota = state.get(
+            "rota",
+            "fallback",
+        )
 
-    mensagem_usuario = (
-        f"Rota: {rota}\n"
-        f"Resposta do agente: \"{resposta_agente}\""
-    )
+        mensagem_usuario = (
+            f"Rota: {rota}\n"
+            f"Resposta do agente: \"{resposta_agente}\""
+        )
 
-    resposta = fast_llm.invoke([
-        SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
-        HumanMessage(content=mensagem_usuario),
-    ])
+        resposta = fast_llm.invoke([
+            SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
+            HumanMessage(content=mensagem_usuario),
+        ])
 
-    state["resposta_final"] = resposta.content.strip()
+        state["resposta_final"] = resposta.content.strip()
+
+        input_tokens, output_tokens = extrair_tokens(resposta)
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.debug(
+            "orquestrador finalizou resposta",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "mensagem_enviada": mensagem_usuario,
+                "resposta_final": state["resposta_final"],
+            },
+        )
 
     return state
 
 
 
 def guardrail_saida(state: State) -> State:
-    mapa = state.get(
-        "mapa_pii",
-        {},
-    )
+    with span(state["trace_id"], "guardrail_saida"):
+        mapa = state.get(
+            "mapa_pii",
+            {},
+        )
 
-    resultado = checar_saida(
-        state["resposta_final"],
-        mapa,
-    )
+        resultado = checar_saida(
+            state["resposta_final"],
+            mapa,
+        )
 
-    state["resposta_final"] = resultado["conteudo"]
-    state["saida_aprovada"] = True
+        state["resposta_final"] = resultado["conteudo"]
+        state["saida_aprovada"] = True
 
     return state
 
@@ -279,7 +404,9 @@ def executar_chat(
     Função pública que encapsula a execução do workflow.
     """
 
-    if session_id:
+    trace_id = generate_trace_id()
+
+    if session_id and ConversationsRepository.sessao_ativa(session_id):
         historico = ConversationsRepository.get_historico(
             session_id
         )
@@ -290,18 +417,59 @@ def executar_chat(
 
         historico = []
 
-    resultado = ceris_workflow.invoke({
-        "mensagem": mensagem,
-        "historico": historico,
-        "rota": "fallback",
-        "resposta_agente": "",
-        "resposta_final": "",
-        "entrada_aprovada": False,
-        "saida_aprovada": False,
-        "mapa_pii": {},
-        "household_account_id": household_account_id,
-        "account_id": account_id,
-    })
+    started_at = datetime.now(timezone.utc)
+    resultado = None
+    erro = False
+
+    try:
+        resultado = ceris_workflow.invoke({
+            "mensagem": mensagem,
+            "historico": historico,
+            "rota": "fallback",
+            "resposta_agente": "",
+            "resposta_final": "",
+            "entrada_aprovada": False,
+            "saida_aprovada": False,
+            "mapa_pii": {},
+            "household_account_id": household_account_id,
+            "account_id": account_id,
+            "trace_id": trace_id,
+            "input_tokens": 0,
+            "output_tokens": 0,
+        })
+    except Exception:
+        erro = True
+
+        logger.exception(
+            "Falha ao executar workflow",
+            extra={"trace_id": trace_id, "stage": "workflow"},
+        )
+
+        raise
+    finally:
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = (finished_at - started_at).total_seconds() * 1000
+
+        if resultado is not None and not resultado.get("entrada_aprovada", True):
+            erro = True
+
+        tool_calls = ToolMetricsRepository.count_by_trace_id(trace_id)
+
+        input_tokens = resultado.get("input_tokens", 0) if resultado is not None else 0
+        output_tokens = resultado.get("output_tokens", 0) if resultado is not None else 0
+
+        MetricsRepository.save_request_metric(
+            trace_id=trace_id,
+            route=resultado.get("rota", "fallback") if resultado is not None else "fallback",
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms,
+            tool_calls=tool_calls,
+            error=erro,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=estimate_cost_usd(input_tokens, output_tokens),
+        )
 
     resposta = resultado["resposta_final"]
 

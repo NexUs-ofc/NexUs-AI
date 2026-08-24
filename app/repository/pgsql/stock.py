@@ -40,7 +40,11 @@ class StockRepository:
         try:
             logger.info("Buscando item do estoque")
 
-            return self.session.get(Pantry_Item, pantry_item_id)
+            item = self.session.get(Pantry_Item, pantry_item_id)
+
+            logger.info(f"Busca de item concluída, encontrado={item is not None}")
+
+            return item
 
         except SQLAlchemyError:
             logger.exception("Erro ao buscar item do estoque")
@@ -76,7 +80,11 @@ class StockRepository:
                 )
             )
 
-            return list(self.session.scalars(stmt).all())
+            itens = list(self.session.scalars(stmt).all())
+
+            logger.info(f"Estoque listado com sucesso, {len(itens)} itens encontrados")
+
+            return itens
 
         except SQLAlchemyError:
             logger.exception("Erro ao listar estoque")
@@ -98,7 +106,11 @@ class StockRepository:
                 )
             )
 
-            return list(self.session.scalars(stmt).all())
+            itens = list(self.session.scalars(stmt).all())
+
+            logger.info(f"Produtos vencidos listados com sucesso, {len(itens)} itens encontrados")
+
+            return itens
 
         except SQLAlchemyError:
             logger.exception("Erro ao buscar produtos vencidos")
@@ -136,7 +148,11 @@ class StockRepository:
                 )
             )
 
-            return self.session.execute(stmt).all()
+            rows = self.session.execute(stmt).all()
+
+            logger.info(f"Produtos em falta listados com sucesso, {len(rows)} itens encontrados")
+
+            return rows
 
         except SQLAlchemyError:
             logger.exception("Erro ao buscar produtos em falta")
@@ -173,7 +189,11 @@ class StockRepository:
                 )
             )
 
-            return self.session.execute(stmt).all()
+            rows = self.session.execute(stmt).all()
+
+            logger.info(f"Relatório por categoria gerado com sucesso, {len(rows)} categorias")
+
+            return rows
 
         except SQLAlchemyError:
             logger.exception("Erro ao gerar relatório por categoria")
@@ -206,7 +226,11 @@ class StockRepository:
                 )
             )
 
-            return self.session.execute(stmt).all()
+            rows = self.session.execute(stmt).all()
+
+            logger.info(f"Relatório por marca gerado com sucesso, {len(rows)} marcas")
+
+            return rows
 
         except SQLAlchemyError:
             logger.exception("Erro ao gerar relatório por marca")
