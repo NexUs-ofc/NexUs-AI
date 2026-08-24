@@ -1,23 +1,18 @@
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from dotenv import load_dotenv
 
 from datetime import datetime
-import os
 
-from ..entities.mongodb.event import Event
+from ...model.mongodb.event import Event
+from ...config import MONGODB_URI
 from ...controller.config import logging
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
 class EventsRepository:
-    uri = os.getenv("MONGODB_URI")
-
-    client = MongoClient(uri)
+    client = MongoClient(MONGODB_URI)
     db = client.get_database("db_ceris")
     events_collection = db.get_collection("events")
 
@@ -39,7 +34,27 @@ class EventsRepository:
             return None
 
     @staticmethod
+    def get_event_by_id(event_id: str | ObjectId) -> Event | None:
+        try:
+            logger.info(f"Buscando evento {event_id}")
+
+            if isinstance(event_id, str):
+                event_id = ObjectId(event_id)
+
+            doc = EventsRepository.events_collection.find_one({"_id": event_id})
+
+            if doc is None:
+                return None
+
+            return Event.from_dict(doc)
+
+        except PyMongoError:
+            logger.exception(f"Erro ao buscar evento {event_id}")
+            return None
+
+    @staticmethod
     def get_events(
+        household_id: int,
         start: datetime = None,
         end: datetime = None,
         type: str = None,
@@ -47,7 +62,7 @@ class EventsRepository:
         recipes_titles: list[str] = None,
     ) -> list[Event]:
 
-        query = {}
+        query = {"household_id": household_id}
 
         if start or end:
             query["date"] = {}
@@ -113,6 +128,59 @@ class EventsRepository:
         except PyMongoError:
             logger.exception(f"Erro ao atualizar evento {event.id}")
             return None
+
+    @staticmethod
+    def add_recipe_to_event(event_id: str | ObjectId, recipe_entry: dict) -> bool:
+        try:
+            logger.info(f"Adicionando receita ao evento {event_id}")
+
+            if isinstance(event_id, str):
+                event_id = ObjectId(event_id)
+
+            result = EventsRepository.events_collection.update_one(
+                {"_id": event_id},
+                {"$push": {"recipes": recipe_entry}}
+            )
+
+            if result.matched_count == 0:
+                logger.warning(f"Evento {event_id} não encontrado")
+                return False
+
+            logger.info("Receita adicionada ao evento com sucesso")
+
+            return True
+
+        except PyMongoError:
+            logger.exception(f"Erro ao adicionar receita ao evento {event_id}")
+            return False
+
+    @staticmethod
+    def remove_recipe_from_event(event_id: str | ObjectId, recipe_id: str | ObjectId) -> bool:
+        try:
+            logger.info(f"Removendo receita do evento {event_id}")
+
+            if isinstance(event_id, str):
+                event_id = ObjectId(event_id)
+
+            if isinstance(recipe_id, str):
+                recipe_id = ObjectId(recipe_id)
+
+            result = EventsRepository.events_collection.update_one(
+                {"_id": event_id},
+                {"$pull": {"recipes": {"recipe_id": recipe_id}}}
+            )
+
+            if result.matched_count == 0:
+                logger.warning(f"Evento {event_id} não encontrado")
+                return False
+
+            logger.info("Receita removida do evento com sucesso")
+
+            return True
+
+        except PyMongoError:
+            logger.exception(f"Erro ao remover receita do evento {event_id}")
+            return False
 
     @staticmethod
     def delete_event(event_id: str | ObjectId) -> bool:

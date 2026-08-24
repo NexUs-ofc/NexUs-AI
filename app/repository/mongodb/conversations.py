@@ -1,20 +1,15 @@
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from dotenv import load_dotenv
 from datetime import datetime
-import os
 
+from ...config import MONGODB_URI
 from ...controller.config import logging
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 class ConversationsRepository:
-    uri = os.getenv("MONGODB_URI")
-
-    client = MongoClient(uri)
+    client = MongoClient(MONGODB_URI)
     db = client.get_database("db_ceris")
     conversations_collection = db.get_collection("conversations")
 
