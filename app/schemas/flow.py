@@ -2,13 +2,13 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from .state import State
-from app.core.llms import fast_llm
+from app.core.llms import get_fast_llm
 
 from app.core.agents import (
-    faq_app,
-    recipe_app,
-    stock_app,
-    events_app,
+    get_events_agent,
+    get_faq_agent,
+    get_recipe_agent,
+    get_stock_agent,
 )
 
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
@@ -50,7 +50,7 @@ def roteador(state: State) -> State:
         f"Mensagem: \"{state['mensagem']}\""
     )
 
-    resposta = fast_llm.invoke([
+    resposta = get_fast_llm().invoke([
         SystemMessage(content=ROTEADOR_PROMPT_COMPLETO),
         HumanMessage(content=mensagem_usuario),
     ])
@@ -62,9 +62,9 @@ def roteador(state: State) -> State:
 
 
 def _invocar_agente(
-    agent,
-    mensagem: str,
-    historico: list,
+        agent,
+        mensagem: str,
+        historico: list,
 ) -> str:
     """
     Invoca um agente e extrai sua resposta final.
@@ -104,7 +104,7 @@ def agente_faq(state: State) -> State:
     )
 
     state["resposta_agente"] = _invocar_agente(
-        faq_app,
+        get_faq_agent(),
         mensagem,
         historico,
     )
@@ -134,7 +134,7 @@ def agente_receitas(state: State) -> State:
     )
 
     state["resposta_agente"] = _invocar_agente(
-        recipe_app,
+        get_recipe_agent(),
         mensagem,
         historico,
     )
@@ -159,7 +159,7 @@ def agente_estoque(state: State) -> State:
     )
 
     state["resposta_agente"] = _invocar_agente(
-        stock_app,
+        get_stock_agent(),
         mensagem,
         historico,
     )
@@ -178,7 +178,7 @@ def agente_eventos(state: State) -> State:
     )
 
     state["resposta_agente"] = _invocar_agente(
-        events_app,
+        get_events_agent(),
         mensagem,
         historico,
     )
@@ -204,7 +204,7 @@ def orquestrador(state: State) -> State:
         f"Resposta do agente: \"{resposta_agente}\""
     )
 
-    resposta = fast_llm.invoke([
+    resposta = get_fast_llm().invoke([
         SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
         HumanMessage(content=mensagem_usuario),
     ])
@@ -253,10 +253,10 @@ def decidir_pos_guardrail_saida(state: State) -> str:
 
 
 def executar_chat(
-    mensagem: str,
-    session_id: str | None,
-    household_account_id: int,
-    account_id: int,
+        mensagem: str,
+        session_id: str | None,
+        household_account_id: int,
+        account_id: int,
 ) -> dict:
     """
     Função pública que encapsula a execução do workflow.

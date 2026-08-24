@@ -1,37 +1,16 @@
-<<<<<<< HEAD
-from sqlalchemy import String, ForeignKey, Numeric
-from sqlalchemy.orm import Mapped, mapped_column
-from .config import Base
 from decimal import Decimal
+
+from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .config import Base
 
 
 class Food(Base):
-    __tablename__ = "food"
+    _tablename_ = "food"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150))
     category_id: Mapped[int] = mapped_column(ForeignKey("category.id"))
     product_brand: Mapped[str] = mapped_column(String(100))
     weight: Mapped[Decimal] = mapped_column(Numeric())
-=======
-from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
-from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric
-from sqlalchemy.orm import (
-    Mapped,
-    mapped_column,
-    relationship
-    )
-from .config import Base
-from decimal import Decimal
-
-class Food(Base):
-    __tablename__ = "food"
-
-    id : Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150))
-    category_id : Mapped[int] = mapped_column(ForeignKey("category.id"))
-    product_brand : Mapped[str] = mapped_column(String(100))
-    weight : Mapped[Decimal] = mapped_column(Numeric())
->>>>>>> b94b141b26db892366519398b3f7679e1bc6b3d6
