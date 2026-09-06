@@ -18,4 +18,7 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "default-secret-key-change-in-produ
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "30"))
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+VALID_API_KEYS = set(
+    key.strip() for key in os.getenv("VALID_API_KEYS", "").split(",") if key.strip()
+)
  
