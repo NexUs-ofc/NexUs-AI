@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 
-from .llms import fast_llm, specialist_llm
+from .llms import fast_llm, specialist_llm, multimodal_llm
 
 from ..tools.faq_tools import faq_retriever
 
@@ -40,6 +40,7 @@ from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
+from .prompts.prompt_nota_fiscal import NOTA_FISCAL_PROMPT_COMPLETO
 
 
 load_dotenv(".env")
@@ -101,4 +102,11 @@ stock_app = create_agent(
         get_foods,
     ],
     system_prompt=ESTOQUE_PROMPT_COMPLETO,
+)
+
+
+nota_fiscal_app = create_agent(
+    model=multimodal_llm,
+    tools=[],
+    system_prompt=NOTA_FISCAL_PROMPT_COMPLETO,
 )
