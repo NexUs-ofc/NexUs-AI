@@ -12,4 +12,10 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 DOC_FILE_PATH = os.getenv("DOC_FILE_PATH")
 FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH")
 TRACING_API_KEY = os.getenv("TRACING_API_KEY")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "default-secret-key-change-in-production")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "30"))
+API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
  
