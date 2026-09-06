@@ -25,6 +25,11 @@ from ..tools.mongodb_tools import (
 
 from ..tools.general_tools import recomendar_receita
 
+from ..tools.user_context_tools import (
+    get_user_history,
+    get_user_profile,
+)
+
 from ..tools.pg_tools import (
     add_product,
     remove_product,
@@ -50,6 +55,8 @@ faq_app = create_agent(
     model=fast_llm,
     tools=[
         faq_retriever,
+        get_user_history,
+        get_user_profile,
     ],
     system_prompt=FAQ_PROMPT_COMPLETO,
 )
@@ -63,6 +70,8 @@ recipe_app = create_agent(
         salvar_receita,
         get_stock,
         get_expired_products,
+        get_user_history,
+        get_user_profile,
     ],
     system_prompt=RECEITAS_PROMPT_COMPLETO,
 )
@@ -82,6 +91,8 @@ events_app = create_agent(
         create_list,
         get_list,
         update_list,
+        get_user_history,
+        get_user_profile,
     ],
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
@@ -99,6 +110,8 @@ stock_app = create_agent(
         get_category_info,
         get_brand_info,
         get_foods,
+        get_user_history,
+        get_user_profile,
     ],
     system_prompt=ESTOQUE_PROMPT_COMPLETO,
 )

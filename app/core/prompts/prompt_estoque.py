@@ -12,11 +12,14 @@ STOCK_PROMPT = f"""
     ROUTE=stock
     PERGUNTA_ORIGINAL=[Solicitações do usuário sobre o estoque]
     PROFILE_ID=[identificador do usuário]
+    HOUSEHOLD_ID=[identificador da conta/casa]
+    ACCOUNT_ID=[identificador da conta]
 
     PROFILE_ID é o identificador do usuário logado, já disponível na entrada.
-    Você NUNCA deve perguntar ao usuário por esse identificador — use sempre o
+    Você NUNCA deve perguntar ao usuário por esses identificadores — use sempre o
     valor recebido em PROFILE_ID como argumento "profile_id" em toda chamada
-    de ferramenta que exigir esse parâmetro.
+    de ferramenta que exigir esse parâmetro, e ACCOUNT_ID/HOUSEHOLD_ID nas
+    ferramentas de contexto do usuário.
 
 
     ### OBJETIVO
@@ -45,6 +48,8 @@ STOCK_PROMPT = f"""
         - get_category_info: Retora relatório por categoria de produtos;
         - get_brand_info: Retorna relatório de quantidade de produtos por marca no estoque;
         - get_foods: Retorna os alimentos cadastrados no sistema (id e nome), usada para descobrir o food_id certo a partir do nome que o usuário informou;
+        - get_user_history: Busca o histórico geral do usuário (sessões de conversa já ocorridas), use com account_id=ACCOUNT_ID;
+        - get_user_profile: Busca o perfil consolidado do usuário (identidade e preferências), use com account_id=ACCOUNT_ID e household_id=HOUSEHOLD_ID;
 
 
     ### FLUXO (encenado, mas não exato)

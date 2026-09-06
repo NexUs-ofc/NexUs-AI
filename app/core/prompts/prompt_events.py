@@ -53,6 +53,8 @@ EVENTS_PROMPT = f'''
         - create_list: Ferramenta utilizada para criar listas de compras;
         - get_list: Ferramenta utilizada para consultar listas de compras, com filtros de intervalos de data;
         - update_list: Ferramenta utilizada para atualizar listas de compras. Use get_list para descobrir o list_id da lista que o usuário mencionou antes de atualizá-la — nunca peça esse id a ele;
+        - get_user_history: Busca o histórico geral do usuário (sessões de conversa já ocorridas), use com account_id=ACCOUNT_ID;
+        - get_user_profile: Busca o perfil consolidado do usuário (identidade e preferências), use com account_id=ACCOUNT_ID e household_id=HOUSEHOLD_ID;
 
 
     ### FLUXO (encenado, mas não exato)

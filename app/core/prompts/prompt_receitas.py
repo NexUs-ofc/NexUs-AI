@@ -32,6 +32,8 @@ Quando o contexto vier de um evento, adapte as receitas ao tipo de evento e quan
     - get_expired_products: Lista produtos vencidos ou próximos do vencimento;
     - buscar_receitas_usuario: Busca receitas já salvas do usuário (para não repetir);
     - salvar_receita: Salva uma receita gerada no banco após confirmação do usuário;
+    - get_user_history: Busca o histórico geral do usuário (sessões de conversa já ocorridas), use com account_id=ACCOUNT_ID;
+    - get_user_profile: Busca o perfil consolidado do usuário (identidade e preferências), use com account_id=ACCOUNT_ID e household_id=HOUSEHOLD_ID;
 
 
 ### FLUXO (obrigatório)

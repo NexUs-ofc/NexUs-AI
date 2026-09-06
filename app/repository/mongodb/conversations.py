@@ -32,6 +32,38 @@ class ConversationsRepository:
             return None
 
     @staticmethod
+    def get_user_sessions(account_id: int, limite: int = 10) -> list[dict]:
+        try:
+            logger.info(f"Buscando sessões do usuário {account_id}")
+
+            docs = (
+                ConversationsRepository.conversations_collection
+                .find({"account_id": account_id})
+                .sort("updated_at", -1)
+                .limit(limite)
+            )
+
+            sessions = [
+                {
+                    "_id": str(doc["_id"]),
+                    "created_at": doc.get("created_at"),
+                    "updated_at": doc.get("updated_at"),
+                    "ended_at": doc.get("ended_at"),
+                    "status": doc.get("status"),
+                    "historico": doc.get("historico", []),
+                }
+                for doc in docs
+            ]
+
+            logger.info(f"Sessões do usuário {account_id} carregadas, {len(sessions)} sessões")
+
+            return sessions
+
+        except PyMongoError:
+            logger.exception(f"Erro ao listar sessões do usuário {account_id}")
+            return []
+
+    @staticmethod
     def get_historico(session_id: str) -> list[dict]:
         try:
             logger.info(f"Buscando histórico da sessão {session_id}")

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from app.controller.config import logging
 from langgraph.graph import StateGraph, END
@@ -97,17 +98,51 @@ def roteador(state: State) -> State:
 
 
 
+def _contexto_sessoes_anteriores(sessoes: list[dict]) -> list[dict]:
+    contexto = []
+
+    for sessao in sessoes:
+        mensagens = sessao.get("historico", [])
+
+        contexto.append(
+            {
+                "sessao": sessao.get("_id"),
+                "created_at": sessao.get("created_at"),
+                "updated_at": sessao.get("updated_at"),
+                "status": sessao.get("status"),
+                "ultimas_mensagens": mensagens[-4:],
+            }
+        )
+
+    return contexto
+
+
 def _invocar_agente(
     agent,
     mensagem: str,
     historico: list,
     trace_id: str,
+    sessoes_anteriores: list,
 ) -> tuple[str, int, int]:
     """
     Invoca um agente e extrai sua resposta final.
     """
 
     messages = []
+
+    if sessoes_anteriores:
+        messages.append(
+            SystemMessage(
+                content=(
+                    "Sessões anteriores deste usuário (contexto do que já foi tratado):\n"
+                    + json.dumps(
+                        sessoes_anteriores,
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                )
+            )
+        )
 
     for msg in historico:
         if msg["role"] == "user":
@@ -152,9 +187,21 @@ def agente_faq(state: State) -> State:
     with span(state["trace_id"], "faq"):
         historico = state.get("historico", [])
 
+        household_id = state.get(
+            "household_account_id",
+            0,
+        )
+
+        account_id = state.get(
+            "account_id",
+            0,
+        )
+
         mensagem = (
             f"ROUTE=faq\n"
-            f"PERGUNTA_ORIGINAL={state['mensagem']}"
+            f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+            f"HOUSEHOLD_ID={household_id}\n"
+            f"ACCOUNT_ID={account_id}"
         )
 
         resposta_agente, input_tokens, output_tokens = _invocar_agente(
@@ -162,6 +209,7 @@ def agente_faq(state: State) -> State:
             mensagem,
             historico,
             state["trace_id"],
+            state.get("sessoes_anteriores", []),
         )
         state["resposta_agente"] = resposta_agente
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -207,6 +255,7 @@ def agente_receitas(state: State) -> State:
             mensagem,
             historico,
             state["trace_id"],
+            state.get("sessoes_anteriores", []),
         )
         state["resposta_agente"] = resposta_agente
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -236,10 +285,17 @@ def agente_estoque(state: State) -> State:
             0,
         )
 
+        account_id = state.get(
+            "account_id",
+            0,
+        )
+
         mensagem = (
             f"ROUTE=stock\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-            f"PROFILE_ID={household_id}"
+            f"PROFILE_ID={household_id}\n"
+            f"HOUSEHOLD_ID={household_id}\n"
+            f"ACCOUNT_ID={account_id}"
         )
 
         resposta_agente, input_tokens, output_tokens = _invocar_agente(
@@ -247,6 +303,7 @@ def agente_estoque(state: State) -> State:
             mensagem,
             historico,
             state["trace_id"],
+            state.get("sessoes_anteriores", []),
         )
         state["resposta_agente"] = resposta_agente
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -294,6 +351,7 @@ def agente_eventos(state: State) -> State:
             mensagem,
             historico,
             state["trace_id"],
+            state.get("sessoes_anteriores", []),
         )
         state["resposta_agente"] = resposta_agente
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -417,6 +475,17 @@ def executar_chat(
 
         historico = []
 
+    sessoes_anteriores = _contexto_sessoes_anteriores(
+        [
+            sessao
+            for sessao in ConversationsRepository.get_user_sessions(
+                account_id,
+                limite=5,
+            )
+            if sessao["_id"] != session_id
+        ]
+    )
+
     started_at = datetime.now(timezone.utc)
     resultado = None
     erro = False
@@ -425,6 +494,7 @@ def executar_chat(
         resultado = ceris_workflow.invoke({
             "mensagem": mensagem,
             "historico": historico,
+            "sessoes_anteriores": sessoes_anteriores,
             "rota": "fallback",
             "resposta_agente": "",
             "resposta_final": "",
