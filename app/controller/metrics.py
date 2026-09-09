@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import HTMLResponse
 
 from ..config import TRACING_API_KEY
-from ..schemas.metrics import build_summary, build_cost_summary
+from ..schemas.metrics import build_cost_summary, build_summary
 
 router = APIRouter(prefix="/metrics")
 

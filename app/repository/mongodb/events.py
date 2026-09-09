@@ -1,12 +1,12 @@
+from datetime import datetime
+
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
-from datetime import datetime
-
-from ...model.mongodb.event import Event
 from ...config import MONGODB_URI
 from ...controller.config import logging
+from ...model.mongodb.event import Event
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,11 @@ class EventsRepository:
     @staticmethod
     def get_events(
         household_id: int,
-        start: datetime = None,
-        end: datetime = None,
-        type: str = None,
-        qtd_min: int = None,
-        recipes_titles: list[str] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        type: str | None = None,
+        qtd_min: int | None = None,
+        recipes_titles: list[str] | None = None,
     ) -> list[Event]:
 
         query = {"household_id": household_id}

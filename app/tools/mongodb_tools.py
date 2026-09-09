@@ -1,7 +1,8 @@
 import json
 import re
-from langchain.tools import tool
 from datetime import datetime
+
+from langchain.tools import tool
 
 from ..model.mongodb.event import Event
 from ..model.mongodb.shopping_list import ShoppingList
@@ -69,11 +70,11 @@ def create_event(
 @tool("get_events")
 def get_events(
     household_id: int,
-    inicio: datetime = None,
-    fim: datetime = None,
-    tipo: str = None,
-    qtd_min: int = None,
-    titulo_receitas: list[str] = None,
+    inicio: datetime | None = None,
+    fim: datetime | None = None,
+    tipo: str | None = None,
+    qtd_min: int | None = None,
+    titulo_receitas: list[str] | None = None,
 ) -> str:
     """
     Busca eventos no banco de dados com base ou não nos seguintes filtros opcionais fornecidos:

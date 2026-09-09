@@ -1,5 +1,6 @@
-from bson import ObjectId
 from datetime import datetime
+
+from bson import ObjectId
 
 
 class Event:
