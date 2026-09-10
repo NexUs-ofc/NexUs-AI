@@ -1,7 +1,9 @@
 import qdrant_client
-from langchain_qdrant import QdrantVectorStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from ...config import QDRANT_DATABASE_URL, QDRANT_API_KEY, GEMINI_API_KEY
+from langchain_qdrant import QdrantVectorStore
+
+from ...config import GEMINI_API_KEY, QDRANT_API_KEY, QDRANT_DATABASE_URL
+
 
 class FAQRepository:
     def __init__(self):

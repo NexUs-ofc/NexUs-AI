@@ -1,5 +1,6 @@
 from datetime import datetime
-from pymongo import MongoClient, ASCENDING
+
+from pymongo import ASCENDING, MongoClient
 from pymongo.errors import PyMongoError
 
 from ...config import MONGODB_URI

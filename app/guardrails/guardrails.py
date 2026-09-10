@@ -1,7 +1,7 @@
 import re
 import uuid
-from app.core.llms import fast_llm
 
+from app.core.llms import fast_llm
 
 PII = [
     ("CPF",      r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}"),
@@ -34,7 +34,7 @@ def anonimizar(texto):
 
 
 def desanonimizar(texto, mapa):
-    for token, valor in mapa.items():
+    for token in mapa:
         tipo = token.split("_")[1]
         texto = texto.replace(token, f"[{tipo} OMITIDO]")
     return texto

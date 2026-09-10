@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from ...model.pgsql.food import Food
+
 from ...controller.config import logging
+from ...model.pgsql.food import Food
 
 logger = logging.getLogger(__name__)
 

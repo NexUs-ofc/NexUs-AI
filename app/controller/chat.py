@@ -1,5 +1,7 @@
-from app.schemas.flow import executar_chat
 from fastapi import APIRouter
+
+from app.schemas.flow import executar_chat
+
 from ..model.dto.chat_request import ChatRequest
 from ..model.dto.chat_response import ChatResponse
 from ..repository.mongodb.conversations import ConversationsRepository

@@ -1,7 +1,9 @@
-from sqlalchemy import String, ForeignKey, Numeric, Enum
-from sqlalchemy.orm import Mapped, mapped_column
-from .config import Base
 from decimal import Decimal
+
+from sqlalchemy import Enum, ForeignKey, Numeric, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .config import Base
 
 UNIT_OF_MEASURE_VALUES = ("kg", "g", "l", "ml", "unit")
 

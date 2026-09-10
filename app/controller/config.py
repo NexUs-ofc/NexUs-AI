@@ -1,4 +1,3 @@
-import logging
 
 from app.observability.logging_config import configure_logging
 
