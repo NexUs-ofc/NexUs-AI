@@ -23,6 +23,8 @@ from app.guardrails.guardrails import (
     checar_saida,
 )
 
+from app.guardrails.hallucination_guardrail import checar_alucinacao
+
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.observability.tracing import generate_trace_id, span
 from app.observability.tool_logging_callback import ToolLoggingCallback
@@ -356,6 +358,41 @@ def orquestrador(state: State) -> State:
 
 
 
+def guardrail_alucinacao(state: State) -> State:
+    with span(state["trace_id"], "guardrail_alucinacao"):
+        resultado = checar_alucinacao(
+            pergunta=state["mensagem"],
+            resposta=state["resposta_final"],
+            rota=state.get("rota", "fallback"),
+            mapa_pii=state.get("mapa_pii", {}),
+            trace_id=state["trace_id"],
+            household_account_id=state.get("household_account_id", 0),
+            account_id=state.get("account_id", 0),
+        )
+
+        state["resposta_final"] = resultado["resposta"]
+        state["alucinacao_detectada"] = resultado["alucinacao_detectada"]
+        state["veredito_investigacao"] = resultado["veredito"]
+        state["evidencias_investigacao"] = resultado["evidencias"]
+        state["replay_executado"] = resultado["replay_executado"]
+        state["input_tokens"] = state.get("input_tokens", 0) + resultado["input_tokens"]
+        state["output_tokens"] = state.get("output_tokens", 0) + resultado["output_tokens"]
+
+        logger.debug(
+            "guardrail_alucinacao finalizou resposta",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "resposta_final": state["resposta_final"],
+                "alucinacao_detectada": state["alucinacao_detectada"],
+                "veredito_investigacao": state["veredito_investigacao"],
+            },
+        )
+
+    return state
+
+
+
 def guardrail_saida(state: State) -> State:
     with span(state["trace_id"], "guardrail_saida"):
         mapa = state.get(
@@ -430,6 +467,10 @@ def executar_chat(
             "resposta_final": "",
             "entrada_aprovada": False,
             "saida_aprovada": False,
+            "alucinacao_detectada": False,
+            "veredito_investigacao": "",
+            "evidencias_investigacao": [],
+            "replay_executado": False,
             "mapa_pii": {},
             "household_account_id": household_account_id,
             "account_id": account_id,
@@ -523,6 +564,11 @@ graph.add_node(
 )
 
 graph.add_node(
+    "guardrail_alucinacao",
+    guardrail_alucinacao,
+)
+
+graph.add_node(
     "guardrail_saida",
     guardrail_saida,
 )
@@ -586,10 +632,13 @@ graph.add_edge(
 
 graph.add_edge(
     "orquestrador",
-    "guardrail_saida",
+    "guardrail_alucinacao",
 )
 
-
+graph.add_edge(
+    "guardrail_alucinacao",
+    "guardrail_saida",
+)
 
 graph.add_conditional_edges(
     "guardrail_saida",

@@ -9,6 +9,10 @@ class State(TypedDict):
     resposta_final: str
     entrada_aprovada: bool
     saida_aprovada: bool
+    alucinacao_detectada: bool
+    veredito_investigacao: str
+    evidencias_investigacao: list
+    replay_executado: bool
     mapa_pii: dict
     household_account_id: int
     account_id: int

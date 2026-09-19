@@ -36,10 +36,21 @@ from ..tools.pg_tools import (
     get_foods,
 )
 
+from ..tools.investigation_tools import (
+    verificar_faq,
+    verificar_estoque,
+    verificar_produtos_vencidos,
+    verificar_produtos_em_falta,
+    verificar_eventos,
+    verificar_receitas_usuario,
+    verificar_alimentos,
+)
+
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
+from .prompts.prompt_investigador import INVESTIGADOR_PROMPT_COMPLETO
 
 
 load_dotenv(".env")
@@ -101,4 +112,19 @@ stock_app = create_agent(
         get_foods,
     ],
     system_prompt=ESTOQUE_PROMPT_COMPLETO,
+)
+
+
+investigation_app = create_agent(
+    model=fast_llm,
+    tools=[
+        verificar_faq,
+        verificar_estoque,
+        verificar_produtos_vencidos,
+        verificar_produtos_em_falta,
+        verificar_eventos,
+        verificar_receitas_usuario,
+        verificar_alimentos,
+    ],
+    system_prompt=INVESTIGADOR_PROMPT_COMPLETO,
 )
