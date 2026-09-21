@@ -1,6 +1,7 @@
-from fastapi import HTTPException, Depends
-from .redis_client import get_session, delete_session
+from fastapi import HTTPException
+
 from .jwt_handler import get_user_id_from_token
+from .redis_client import delete_session, get_session
 
 
 def validate_session(session_id: str, token: str) -> dict:

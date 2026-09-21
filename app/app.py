@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .controller.chat import router as chat_router
 from .controller.metrics import router as metrics_router

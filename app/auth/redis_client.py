@@ -1,4 +1,5 @@
 import redis
+
 from ..config import REDIS_URL
 
 _redis_client = None
@@ -31,7 +32,7 @@ def delete_session(session_id: str) -> None:
 
 def invalidate_user_sessions(user_id: str) -> None:
     client = get_redis_client()
-    pattern = f"session:*"
+    pattern = "session:*"
     keys = client.keys(pattern)
     for key in keys:
         session_data = client.get(key)

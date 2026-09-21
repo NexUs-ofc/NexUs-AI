@@ -1,17 +1,19 @@
-from fastapi import Depends, HTTPException, Security, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from .api_key_validator import validate_api_key
-from .jwt_handler import decode_access_token, get_user_id_from_token
-from .session_validator import validate_session
+from typing import Annotated
 
+from fastapi import Depends, HTTPException, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from .api_key_validator import validate_api_key
+from .jwt_handler import get_user_id_from_token
+from .session_validator import validate_session
 
 security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Security(security),
-    api_key: str = Depends(validate_api_key),
+    credentials: Annotated[HTTPAuthorizationCredentials, Security(security)],
+    api_key: Annotated[str, Depends(validate_api_key)],
 ) -> dict:
     if not credentials:
         raise HTTPException(
