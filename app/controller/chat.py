@@ -8,6 +8,8 @@ from ..auth.dependencies import get_current_user
 from ..model.dto.chat_request import ChatRequest
 from ..model.dto.chat_response import ChatResponse
 from ..repository.mongodb.conversations import ConversationsRepository
+
+
 router = APIRouter(prefix="/chat")
 
 @router.post("/", response_model=ChatResponse)
