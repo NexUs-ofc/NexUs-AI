@@ -1,10 +1,11 @@
 from langchain.tools import tool
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from app.repository.qdrant.faq_repository import FAQRepository
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from app.config import DOC_FILE_PATH, GEMINI_API_KEY
+from app.repository.qdrant.faq_repository import FAQRepository
 
 faq_repo = FAQRepository()
 

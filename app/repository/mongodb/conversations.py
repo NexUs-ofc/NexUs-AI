@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
+
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from datetime import datetime
 
 from ...config import MONGODB_URI
 from ...controller.config import logging
@@ -19,8 +20,8 @@ class ConversationsRepository:
             result = ConversationsRepository.conversations_collection.insert_one({
                 "account_id": account_id,
                 "historico": [],
-                "created_at": datetime.now(),
-                "updated_at": datetime.now(),
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
             })
 
             logger.info(f"Sessão criada: {result.inserted_id}")
@@ -82,7 +83,7 @@ class ConversationsRepository:
                 {"_id": ObjectId(session_id)},
                 {
                     "$set": {
-                        "ended_at": datetime.now(),
+                        "ended_at": datetime.now(timezone.utc),
                         "status": "closed",
                     }
                 }
@@ -112,7 +113,7 @@ class ConversationsRepository:
                             ]
                         }
                     },
-                    "$set": {"updated_at": datetime.now()}
+                    "$set": {"updated_at": datetime.now(timezone.utc)}
                 }
             )
 

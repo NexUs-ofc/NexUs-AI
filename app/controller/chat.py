@@ -1,9 +1,7 @@
 from typing import Annotated
-
-from fastapi import APIRouter, Depends
-
 from app.schemas.flow import executar_chat
-
+from fastapi import APIRouter, Depends
+from app.schemas.flow import executar_chat
 from ..auth.dependencies import get_current_user
 from ..model.dto.chat_request import ChatRequest
 from ..model.dto.chat_response import ChatResponse

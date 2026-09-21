@@ -3,11 +3,11 @@ from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ...controller.config import logging
 from ...model.pgsql.category import Category
 from ...model.pgsql.food import Food
 from ...model.pgsql.pantry_item import Pantry_Item
 from ...model.pgsql.pantry_product_setting import Pantry_Product_Setting
-from ...controller.config import logging
 
 logger = logging.getLogger(__name__)
 

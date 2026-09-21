@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class ChatRequest(BaseModel):
     mensagem: str
     session_id: str | None = None

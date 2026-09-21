@@ -8,6 +8,7 @@ from ..auth.dependencies import get_current_user
 from ..config import TRACING_API_KEY
 from ..schemas.metrics import build_cost_summary, build_summary
 
+
 router = APIRouter(prefix="/metrics")
 
 _DASHBOARD_HTML_PATH = Path(__file__).resolve().parent.parent / "static" / "metrics" / "dashboard.html"

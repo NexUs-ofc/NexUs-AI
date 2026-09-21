@@ -1,11 +1,12 @@
+from datetime import datetime, timezone
+
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
-from datetime import datetime
 
-from ...model.mongodb.recipe import Recipe
 from ...config import MONGODB_URI
 from ...controller.config import logging
+from ...model.mongodb.recipe import Recipe
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class RecipesRepository:
             RecipesRepository.recipe_accounts_collection.insert_one({
                 "id_recipe": recipe.id,
                 "id_account": account_id,
-                "created_at": datetime.now(),
+                "created_at": datetime.now(timezone.utc),
             })
 
             logger.info("Receita inserida com sucesso")
