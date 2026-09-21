@@ -20,4 +20,6 @@ pymongo==4.17.0
 SQLAlchemy==2.0.51
 psycopg[binary]==3.3.4
 
+redis==5.2.1
+PyJWT==2.10.1
 ruff

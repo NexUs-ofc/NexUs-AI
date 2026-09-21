@@ -1,7 +1,10 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 from app.schemas.flow import executar_chat
 
+from ..auth.dependencies import get_current_user
 from ..model.dto.chat_request import ChatRequest
 from ..model.dto.chat_response import ChatResponse
 from ..repository.mongodb.conversations import ConversationsRepository
@@ -9,12 +12,12 @@ from ..repository.mongodb.conversations import ConversationsRepository
 router = APIRouter(prefix="/chat")
 
 @router.post("/", response_model=ChatResponse)
-def send_message(request: ChatRequest):
+def send_message(request: ChatRequest, user: Annotated[dict, Depends(get_current_user)]):
     resultado = executar_chat(
         mensagem=request.mensagem,
         session_id=request.session_id,
         household_account_id=request.household_account_id,
-        account_id=request.account_id,
+        account_id=user["user_id"],
     )
 
     return ChatResponse(
@@ -24,7 +27,7 @@ def send_message(request: ChatRequest):
 
 
 @router.delete("/{session_id}")
-def end_session(session_id: str):
+def end_session(session_id: str, user: Annotated[dict, Depends(get_current_user)]):
     encerrada = ConversationsRepository.end_session(session_id)
 
     return {"session_id": session_id, "encerrada": encerrada}

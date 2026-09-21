@@ -1,8 +1,10 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 
+from ..auth.dependencies import get_current_user
 from ..config import TRACING_API_KEY
 from ..schemas.metrics import build_cost_summary, build_summary
 
@@ -19,20 +21,16 @@ def _verificar_auth(authorization: str | None) -> None:
 
 
 @router.get("/summary")
-def get_summary(authorization: str | None = Header(default=None)):
-    _verificar_auth(authorization)
-
+def get_summary(user: Annotated[dict, Depends(get_current_user)]):
     return build_summary()
 
 
 @router.get("/cost")
 def get_cost(
-    authorization: str | None = Header(default=None),
+    user: Annotated[dict, Depends(get_current_user)],
     requests_per_user_per_week: int = 20,
     value_per_resolution_usd: float = 0.0,
 ):
-    _verificar_auth(authorization)
-
     return build_cost_summary(requests_per_user_per_week, value_per_resolution_usd)
 
 
