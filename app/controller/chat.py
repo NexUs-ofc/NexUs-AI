@@ -1,3 +1,4 @@
+
 from app.schemas.flow import executar_chat
 from fastapi import APIRouter, Depends
 from ..model.dto.chat_request import ChatRequest
