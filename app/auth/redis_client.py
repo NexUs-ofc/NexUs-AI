@@ -1,3 +1,6 @@
+import ast
+import json
+
 import redis
 
 from ..config import REDIS_URL
@@ -14,15 +17,25 @@ def get_redis_client() -> redis.Redis:
 
 def set_session(session_id: str, user_data: dict, expiration_seconds: int) -> None:
     client = get_redis_client()
-    client.setex(f"session:{session_id}", expiration_seconds, str(user_data))
+    client.setex(f"session:{session_id}", expiration_seconds, json.dumps(user_data))
 
 
 def get_session(session_id: str) -> dict | None:
     client = get_redis_client()
     session_data = client.get(f"session:{session_id}")
-    if session_data:
-        return eval(session_data)
-    return None
+
+    if not session_data:
+        return None
+
+    try:
+        dados = json.loads(session_data)
+    except (json.JSONDecodeError, TypeError):
+        try:
+            dados = ast.literal_eval(session_data)
+        except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
+            return None
+
+    return dados if isinstance(dados, dict) else None
 
 
 def delete_session(session_id: str) -> None:
