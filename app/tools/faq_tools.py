@@ -1,13 +1,10 @@
 from langchain.tools import tool
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from app.config import DOC_FILE_PATH, GEMINI_API_KEY
+from app.repository.qdrant.doc_repository import DocRepository
 from app.repository.qdrant.faq_repository import FAQRepository
 
 faq_repo = FAQRepository()
+doc_repo = DocRepository()
 
 @tool("faq_retriever")
 def faq_retriever(question: str) -> str:
@@ -24,19 +21,9 @@ def faq_retriever(question: str) -> str:
     vagas_restantes = 2 - len(respostas_formatadas)
 
     if vagas_restantes > 0:
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="gemini-embedding-2-preview",
-            google_api_key=GEMINI_API_KEY,
-        )
-        splitter_pdf = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
-        pdf_loader = PyPDFLoader(DOC_FILE_PATH)
-        pdf_chunks = splitter_pdf.split_documents(pdf_loader.load())
-        pdf_db = FAISS.from_documents(pdf_chunks, embeddings)
+        trechos = doc_repo.buscar_trechos_documentacao(question, k=vagas_restantes)
 
-        resultados_pdf = pdf_db.similarity_search(question, k=vagas_restantes)
-
-        for doc in resultados_pdf:
-            texto_limpo = doc.page_content.replace("\n", " ").strip()
-            respostas_formatadas.append(f"- {texto_limpo}")
+        for trecho in trechos:
+            respostas_formatadas.append(f"- {trecho}")
 
     return "\n".join(respostas_formatadas)
