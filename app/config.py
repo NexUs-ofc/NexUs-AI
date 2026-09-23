@@ -15,7 +15,13 @@ FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH")
 TRACING_API_KEY = os.getenv("TRACING_API_KEY")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "default-secret-key-change-in-production")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+if not JWT_SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY não definida. Configure a mesma chave usada pelo "
+        "microsserviço de autenticação; sem ela os tokens não podem ser validados."
+    )
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "30"))
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
