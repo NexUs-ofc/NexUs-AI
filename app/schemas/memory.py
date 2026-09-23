@@ -7,6 +7,7 @@ from app.core.llms import fast_llm
 from app.core.prompts.prompt_resumo import RESUMO_PROMPT
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.repository.qdrant.memory_repository import MemoryRepository
+from app.schemas.preferences import derivar_preferencias
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +67,27 @@ def resumir_sessao(session_id: str, account_id: int) -> str:
     )
 
     return resumo
+
+
+def encerrar_sessao(session_id: str, account_id: int, household_id: int) -> dict:
+    """
+    Fecha o ciclo de memória de uma sessão: gera o resumo da conversa e
+    atualiza as preferências do usuário a partir da atividade acumulada.
+
+    Uma falha ao derivar preferências não impede o encerramento da sessão.
+    """
+
+    resumo = resumir_sessao(session_id, account_id)
+
+    try:
+        preferencias = derivar_preferencias(
+            account_id=account_id,
+            household_id=household_id,
+        )
+    except Exception:
+        logger.exception(
+            f"Não foi possível atualizar preferências da conta {account_id}"
+        )
+        preferencias = []
+
+    return {"resumo": resumo, "preferencias": preferencias}
