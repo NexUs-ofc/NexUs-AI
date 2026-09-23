@@ -3,6 +3,7 @@ from langchain.agents import create_agent
 
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
+from ..tools.memory_tools import buscar_historico
 from ..tools.mongo_recipe_tools import (
     buscar_receitas_usuario,
     salvar_receita,
@@ -29,6 +30,7 @@ from ..tools.pg_tools import (
     get_stock,
     remove_product,
 )
+from ..tools.preference_tools import consultar_preferencias
 from .llms import fast_llm, specialist_llm
 from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
@@ -56,6 +58,8 @@ recipe_app = create_agent(
         salvar_receita,
         get_stock,
         get_expired_products,
+        consultar_preferencias,
+        buscar_historico,
     ],
     system_prompt=RECEITAS_PROMPT_COMPLETO,
 )
@@ -75,6 +79,8 @@ events_app = create_agent(
         create_list,
         get_list,
         update_list,
+        consultar_preferencias,
+        buscar_historico,
     ],
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
