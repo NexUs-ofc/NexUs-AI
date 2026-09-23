@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.schemas.flow import executar_chat
+from app.schemas.memory import resumir_sessao
 
 from ..auth.dependencies import get_current_user
 from ..model.dto.chat_request import ChatRequest
@@ -28,6 +29,12 @@ def send_message(request: ChatRequest, user: Annotated[dict, Depends(get_current
 
 @router.delete("/{session_id}")
 def end_session(session_id: str, user: Annotated[dict, Depends(get_current_user)]):
+    resumo = resumir_sessao(session_id, user["user_id"])
+
     encerrada = ConversationsRepository.end_session(session_id)
 
-    return {"session_id": session_id, "encerrada": encerrada}
+    return {
+        "session_id": session_id,
+        "encerrada": encerrada,
+        "resumo": resumo or None,
+    }
