@@ -1,7 +1,9 @@
+import re
 from datetime import datetime, timezone
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
+from langsmith import trace, traceable
 
 from app.controller.config import logging
 from app.core.agents import (
@@ -14,6 +16,7 @@ from app.core.llms import fast_llm
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.guardrails.guardrails import (
+    PII,
     anonimizar,
     checar_entrada,
     checar_saida,
@@ -30,7 +33,48 @@ from .state import State
 logger = logging.getLogger(__name__)
 
 
+def _mascarar(valor):
+    """
+    Devolve uma copia do valor com PII mascarada, para o que sai no trace.
 
+    Nunca altera o objeto recebido: o State segue intacto para o grafo.
+    """
+
+    if isinstance(valor, str):
+        for tipo, padrao in PII:
+            valor = re.sub(padrao, f"[{tipo}_MASCARADO]", valor)
+
+        return valor
+
+    if isinstance(valor, dict):
+        return {
+            chave: _mascarar(item)
+            for chave, item in valor.items()
+            if chave != "mapa_pii"
+        }
+
+    if isinstance(valor, (list, tuple)):
+        return [_mascarar(item) for item in valor]
+
+    return valor
+
+
+def _entrada_do_no(inputs: dict) -> dict:
+    return {"state": _mascarar(inputs.get("state", {}))}
+
+
+def _saida_do_no(outputs):
+    return _mascarar(outputs)
+
+
+_TRACE_NO = {
+    "run_type": "chain",
+    "process_inputs": _entrada_do_no,
+    "process_outputs": _saida_do_no,
+}
+
+
+@traceable(name="guardrail_entrada", **_TRACE_NO)
 def guardrail_entrada(state: State) -> State:
     with span(state["trace_id"], "guardrail_entrada"):
         texto_anonimizado, mapa = anonimizar(state["mensagem"])
@@ -60,6 +104,7 @@ def guardrail_entrada(state: State) -> State:
 
 
 
+@traceable(name="roteador", **_TRACE_NO)
 def roteador(state: State) -> State:
     with span(state["trace_id"], "roteador"):
         historico = state.get("historico", [])
@@ -145,6 +190,7 @@ def _invocar_agente(
 
 
 
+@traceable(name="agente_faq", **_TRACE_NO)
 def agente_faq(state: State) -> State:
     with span(state["trace_id"], "faq"):
         historico = state.get("historico", [])
@@ -178,6 +224,7 @@ def agente_faq(state: State) -> State:
 
 
 
+@traceable(name="agente_receitas", **_TRACE_NO)
 def agente_receitas(state: State) -> State:
     with span(state["trace_id"], "receitas"):
         historico = state.get("historico", [])
@@ -224,6 +271,7 @@ def agente_receitas(state: State) -> State:
 
 
 
+@traceable(name="agente_estoque", **_TRACE_NO)
 def agente_estoque(state: State) -> State:
     with span(state["trace_id"], "estoque"):
         historico = state.get("historico", [])
@@ -264,6 +312,7 @@ def agente_estoque(state: State) -> State:
 
 
 
+@traceable(name="agente_eventos", **_TRACE_NO)
 def agente_eventos(state: State) -> State:
     with span(state["trace_id"], "eventos"):
         historico = state.get("historico", [])
@@ -311,6 +360,7 @@ def agente_eventos(state: State) -> State:
 
 
 
+@traceable(name="orquestrador", **_TRACE_NO)
 def orquestrador(state: State) -> State:
     with span(state["trace_id"], "orquestrador"):
         resposta_agente = state.get(
@@ -353,6 +403,7 @@ def orquestrador(state: State) -> State:
 
 
 
+@traceable(name="guardrail_saida", **_TRACE_NO)
 def guardrail_saida(state: State) -> State:
     with span(state["trace_id"], "guardrail_saida"):
         mapa = state.get(
@@ -419,21 +470,31 @@ def executar_chat(
     erro = False
 
     try:
-        resultado = ceris_workflow.invoke({
-            "mensagem": mensagem,
-            "historico": historico,
-            "rota": "fallback",
-            "resposta_agente": "",
-            "resposta_final": "",
-            "entrada_aprovada": False,
-            "saida_aprovada": False,
-            "mapa_pii": {},
-            "household_account_id": household_account_id,
-            "account_id": account_id,
-            "trace_id": trace_id,
-            "input_tokens": 0,
-            "output_tokens": 0,
-        })
+        with trace(
+            name="ceris_chat_request",
+            run_type="chain",
+            metadata={
+                "session_id": session_id,
+                "household_account_id": household_account_id,
+                "account_id": account_id,
+                "trace_id": trace_id,
+            },
+        ):
+            resultado = ceris_workflow.invoke({
+                "mensagem": mensagem,
+                "historico": historico,
+                "rota": "fallback",
+                "resposta_agente": "",
+                "resposta_final": "",
+                "entrada_aprovada": False,
+                "saida_aprovada": False,
+                "mapa_pii": {},
+                "household_account_id": household_account_id,
+                "account_id": account_id,
+                "trace_id": trace_id,
+                "input_tokens": 0,
+                "output_tokens": 0,
+            })
     except Exception:
         erro = True
 

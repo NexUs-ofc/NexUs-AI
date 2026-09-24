@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .controller.chat import router as chat_router
-from .controller.metrics import router as metrics_router
+from .controller.health import router as health_router
 
 app = FastAPI()
 
@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
-app.include_router(metrics_router, tags=["Metrics"])
+app.include_router(health_router, tags=["Health"])
 
 app.mount(
     "/static",
@@ -28,5 +28,4 @@ app.mount(
 
 @app.get("/")
 def check() -> dict:
-    return {"msg":"Ceris Rodando!"}
-
+    return {"msg":"Ceris.AI Rodando!"}
