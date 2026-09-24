@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -15,6 +16,7 @@ from app.core.llms import fast_llm
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.guardrails.guardrails import (
+    PII,
     anonimizar,
     checar_entrada,
     checar_saida,
@@ -31,23 +33,38 @@ from .state import State
 logger = logging.getLogger(__name__)
 
 
-def _sem_mapa_pii(state):
-    if not isinstance(state, dict):
-        return state
+def _mascarar(valor):
+    """
+    Devolve uma copia do valor com PII mascarada, para o que sai no trace.
 
-    return {
-        chave: valor
-        for chave, valor in state.items()
-        if chave != "mapa_pii"
-    }
+    Nunca altera o objeto recebido: o State segue intacto para o grafo.
+    """
+
+    if isinstance(valor, str):
+        for tipo, padrao in PII:
+            valor = re.sub(padrao, f"[{tipo}_MASCARADO]", valor)
+
+        return valor
+
+    if isinstance(valor, dict):
+        return {
+            chave: _mascarar(item)
+            for chave, item in valor.items()
+            if chave != "mapa_pii"
+        }
+
+    if isinstance(valor, (list, tuple)):
+        return [_mascarar(item) for item in valor]
+
+    return valor
 
 
 def _entrada_do_no(inputs: dict) -> dict:
-    return {"state": _sem_mapa_pii(inputs.get("state", {}))}
+    return {"state": _mascarar(inputs.get("state", {}))}
 
 
 def _saida_do_no(outputs):
-    return _sem_mapa_pii(outputs)
+    return _mascarar(outputs)
 
 
 _TRACE_NO = {
