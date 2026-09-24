@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse
 
 from ..auth.tracing_key_validator import validate_api_key
 from ..schemas.health import checar_saude, checar_vivo
+from ..schemas.report import gerar_relatorio
+from ..schemas.report_html import montar_html
 
 router = APIRouter(prefix="/health")
 
@@ -33,3 +35,25 @@ def dependencies(api_key: Annotated[str, Depends(validate_api_key)]):
 @router.get("/page", response_class=HTMLResponse)
 def page():
     return HTMLResponse(content=_PAGINA.read_text(encoding="utf-8"))
+
+
+@router.get("/report", response_class=HTMLResponse)
+def report(
+    api_key: Annotated[str, Depends(validate_api_key)],
+    dias: int = 7,
+    mensagens_semana: int = 10,
+    economia_mensal_brl: float = 0.0,
+    projeto: str | None = None,
+):
+    """
+    Relatório de observabilidade a partir do LangSmith, com valores em real.
+    """
+
+    dados = gerar_relatorio(
+        dias=dias,
+        mensagens_semana=mensagens_semana,
+        economia_mensal_brl=economia_mensal_brl,
+        projeto=projeto,
+    )
+
+    return HTMLResponse(content=montar_html(dados))

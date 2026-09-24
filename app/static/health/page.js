@@ -245,10 +245,62 @@ async function carregar() {
   }
 }
 
+async function exportarRelatorio() {
+  const chave = elemento("apikey").value.trim();
+  const botao = elemento("relatorio");
+
+  if (!chave) {
+    aguardandoChave();
+    return;
+  }
+
+  const rotulo = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = "Gerando...";
+
+  const parametros = new URLSearchParams({
+    dias: elemento("dias").value,
+    mensagens_semana: elemento("mensagens-semana").value || "10",
+    economia_mensal_brl: elemento("economia").value || "0",
+  });
+
+  let endereco = null;
+
+  try {
+    const resposta = await fetch("/health/report?" + parametros.toString(), {
+      headers: { "X-API-Key": chave },
+    });
+
+    if (!resposta.ok) {
+      throw new Error("HTTP " + resposta.status);
+    }
+
+    const blob = await resposta.blob();
+    endereco = URL.createObjectURL(blob);
+
+    if (!window.open(endereco, "_blank")) {
+      const link = document.createElement("a");
+      link.href = endereco;
+      link.download = "relatorio-ceris.html";
+      link.click();
+    }
+  } catch (erro) {
+    mostrarFalha("falha ao gerar relatório", String(erro.message || erro));
+  } finally {
+    botao.disabled = false;
+    botao.textContent = rotulo;
+
+    if (endereco) {
+      setTimeout(function () { URL.revokeObjectURL(endereco); }, 60000);
+    }
+  }
+}
+
 function iniciar() {
   const salva = lerChaveSalva();
 
   elemento("verificar").addEventListener("click", carregar);
+  elemento("relatorio").addEventListener("click", exportarRelatorio);
 
   elemento("apikey").addEventListener("keydown", function (evento) {
     if (evento.key === "Enter") {

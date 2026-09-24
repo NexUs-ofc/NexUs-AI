@@ -16,6 +16,23 @@
   <div class="auth">
     <input id="apikey" type="password" placeholder="X-API-Key" autocomplete="off">
     <button id="verificar" type="button">Verificar</button>
+    <button id="relatorio" type="button" class="secundario">Exportar relatório</button>
+  </div>
+
+  <div class="relatorio-params">
+    <label>Período
+      <select id="dias">
+        <option value="1">24 horas</option>
+        <option value="7" selected>7 dias</option>
+        <option value="30">30 dias</option>
+      </select>
+    </label>
+    <label>Mensagens/usuário/semana
+      <input id="mensagens-semana" type="number" min="1" value="10">
+    </label>
+    <label>Economia mensal por household (R$)
+      <input id="economia" type="number" min="0" step="0.01" value="0" placeholder="suposição do ROI">
+    </label>
   </div>
 
   <div class="cards">
