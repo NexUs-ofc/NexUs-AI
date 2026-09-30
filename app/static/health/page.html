@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saúde da API — Ceris.AI</title>
+  <link rel="stylesheet" href="/static/health/page.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Saúde da API</h1>
+    <p>Ceris.AI — ms-ia · atualiza a cada 20s</p>
+  </header>
+
+  <div class="auth">
+    <input id="apikey" type="password" placeholder="X-API-Key" autocomplete="off">
+    <button id="verificar" type="button">Verificar</button>
+    <button id="relatorio" type="button" class="secundario">Exportar relatório</button>
+  </div>
+
+  <div class="relatorio-params">
+    <label>Período
+      <select id="dias">
+        <option value="1">24 horas</option>
+        <option value="7" selected>7 dias</option>
+        <option value="30">30 dias</option>
+      </select>
+    </label>
+    <label>Mensagens/usuário/semana
+      <input id="mensagens-semana" type="number" min="1" value="10">
+    </label>
+    <label>Economia mensal por household (R$)
+      <input id="economia" type="number" min="0" step="0.01" value="0" placeholder="suposição do ROI">
+    </label>
+  </div>
+
+  <div class="cards">
+    <div class="card status">
+      <div class="label">Estado</div>
+      <div class="pill alerta" id="estado">aguardando</div>
+      <div class="hint" id="falhas"></div>
+    </div>
+    <div class="card status">
+      <div class="label">Memória</div>
+      <div class="value" id="memoria">—</div>
+      <div class="hint" id="memoria-hint">do processo</div>
+    </div>
+    <div class="card status">
+      <div class="label">CPU</div>
+      <div class="value" id="cpu">—</div>
+      <div class="hint" id="cpu-hint">do processo</div>
+    </div>
+    <div class="card status">
+      <div class="label">Uptime</div>
+      <div class="value" id="uptime">—</div>
+      <div class="hint" id="momento"></div>
+    </div>
+  </div>
+
+  <div class="chart-panel">
+    <div class="chart-label">Consumo de recursos — nesta sessão</div>
+    <div class="chart-box">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="deps">
+    <h2>Serviços</h2>
+    <div id="lista"></div>
+  </div>
+
+  <div class="aviso">
+    Esta página acompanha o consumo de recursos do processo e a disponibilidade
+    dos serviços. Latência entre agentes, índice de erros, custo e ROI ficam no
+    LangSmith e nos relatórios periódicos.
+  </div>
+
+  <script src="/static/health/page.js"></script>
+</body>
+</html>

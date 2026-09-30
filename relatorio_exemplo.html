@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Relatório de Observabilidade — Ceris.AI</title><style>
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: #1f2937; background: #ffffff;
+  margin: 0 auto; padding: 40px 32px; max-width: 900px; line-height: 1.55;
+}
+header { border-bottom: 3px solid #7c3aed; padding-bottom: 18px; margin-bottom: 28px; }
+h1 { margin: 0; font-size: 26px; }
+header p { margin: 6px 0 0; color: #6b7280; font-size: 14px; }
+h2 {
+  font-size: 15px; text-transform: uppercase; letter-spacing: .04em;
+  color: #7c3aed; margin: 32px 0 12px; padding-bottom: 6px;
+  border-bottom: 1px solid #ede9fe;
+}
+table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14px; }
+th {
+  text-align: left; background: #f3f4f6; color: #4b5563;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+  padding: 9px 12px; border-bottom: 2px solid #d1d5db;
+}
+td { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.destaques { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 4px; }
+.destaque {
+  flex: 1 1 180px; background: #f3f4f6; border-radius: 10px; padding: 14px 16px;
+}
+.destaque .rotulo {
+  font-size: 11px; font-weight: 700; color: #7c3aed;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.destaque .valor { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.destaque .nota { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.nota-bloco {
+  background: #ede9fe; border: 1px solid #ddd6fe; border-radius: 10px;
+  padding: 14px 16px; color: #4c1d95; font-size: 13px; margin: 14px 0;
+}
+.alerta-bloco {
+  background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px;
+  padding: 14px 16px; color: #92400e; font-size: 13px; margin: 14px 0;
+}
+code {
+  background: #f3f4f6; padding: 2px 6px; border-radius: 4px;
+  font-size: 13px; font-family: Consolas, Monaco, monospace;
+}
+pre {
+  background: #f3f4f6; padding: 14px 16px; border-radius: 8px;
+  font-size: 13px; overflow-x: auto; font-family: Consolas, Monaco, monospace;
+}
+footer {
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid #d1d5db;
+  color: #6b7280; font-size: 12px;
+}
+@media print {
+  body { padding: 0; max-width: none; }
+  h2 { break-after: avoid; }
+  table, .destaques { break-inside: avoid; }
+}
+</style></head><body><header><h1>Relatório de Observabilidade</h1><p>Ceris.AI — ms-ia · projeto <code>ceris-ms-ia-dev</code> · últimos 30 dias · gerado em 2026-09-24T15:40:36+00:00</p></header><h2>1. Volume e confiabilidade</h2><div class='destaques'><div class='destaque'><div class='rotulo'>Requisições</div><div class='valor'>1</div><div class='nota'>no período</div></div><div class='destaque'><div class='rotulo'>Índice de erros</div><div class='valor'>0.0%</div><div class='nota'>0 com falha</div></div><div class='destaque'><div class='rotulo'>Sessões</div><div class='valor'>1</div><div class='nota'>1.0 msg/sessão</div></div><div class='destaque'><div class='rotulo'>Chamadas de LLM</div><div class='valor'>126</div><div class='nota'>422 runs</div></div></div><h2>2. Tempo total de resposta</h2><table><tr><th>Média</th><th class='num'>Mediana</th><th class='num'>P95</th><th class='num'>Mínimo</th><th class='num'>Máximo</th></tr><tr><td>0.18 s</td><td class='num'>0.18 s</td><td class='num'>0.18 s</td><td class='num'>0.18 s</td><td class='num'>0.18 s</td></tr></table><div class='nota-bloco'>A mediana costuma representar melhor o comportamento típico que a média, que é puxada por casos extremos.</div><h2>3. Latência interagentes</h2><table><tr><th>Agente</th><th class='num'>Chamadas</th><th class='num'>Média</th><th class='num'>Mediana</th><th class='num'>P95</th></tr><tr><td><code>agente_receitas</code></td><td class='num'>1</td><td class='num'>0.00 s</td><td class='num'>0.00 s</td><td class='num'>0.00 s</td></tr></table><h2>4. Etapas do pipeline</h2><table><tr><th>Etapa</th><th class='num'>Chamadas</th><th class='num'>Média</th><th class='num'>Mediana</th><th class='num'>P95</th></tr><tr><td><code>orquestrador</code></td><td class='num'>10</td><td class='num'>7.17 s</td><td class='num'>5.22 s</td><td class='num'>26.06 s</td></tr><tr><td><code>guardrail_saida</code></td><td class='num'>10</td><td class='num'>4.70 s</td><td class='num'>2.66 s</td><td class='num'>17.03 s</td></tr><tr><td><code>guardrail_entrada</code></td><td class='num'>13</td><td class='num'>2.96 s</td><td class='num'>1.40 s</td><td class='num'>11.65 s</td></tr><tr><td><code>roteador</code></td><td class='num'>12</td><td class='num'>1.56 s</td><td class='num'>0.71 s</td><td class='num'>10.78 s</td></tr></table><h2>5. Custo</h2><div class='destaques'><div class='destaque'><div class='rotulo'>Total do período</div><div class='valor'>R$ 0,1648</div><div class='nota'>US$ 0.032063</div></div><div class='destaque'><div class='rotulo'>Por requisição</div><div class='valor'>R$ 0,1648</div><div class='nota'>US$ 0.032063</div></div><div class='destaque'><div class='rotulo'>Por resolução</div><div class='valor'>R$ 0,1648</div><div class='nota'>uma sessão de conversa</div></div></div><p>Tokens: <strong>229,578</strong> de entrada e <strong>49,705</strong> de saída. Modelos: openai/gpt-oss-20b (126).</p><h2>6. Custo estimado por volume de usuários</h2><div class='nota-bloco'><strong>Suposição declarada:</strong> cada usuário envia 10 mensagens por semana.</div><table><tr><th>Cenário</th><th class='num'>Mensagens/semana</th><th class='num'>Custo/semana</th><th class='num'>Custo/mês</th></tr><tr><td>100 usuários semanais</td><td class='num'>1,000</td><td class='num'>R$ 164,8469</td><td class='num'>R$ 659,3876</td></tr><tr><td>1000 usuários semanais</td><td class='num'>10,000</td><td class='num'>R$ 1.648,4691</td><td class='num'>R$ 6.593,8763</td></tr></table><h2>7. Custo / Retorno (ROI)</h2><pre>ROI (%) = (economia_mensal − custo_mensal) ÷ custo_mensal × 100</pre><p>Lado do custo, medido: <strong>R$ 6,5939</strong> por household/mês.</p><div class='destaques'><div class='destaque'><div class='rotulo'>ROI</div><div class='valor'>582.4%</div><div class='nota'>economia assumida de R$ 45,0000/mês</div></div></div><h2>8. Metodologia</h2><table><tr><th>Item</th><th>Origem</th></tr><tr><td>Tempo total de resposta</td><td>duração das runs <code>ceris_chat_request</code> no LangSmith</td></tr><tr><td>Latência interagentes</td><td>duração dos spans <code>agente_*</code>, deduplicados por trace</td></tr><tr><td>Índice de erros</td><td>runs raiz com <code>status = error</code> sobre o total</td></tr><tr><td>Custo</td><td>campo <code>total_cost</code> que o LangSmith calcula por chamada de LLM, somado por período</td></tr><tr><td>Custo por resolução</td><td>custo total ÷ <code>session_id</code> distintos nos metadados</td></tr><tr><td>Projeção por volume</td><td>custo médio por requisição × mensagens/semana × nº de usuários</td></tr><tr><td>Conversão para real</td><td>PTAX / Banco Central do Brasil, cotação de venda de 2026-09-23: R$ 5.1414</td></tr></table><footer>Relatório gerado automaticamente a partir do LangSmith. Os valores em real usam a cotação PTAX do Banco Central na data indicada.</footer></body></html>

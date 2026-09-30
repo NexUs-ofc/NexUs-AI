@@ -1,0 +1,71 @@
+name: AI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff
+        run: ruff check app/
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile sources
+        run: python -m compileall app
+
+  validate-bases:
+    name: Validate Bases
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check base files exist
+        run: |
+          test -f app/bases/NexUs_doc.pdf || (echo "Missing app/bases/NexUs_doc.pdf" && exit 1)
+          test -f app/bases/NexUs_FAQs.json || (echo "Missing app/bases/NexUs_FAQs.json" && exit 1)
+          test -f app/bases/NexUs_FAQs.md || (echo "Missing app/bases/NexUs_FAQs.md" && exit 1)
+
+      - name: Validate FAQs JSON
+        run: |
+          python -c "import json; d=json.load(open('app/bases/NexUs_FAQs.json', encoding='utf-8')); assert isinstance(d, list) and len(d) > 0; print(f'FAQs OK: {len(d)} entradas')"

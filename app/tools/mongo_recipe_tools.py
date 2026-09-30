@@ -1,6 +1,7 @@
 from langchain.tools import tool
-from ..repository.mongodb.recipes import RecipesRepository
+
 from ..model.mongodb.recipe import Recipe
+from ..repository.mongodb.recipes import RecipesRepository
 
 
 @tool("buscar_receitas_usuario")

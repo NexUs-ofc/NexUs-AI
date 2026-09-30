@@ -3,12 +3,11 @@ from datetime import date
 
 from langchain.tools import tool
 
-from ..repository.pgsql.config import SessionLocal
-from ..model.pgsql.pantry_item import Pantry_Item
 from ..model.pgsql.food import Food
-
-from ..repository.pgsql.stock import StockRepository
+from ..model.pgsql.pantry_item import Pantry_Item
+from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
+from ..repository.pgsql.stock import StockRepository
 
 
 def _food_lookup(session) -> dict[int, Food]:

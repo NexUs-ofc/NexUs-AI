@@ -2,9 +2,9 @@ from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
-from ...model.mongodb.shopping_list import ShoppingList
 from ...config import MONGODB_URI
 from ...controller.config import logging
+from ...model.mongodb.shopping_list import ShoppingList
 
 logger = logging.getLogger(__name__)
 

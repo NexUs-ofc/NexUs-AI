@@ -1,4 +1,4 @@
-from .config import TEMPORAL_CONTEXT, SYSTEM_PROMPT
+from .config import SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 STOCK_PROMPT = f"""
     {SYSTEM_PROMPT}

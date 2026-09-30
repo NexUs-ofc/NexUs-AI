@@ -1,12 +1,13 @@
 # Arquivo de embedding, rodar apenas para subir os dados para o Qdrant Cloud. Não é necessário rodar em produção.
 
 
-import os
 import json
+import os
+
 from dotenv import load_dotenv
-from langchain_qdrant import QdrantVectorStore
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
 
 load_dotenv()
 
