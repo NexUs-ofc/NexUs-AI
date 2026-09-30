@@ -50,7 +50,7 @@ Caso a categoria não se encaixe claramente em nenhuma opção, utilize "Outros"
 - Extraia SOMENTE o que estiver claramente legível na nota fiscal. Nunca invente
   produtos, marcas, quantidades ou preços.
 - A marca deve ser extraída da descrição do produto sempre que estiver presente.
-  Caso a marca não seja identificável, deixe o campo vazio.
+  Caso a marca não seja identificável, deixe o campo como `null`.
 - A quantidade deve ser um número. Se a própria nota apresentar quantidade,
   use-a. Caso contrário, considere 1 quando houver apenas uma linha de preço.
 - Se a nota apresentar múltiplas embalagens do mesmo produto, some na
@@ -61,12 +61,12 @@ Caso a categoria não se encaixe claramente em nenhuma opção, utilize "Outros"
 {{
   "itens": [
     {{
-      "marca": "string (vazio se não identificada)",
+      "marca": "string ou null (se não identificada)",
       "nome": "string",
       "categoria": "string (uma das categorias do ENUM)",
       "quantidade": "number",
-      "preco_unitario": "number (opcional)",
-      "preco_total": "number (opcional)"
+      "preco_unitario": "number ou null (se não identificado)",
+      "preco_total": "number ou null (se não identificado)"
     }}
   ]
 }}
@@ -120,7 +120,7 @@ Resposta:
 {
     "itens": [
         {
-            "marca": "",
+            "marca": null,
             "nome": "Banana Prata",
             "categoria": "Hortifruti",
             "quantidade": 1,
@@ -128,7 +128,7 @@ Resposta:
             "preco_total": 6.80
         },
         {
-            "marca": "",
+            "marca": null,
             "nome": "Tomate",
             "categoria": "Hortifruti",
             "quantidade": 1,
