@@ -1,19 +1,15 @@
-from datetime import date
-from decimal import Decimal
-from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-
-class ItemConfirmacaoRequest(BaseModel):
-    nome: str
-    marca: Optional[str] = None
-    categoria: str
-    quantidade: int = 1
-    data_validade: Optional[date] = None
-    peso: Optional[Decimal] = None
-    unidade_medida: Optional[str] = "unit"
+from .nota_fiscal_response import ItemNotaFiscal
 
 
 class NotaFiscalConfirmacaoRequest(BaseModel):
-    household_account_id: int
-    itens: list[ItemConfirmacaoRequest]
+    """
+    Itens revisados pelo usuário no app após a leitura da nota.
+
+    O fluxo é em duas etapas (ler -> usuário confirma/edita -> salvar) para que
+    nada gerado pelo modelo entre no estoque sem revisão humana.
+    """
+
+    household_account_id: int = Field(..., gt=0)
+    itens: list[ItemNotaFiscal] = Field(..., min_length=1, max_length=200)

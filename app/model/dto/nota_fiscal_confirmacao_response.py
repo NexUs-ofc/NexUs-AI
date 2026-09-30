@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -7,10 +7,11 @@ class ItemConfirmadoResponse(BaseModel):
     pantry_item_id: int
     food_id: int
     nome: str
-    marca: Optional[str] = None
+    marca: str | None = None
     categoria: str
     quantidade: int
-    data_validade: Optional[date] = None
+    data_validade: date
+    validade_estimada: bool = False
 
 
 class NotaFiscalConfirmacaoResponse(BaseModel):

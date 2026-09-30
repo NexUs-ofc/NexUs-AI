@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 
+from ..model.dto.nota_fiscal_response import NotaFiscalExtraida
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
@@ -104,8 +105,12 @@ stock_app = create_agent(
 )
 
 
+# Agente leitor de notas fiscais: sem tools, apenas visão + saída estruturada.
+# O response_format obriga o modelo a devolver um JSON validado pelo Pydantic
+# (fica em resultado["structured_response"]), eliminando o parse manual.
 nota_fiscal_app = create_agent(
     model=multimodal_llm,
     tools=[],
     system_prompt=NOTA_FISCAL_PROMPT_COMPLETO,
+    response_format=NotaFiscalExtraida,
 )
