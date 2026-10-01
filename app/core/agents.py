@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-
+import asyncio
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
@@ -36,10 +36,22 @@ from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
+from .mcp.tavily_mcp import load_tavily_tools
 
-load_dotenv(".env")
+
+TAVILY_HABILITADAS = {"tavily_search"}
+
+tavily_tools = []
 
 
+async def initialize_tavily_tools():
+    
+    global tavily_tools
+    all_tools = await load_tavily_tools()
+    tavily_tools = [t for t in all_tools if t.name in TAVILY_HABILITADAS]
+
+
+asyncio.run(initialize_tavily_tools())
 
 faq_app = create_agent(
     model=fast_llm,
@@ -48,8 +60,6 @@ faq_app = create_agent(
     ],
     system_prompt=FAQ_PROMPT_COMPLETO,
 )
-
-
 
 recipe_app = create_agent(
     model=specialist_llm,
@@ -60,6 +70,7 @@ recipe_app = create_agent(
         get_expired_products,
         consultar_preferencias,
         buscar_historico,
+        *tavily_tools
     ],
     system_prompt=RECEITAS_PROMPT_COMPLETO,
 )
