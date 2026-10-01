@@ -1,17 +1,26 @@
+"""
+Dependência de autenticação das rotas.
+
+A estratégia é a mesma da API Core: o token vem do mobile no cabeçalho
+Authorization, e a validade é decidida aqui mesmo, pela assinatura — não há
+consulta a sessão, a Redis nem ao microsserviço de autenticação.
+"""
+
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, Security
+from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from ..config import VALID_TOKENS
 from .api_key_validator import validate_api_key
-from .jwt_handler import get_user_id_from_token
-from .session_validator import validate_session
+from .jwt_handler import TokenInvalido, decodificar_token
 
 security = HTTPBearer(auto_error=False)
 
+NAO_AUTORIZADO = {"WWW-Authenticate": "Bearer"}
+
 
 def get_current_user(
-    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Security(security)],
     api_key: Annotated[str, Depends(validate_api_key)],
 ) -> dict:
@@ -19,19 +28,33 @@ def get_current_user(
         raise HTTPException(
             status_code=401,
             detail="Bearer token required",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers=NAO_AUTORIZADO,
         )
 
     token = credentials.credentials
-    user_id = get_user_id_from_token(token)
-    if not user_id:
+
+    # Atalho de desenvolvimento: tokens listados em VALID_TOKENS passam sem
+    # verificação de assinatura. Em produção a variável fica vazia e este
+    # ramo nunca executa.
+    if token in VALID_TOKENS:
+        return {"user_id": 0, "token": token, "claims": {}, "teste": True}
+
+    try:
+        claims = decodificar_token(token)
+    except TokenInvalido as erro:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or expired token",
-        )
+            detail=str(erro),
+            headers=NAO_AUTORIZADO,
+        ) from erro
 
-    session_id = request.path_params.get("session_id") or request.query_params.get("session_id")
-    if session_id:
-        validate_session(session_id, token)
+    try:
+        user_id = int(claims["sub"])
+    except (KeyError, TypeError, ValueError) as erro:
+        raise HTTPException(
+            status_code=401,
+            detail="Token sem identificação de perfil",
+            headers=NAO_AUTORIZADO,
+        ) from erro
 
-    return {"user_id": user_id, "token": token}
+    return {"user_id": user_id, "token": token, "claims": claims, "teste": False}

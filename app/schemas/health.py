@@ -70,14 +70,6 @@ def _checar_qdrant() -> str:
     return f"{len(colecoes)} collections"
 
 
-def _checar_redis() -> str:
-    from app.auth.redis_client import get_redis_client
-
-    get_redis_client().ping()
-
-    return "conectado"
-
-
 def _checar_tcp(url: str) -> str:
     alvo = urlparse(url if "//" in url else f"//{url}")
     porta = alvo.port or (443 if (alvo.scheme or "https") == "https" else 80)
@@ -146,7 +138,6 @@ def checar_saude() -> dict:
         _medir("MongoDB", _checar_mongodb),
         _medir("PostgreSQL", _checar_postgres),
         _medir("Qdrant", _checar_qdrant),
-        _medir("Redis", _checar_redis),
         _medir("Groq", _checar_groq),
         _medir("LangSmith", _checar_langsmith),
     ]
