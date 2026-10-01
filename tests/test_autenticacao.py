@@ -18,11 +18,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from app.auth.api_key_validator import validate_api_key
 from app.auth.dependencies import get_current_user
-from app.auth.jwt_handler import (
-    TokenInvalido,
-    decodificar_token,
-    get_user_id_from_token,
-)
+from app.auth.jwt_handler import TokenInvalido, decodificar_token
 from app.config import (
     JWT_ALGORITHM,
     JWT_ISSUER,
@@ -62,10 +58,6 @@ def test_token_valido_devolve_claims():
     assert claims["sub"] == "7"
     assert claims["iss"] == JWT_ISSUER
     assert claims["profile_type"] == "HOUSEHOLD"
-
-
-def test_sub_vira_inteiro():
-    assert get_user_id_from_token(montar_token(sub="42")) == 42
 
 
 def test_assinatura_de_outro_segredo_e_recusada():
@@ -119,7 +111,9 @@ def test_token_sem_exp_e_recusado():
 
 
 def test_lixo_nao_derruba_o_validador():
-    assert get_user_id_from_token("nao-e-um-jwt") is None
+    """Entrada que nem é JWT tem que virar TokenInvalido, não exceção crua."""
+    with pytest.raises(TokenInvalido):
+        decodificar_token("nao-e-um-jwt")
 
 
 # -------------------------------------------------------------- dependencies

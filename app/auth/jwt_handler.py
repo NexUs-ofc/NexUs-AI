@@ -49,22 +49,3 @@ def decodificar_token(token: str) -> dict:
         raise TokenInvalido("Assinatura inválida") from erro
     except jwt.InvalidTokenError as erro:
         raise TokenInvalido("Token inválido") from erro
-
-
-def get_user_id_from_token(token: str) -> int | None:
-    """
-    Id do perfil, lido do claim "sub".
-
-    O Auth grava o id como string (Long.toString(profile.id())), então a
-    conversão para int acontece aqui. Devolve None quando o token não presta,
-    para quem chama decidir a resposta HTTP.
-    """
-    try:
-        claims = decodificar_token(token)
-    except TokenInvalido:
-        return None
-
-    try:
-        return int(claims["sub"])
-    except (KeyError, TypeError, ValueError):
-        return None
