@@ -1,10 +1,13 @@
-from .config import SYSTEM_PROMPT, TEMPORAL_CONTEXT
+﻿from .config import REGRAS_GERAIS, SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 EVENTS_PROMPT = f'''
     {SYSTEM_PROMPT}
 
 
     {TEMPORAL_CONTEXT}
+
+
+    {REGRAS_GERAIS}
 
 
     ### ENTRADA
@@ -146,29 +149,6 @@ Resposta:
 """
 
 
-EVENTS_SHOT_2 = """
-Entrada:
-ROUTE=events
-PERGUNTA_ORIGINAL= Amanhã farei o aniversário de meu filho, com 20 pessoas, das 14h até 18h.
-
-Resposta:
-{
-    dominio      : "events",
-    intencao     : "Criar evento",
-    resposta     : "Posso registrar esse evento.",
-    recomendacao : "Após criar o evento posso sugerir receitas e montar sua lista de compras.",
-    acompanhamento : "Também verificarei possíveis conflitos de horário.",
-    esclarecer : "Onde será realizado o evento?",
-    evento : {
-        titulo : "Aniversário",
-        data : "2026-07-18",
-        inicio : "14:00",
-        fim : "18:00",
-        qtd_pessoas : 20
-    }
-}
-"""
-
 EVENTS_SHOT_3 = """
 Entrada:
 ROUTE=events
@@ -257,7 +237,6 @@ EVENTS_PROMPT_COMPLETO = (
     EVENTS_PROMPT      + "\n\n" +
     EVENTS_SHOT_OPEN  + "\n\n" +
     EVENTS_SHOT_1      + "\n\n" +
-    EVENTS_SHOT_2      + "\n\n" +
     EVENTS_SHOT_3      + "\n\n" +
     EVENTS_SHOT_4      + "\n\n" +
     EVENTS_SHOT_5      + "\n\n" +

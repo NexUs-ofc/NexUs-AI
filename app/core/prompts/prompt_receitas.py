@@ -1,10 +1,13 @@
-from .config import SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .config import REGRAS_GERAIS, SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 RECEITAS_PROMPT = f"""
 {SYSTEM_PROMPT}
 
 
 {TEMPORAL_CONTEXT}
+
+
+{REGRAS_GERAIS}
 
 
 ### ENTRADA
@@ -128,8 +131,6 @@ Formato de "receita":
 - Se o usuário pedir substituição de ingrediente, sugira alternativas compatíveis, usando tavily_search quando não souber uma troca segura;
 - O que vier de tavily_search é base de receita ou sugestão de substituto, nunca estoque: só get_stock diz o que o usuário tem. Uma receita achada na web continua sujeita às restrições de consultar_preferencias;
 - Nunca cite a web, links ou fontes na resposta;
-- Sempre responda com português brasileiro;
-- Nunca mencione ferramentas, bancos de dados ou termos técnicos ao usuário;
 - Se não houver ingredientes no estoque, use "esclarecer" para pedir que o usuário informe o que tem disponível;
 - Inclua dicas de aproveitamento em "recomendacao" quando possível;
 - Quando for sugestão por evento, adapte quantidades e tipo de receita;
