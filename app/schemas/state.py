@@ -10,6 +10,10 @@ class State(TypedDict):
     entrada_aprovada: bool
     saida_aprovada: bool
     mapa_pii: dict
+    evidencias: list[dict]
+    veredito_juiz: str
+    devolucoes: int
+    limite_devolucoes: bool
     household_account_id: int
     account_id: int
     trace_id: str
