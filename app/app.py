@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -8,6 +9,8 @@ from groq import APIConnectionError, APIStatusError, RateLimitError
 
 from .controller.chat import router as chat_router
 from .controller.health import router as health_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -71,6 +74,31 @@ def erro_do_provedor(
             "detalhe": "O provedor do modelo recusou a requisição.",
             "origem": "groq",
             "mensagem_do_provedor": str(exc),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+def falha_inesperada(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Ultimo recurso: banco fora, ferramenta quebrada, qualquer coisa nao
+    prevista. O cliente recebia "Internal Server Error" sem nenhuma pista,
+    e o mobile nao tinha como distinguir disso de um bug dele.
+
+    O detalhe tecnico fica no log, nao na resposta.
+    """
+
+    logger.exception(
+        "Falha nao tratada na requisicao",
+        extra={"stage": "http", "caminho": str(request.url.path)},
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detalhe": "Nao foi possivel concluir a requisicao.",
+            "origem": "ceris-ia",
+            "tipo": type(exc).__name__,
         },
     )
 
