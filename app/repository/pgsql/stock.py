@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
@@ -33,6 +35,33 @@ class StockRepository:
             self.session.rollback()
 
             logger.exception("Erro ao inserir item em estoque")
+
+            return None
+
+    def find_equivalente(
+        self,
+        profile_id: int,
+        food_id: int,
+        expiry_date: date | None,
+    ) -> Pantry_Item | None:
+        """
+        Item do mesmo alimento, com a mesma validade, já no estoque.
+
+        Serve para somar quantidade em vez de abrir linha nova: sem isto o
+        estoque acumula duplicata a cada atualização.
+        """
+
+        try:
+            return self.session.scalars(
+                select(Pantry_Item).where(
+                    Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.food_id == food_id,
+                    Pantry_Item.expiry_date == expiry_date,
+                )
+            ).first()
+
+        except SQLAlchemyError:
+            logger.exception("Erro ao buscar item equivalente em estoque")
 
             return None
 

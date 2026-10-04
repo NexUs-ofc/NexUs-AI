@@ -12,7 +12,10 @@ class Pantry_Product_Setting(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     food_id: Mapped[int] = mapped_column(ForeignKey("food.id"))
-    profile_id: Mapped[int] = mapped_column(ForeignKey("profile.id"))
+    # Integer, e nao ForeignKey: a tabela referenciada nao e mapeada neste
+    # projeto, e a FK declarada quebraria a configuracao do mapper. A
+    # constraint existe no banco.
+    profile_id: Mapped[int] = mapped_column(Integer())
     minimum_quantity: Mapped[int] = mapped_column(Integer())
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=func.now()
