@@ -8,6 +8,7 @@ from ..tools.calc_tools import (
     escalar_quantidades,
     somar_valores,
 )
+from ..tools.date_tools import resolver_data
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
@@ -112,6 +113,7 @@ recipe_app = create_agent(
 events_app = create_agent(
     model=specialist_llm,
     tools=[
+        resolver_data,
         create_event,
         get_events,
         postpone_event,
@@ -136,6 +138,7 @@ events_app = create_agent(
 stock_app = create_agent(
     model=specialist_llm,
     tools=[
+        resolver_data,
         resolver_alimento,
         add_product,
         remove_product,

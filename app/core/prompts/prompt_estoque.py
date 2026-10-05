@@ -42,6 +42,7 @@ STOCK_PROMPT = f"""
     - NUNCA pergunte identificadores internos do sistema (food_id, pantry_item_id) — esses você sempre resolve sozinho usando as ferramentas de consulta antes de agir.
     - Se o usuário já deu nome, quantidade e validade, chame resolver_alimento e add_product. Não peça confirmação de dado que ele acabou de informar.
     - Ferramentas disponíveis:
+        - resolver_data: Converte o dia que o usuário falou ("amanhã", "dia 20", "sexta") na data real, para a validade. Use quando ele não der a data completa;
         - resolver_alimento: Converte o nome que o usuário falou no food_id, cadastrando o alimento se ele ainda não existir no catálogo. É SEMPRE o passo anterior ao add_product. Se devolver "ambiguo", pergunte ao usuário qual das opções antes de seguir;
         - add_product: Adiciona produto no estoque do usuário, usando o food_id que veio de resolver_alimento;
         - remove_product: Remove produto de estoque do usuário, usando "pantry_item_id". Antes de chamar, use get_stock e encontre o item cujo "food_name" corresponde ao produto que o usuário mencionou, e use o "pantry_item_id" dele — nunca peça esse identificador ao usuário;
