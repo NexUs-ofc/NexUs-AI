@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
-from langchain.agents import create_agent
 import asyncio
+
+from langchain.agents import create_agent
+
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
@@ -32,12 +33,11 @@ from ..tools.pg_tools import (
 )
 from ..tools.preference_tools import consultar_preferencias
 from .llms import fast_llm, specialist_llm
+from .mcp.tavily_mcp import load_tavily_tools
 from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
 from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
-from .mcp.tavily_mcp import load_tavily_tools
-
 
 TAVILY_HABILITADAS = {"tavily_search"}
 
