@@ -1,17 +1,15 @@
-﻿from dotenv import load_dotenv
-from langchain.agents import create_agent
-import asyncio
+﻿import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+
+from langchain.agents import create_agent
+
 from ..tools.calc_tools import (
     calcular_percentual,
     escalar_quantidades,
     somar_valores,
 )
 from ..tools.date_tools import resolver_data
-import asyncio
-
-
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
