@@ -1,6 +1,6 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from ...config import TAVILY_API_KEY
 
+from ...config import TAVILY_API_KEY
 
 if not TAVILY_API_KEY:
         raise RuntimeError(
