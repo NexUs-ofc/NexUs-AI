@@ -25,3 +25,6 @@ PyJWT==2.10.1
 ruff
 psutil==7.2.2
 numpy==2.5.3
+rapidocr-onnxruntime==1.2.3
+opencv-python-headless
+python-multipart
