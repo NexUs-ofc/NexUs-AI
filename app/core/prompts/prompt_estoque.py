@@ -1,10 +1,13 @@
-from .config import SYSTEM_PROMPT, TEMPORAL_CONTEXT
+﻿from .config import REGRAS_GERAIS, SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 STOCK_PROMPT = f"""
     {SYSTEM_PROMPT}
 
 
     {TEMPORAL_CONTEXT}
+
+
+    {REGRAS_GERAIS}
 
 
     ### ENTRADA
@@ -35,9 +38,13 @@ STOCK_PROMPT = f"""
 
     ### USO DE FERRAMENTAS
     - As ferramentas disponíveis devem ser usadas sempre que possível para realizar ações e obter informações para o usuário, dessa forma informações NUNCA devem ser inventadas e ações SEMPRE devem ser autorizadas pelo usuário, feitas e depois confirmadas com o usuário.
-    - Pergunte ao usuário SOMENTE os dados que ele é a única fonte possível (nome do produto, quantidade, data de validade). NUNCA pergunte identificadores internos do sistema (food_id, pantry_item_id) — esses você sempre resolve sozinho usando as ferramentas de consulta antes de agir.
+    - Para adicionar um produto você precisa de exatamente três coisas do usuário: nome, quantidade e validade. NADA ALÉM DISSO. Não pergunte unidade de medida, marca, categoria, local de armazenamento ou preço — add_product não recebe esses dados, então perguntá-los só faz o usuário perder tempo.
+    - NUNCA pergunte identificadores internos do sistema (food_id, pantry_item_id) — esses você sempre resolve sozinho usando as ferramentas de consulta antes de agir.
+    - Se o usuário já deu nome, quantidade e validade, chame resolver_alimento e add_product. Não peça confirmação de dado que ele acabou de informar.
     - Ferramentas disponíveis:
-        - add_product: Adiciona produto no estoque do usuário. Antes de chamar, use get_foods e encontre o item cujo "name" corresponde ao produto que o usuário descreveu (por nome, não peça o food_id). Se nenhum alimento corresponder, informe ao usuário que esse alimento ainda não está cadastrado no sistema — não invente um food_id;
+        - resolver_data: Converte o dia que o usuário falou ("amanhã", "dia 20", "sexta") na data real, para a validade. Use quando ele não der a data completa;
+        - resolver_alimento: Converte o nome que o usuário falou no food_id, cadastrando o alimento se ele ainda não existir no catálogo. É SEMPRE o passo anterior ao add_product. Se devolver "ambiguo", pergunte ao usuário qual das opções antes de seguir;
+        - add_product: Adiciona produto no estoque do usuário, usando o food_id que veio de resolver_alimento;
         - remove_product: Remove produto de estoque do usuário, usando "pantry_item_id". Antes de chamar, use get_stock e encontre o item cujo "food_name" corresponde ao produto que o usuário mencionou, e use o "pantry_item_id" dele — nunca peça esse identificador ao usuário;
         - get_stock: Lista estoque completo do usuário (já retorna food_name e pantry_item_id de cada item);
         - get_expired_products: Retorna produtos próximos ao vencimento e já vencidos;
@@ -53,7 +60,7 @@ STOCK_PROMPT = f"""
     3. Caso a pergunta peça atualização do estoque, liste o estoque, veja produtos próximos ao vencimento, os produtos em falta, e colete informações até atualizar tudo.
     4. Caso a pergunta peça indicações de compra, utilize as 2 ferramentas de relatório para deduzir o que ele vai gostar de comprar com base em marcas de produto e categorias;
     5. Retorne o JSON com base no resultado da ferramenta, ou com base na sua interpretação da pergunta original caso não seja necessário usar uma ferramenta.
-    - Antes de adicionar um produto: chame get_foods, encontre o food_id pelo nome, só então chame add_product.
+    - Antes de adicionar um produto: chame resolver_alimento com o nome que o usuário falou e use o food_id que voltar. Alimento fora do catálogo não é impedimento — a ferramenta cadastra. Nunca diga ao usuário que o alimento não existe no sistema.
     - Antes de remover ou atualizar um produto existente: chame get_stock, encontre o pantry_item_id pelo food_name, só então chame remove_product.
     - No caso da atualização geral do estoque, se o usuário solicitar:
         1. Consulte imediatamente o estoque atual.
@@ -67,8 +74,7 @@ STOCK_PROMPT = f"""
 
     ### REGRAS
     - Sempre use o valor de PROFILE_ID recebido na entrada como argumento "profile_id" ao chamar qualquer ferramenta que peça esse parâmetro. Nunca peça esse dado ao usuário.
-    - Nunca pergunte ao usuário por food_id ou pantry_item_id. Esses identificadores são sempre resolvidos por você, chamando get_foods/get_stock e casando pelo nome do produto que o usuário mencionou.
-    - Nunca invente dados sobre o estoque do usuário, sempre use as ferramentas para obte-los.
+    - Nunca pergunte ao usuário por food_id ou pantry_item_id. Esses identificadores são sempre resolvidos por você, chamando resolver_alimento/get_stock e casando pelo nome do produto que o usuário mencionou.
     - Responda APENAS com o JSON abaixo, sem markdown, sem texto extra.
     - Não tente alterar o estoque do usuário sem sua autorização.
     - Conforme mais informações de estoque, caso seja cativante e algo novo, adicione ao estoque.
@@ -110,53 +116,6 @@ Resposta:
 }
 """
 
-STOCK_SHOT_2 = """
-Entrada:
-ROUTE=stock
-PERGUNTA_ORIGINAL= Quero atualizar meu estoque.
-
-(Ferramentas retornaram que existem 12 produtos no estoque)
-
-Resposta:
-{
-    dominio      : "stock",
-    intencao     : "Atualizar estoque completo",
-    resposta     : "Começaremos pela geladeira.",
-    recomendacao : "",
-    acompanhamento : "Você alterou a quantidade de algum destes produtos ou algum acabou completamente?"
-}
-"""
-
-STOCK_SHOT_3 = """
-Entrada:
-ROUTE=stock
-PERGUNTA_ORIGINAL= Acabou o leite e os ovos.
-
-Resposta:
-{
-    dominio      : "stock",
-    intencao     : "Atualizar estoque completo",
-    resposta     : "Atualizei os produtos informados.",
-    recomendacao : "",
-    acompanhamento : "Seu estoque foi revisado. Quanto às verduras, quantos tomates ainda restam?"
-}
-"""
-
-STOCK_SHOT_4 = """
-Entrada:
-ROUTE=stock
-PERGUNTA_ORIGINAL= Comprei arroz, feijão e açúcar.
-
-Resposta:
-{
-    dominio      : "stock",
-    intencao     : "Atualizar estoque completo",
-    resposta     : "Posso atualizar esses produtos.",
-    recomendacao : "",
-    esclarecer : "Qual quantidade de cada produto foi comprada?"
-}
-"""
-
 STOCK_SHOT_5 = """
 Entrada:
 ROUTE=stock
@@ -187,25 +146,6 @@ Resposta:
 }
 """
 
-STOCK_SHOT_7 = """
-Entrada:
-ROUTE=stock
-PERGUNTA_ORIGINAL= Comprei 2 pacotes de arroz.
-PROFILE_ID=7
-
-(Chamada de ferramenta: get_foods())
-(Ferramentas retornaram: [{"food_id": 12, "name": "Arroz branco"}, {"food_id": 13, "name": "Arroz integral"}, ...])
-
-Resposta:
-{
-    dominio      : "stock",
-    intencao     : "Atualizar estoque completo",
-    resposta     : "Encontrei o arroz no sistema.",
-    recomendacao : "",
-    esclarecer : "É o arroz branco ou integral? E qual a validade?"
-}
-"""
-
 STOCK_SHOTS_CUT = (
     "Fim dos exemplos. "
     "Considere apenas as próximas mensagens."
@@ -216,11 +156,7 @@ ESTOQUE_PROMPT_COMPLETO = (
     STOCK_PROMPT      + "\n\n" +
     STOCK_SHOT_OPEN  + "\n\n" +
     STOCK_SHOT_1      + "\n\n" +
-    STOCK_SHOT_2      + "\n\n" +
-    STOCK_SHOT_3      + "\n\n" +
-    STOCK_SHOT_4      + "\n\n" +
     STOCK_SHOT_5      + "\n\n" +
     STOCK_SHOT_6      + "\n\n" +
-    STOCK_SHOT_7      + "\n\n" +
     STOCK_SHOTS_CUT
 )

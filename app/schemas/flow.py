@@ -13,6 +13,7 @@ from app.core.agents import (
     stock_app,
 )
 from app.core.llms import fast_llm
+from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.guardrails.guardrails import (
@@ -31,6 +32,15 @@ from app.repository.mongodb.tool_metrics import ToolMetricsRepository
 from .state import State
 
 logger = logging.getLogger(__name__)
+
+LIMITE_DEVOLUCOES = 2
+LIMITE_EVIDENCIA = 400
+LIMITE_EVIDENCIAS_TOTAL = 2000
+TURNOS_PARA_O_JUIZ = 4
+TURNOS_PARA_O_AGENTE = 10
+
+# As rotas que o grafo sabe atender. Qualquer outra coisa vira fallback.
+ROTAS = ("faq", "receitas", "estoque", "eventos", "fallback")
 
 
 def _mascarar(valor):
@@ -110,7 +120,7 @@ def roteador(state: State) -> State:
         historico = state.get("historico", [])
 
         mensagem_usuario = (
-            f"Histórico: {historico}\n"
+            f"Histórico: {_ultimos_turnos(historico, TURNOS_PARA_O_JUIZ)}\n"
             f"Mensagem: \"{state['mensagem']}\""
         )
 
@@ -119,7 +129,7 @@ def roteador(state: State) -> State:
             HumanMessage(content=mensagem_usuario),
         ])
 
-        state["rota"] = resposta.content.strip().lower()
+        state["rota"] = _normalizar_rota(resposta.content)
 
         input_tokens, output_tokens = extrair_tokens(resposta)
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -139,15 +149,63 @@ def roteador(state: State) -> State:
 
 
 
+def _normalizar_rota(bruto: str) -> str:
+    """
+    Converte a saída do roteador numa rota que o grafo atende.
+
+    O valor ia cru para o add_conditional_edges, então qualquer coisa fora
+    da lista — "Rota: estoque", "estoque.", texto vazio — derrubava a
+    requisição inteira com erro de grafo, e não com uma resposta ruim.
+    """
+
+    texto = (bruto or "").strip().lower()
+
+    if texto in ROTAS:
+        return texto
+
+    for rota in ROTAS:
+        if rota in texto:
+            return rota
+
+    logger.warning(
+        "roteador devolveu rota desconhecida; caindo em fallback",
+        extra={"stage": "roteador", "bruto": texto[:120]},
+    )
+
+    return "fallback"
+
+
+def _ultimos_turnos(historico: list[dict], quantos: int) -> list[dict]:
+    """
+    Recorta o histórico antes de ele entrar num prompt.
+
+    Sem teto, uma conversa longa cresce sem limite dentro de cada chamada:
+    estoura o contexto do modelo e queima cota por mensagem.
+    """
+
+    if not historico:
+        return []
+
+    return historico[-quantos:]
+
+
 def _invocar_agente(
     agent,
     mensagem: str,
     historico: list,
     trace_id: str,
-) -> tuple[str, int, int]:
+    revisao: str = "",
+) -> tuple[str, int, int, list[dict]]:
     """
-    Invoca um agente e extrai sua resposta final.
+    Invoca um agente e extrai sua resposta final, os tokens e o que as
+    ferramentas devolveram.
+
+    Quando o juiz devolveu a rodada anterior, o motivo entra na mensagem como
+    REVISAO: é a unica diferenca entre a primeira tentativa e as seguintes.
     """
+
+    if revisao:
+        mensagem = f"{mensagem}\nREVISAO={revisao}"
 
     messages = []
 
@@ -177,36 +235,53 @@ def _invocar_agente(
 
     input_tokens = 0
     output_tokens = 0
+    evidencias = []
 
     for msg in mensagens_saida:
         tokens_in, tokens_out = extrair_tokens(msg)
         input_tokens += tokens_in
         output_tokens += tokens_out
 
-    if mensagens_saida:
-        return mensagens_saida[-1].content, input_tokens, output_tokens
+        if getattr(msg, "type", "") == "tool":
+            evidencias.append({
+                "ferramenta": getattr(msg, "name", "") or "ferramenta",
+                "conteudo": msg.content,
+            })
 
-    return "", input_tokens, output_tokens
+    if mensagens_saida:
+        return (
+            mensagens_saida[-1].content,
+            input_tokens,
+            output_tokens,
+            evidencias,
+        )
+
+    return "", input_tokens, output_tokens, evidencias
 
 
 
 @traceable(name="agente_faq", **_TRACE_NO)
 def agente_faq(state: State) -> State:
     with span(state["trace_id"], "faq"):
-        historico = state.get("historico", [])
+        historico = _ultimos_turnos(
+            state.get("historico", []),
+            TURNOS_PARA_O_AGENTE,
+        )
 
         mensagem = (
             f"ROUTE=faq\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}"
         )
 
-        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+        resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
             faq_app,
             mensagem,
             historico,
             state["trace_id"],
+            state.get("veredito_juiz", ""),
         )
         state["resposta_agente"] = resposta_agente
+        state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
@@ -227,7 +302,10 @@ def agente_faq(state: State) -> State:
 @traceable(name="agente_receitas", **_TRACE_NO)
 def agente_receitas(state: State) -> State:
     with span(state["trace_id"], "receitas"):
-        historico = state.get("historico", [])
+        historico = _ultimos_turnos(
+            state.get("historico", []),
+            TURNOS_PARA_O_AGENTE,
+        )
 
         household_id = state.get(
             "household_account_id",
@@ -246,13 +324,15 @@ def agente_receitas(state: State) -> State:
             f"ACCOUNT_ID={account_id}"
         )
 
-        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+        resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
             recipe_app,
             mensagem,
             historico,
             state["trace_id"],
+            state.get("veredito_juiz", ""),
         )
         state["resposta_agente"] = resposta_agente
+        state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
@@ -274,7 +354,10 @@ def agente_receitas(state: State) -> State:
 @traceable(name="agente_estoque", **_TRACE_NO)
 def agente_estoque(state: State) -> State:
     with span(state["trace_id"], "estoque"):
-        historico = state.get("historico", [])
+        historico = _ultimos_turnos(
+            state.get("historico", []),
+            TURNOS_PARA_O_AGENTE,
+        )
 
         household_id = state.get(
             "household_account_id",
@@ -287,13 +370,15 @@ def agente_estoque(state: State) -> State:
             f"PROFILE_ID={household_id}"
         )
 
-        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+        resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
             stock_app,
             mensagem,
             historico,
             state["trace_id"],
+            state.get("veredito_juiz", ""),
         )
         state["resposta_agente"] = resposta_agente
+        state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
@@ -315,7 +400,10 @@ def agente_estoque(state: State) -> State:
 @traceable(name="agente_eventos", **_TRACE_NO)
 def agente_eventos(state: State) -> State:
     with span(state["trace_id"], "eventos"):
-        historico = state.get("historico", [])
+        historico = _ultimos_turnos(
+            state.get("historico", []),
+            TURNOS_PARA_O_AGENTE,
+        )
 
         household_id = state.get(
             "household_account_id",
@@ -335,13 +423,15 @@ def agente_eventos(state: State) -> State:
             f"ACCOUNT_ID={account_id}"
         )
 
-        resposta_agente, input_tokens, output_tokens = _invocar_agente(
+        resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
             events_app,
             mensagem,
             historico,
             state["trace_id"],
+            state.get("veredito_juiz", ""),
         )
         state["resposta_agente"] = resposta_agente
+        state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
@@ -357,6 +447,136 @@ def agente_eventos(state: State) -> State:
 
     return state
 
+
+
+
+def _formatar_evidencias(evidencias: list[dict]) -> str:
+    """
+    Monta o bloco de evidencias do juiz com o que as ferramentas devolveram,
+    com teto de tamanho: o juiz roda a cada resposta e nao pode virar o
+    gargalo de latencia da requisicao.
+    """
+
+    if not evidencias:
+        return "nenhuma"
+
+    linhas = []
+    total = 0
+
+    for evidencia in evidencias:
+        ferramenta = evidencia.get("ferramenta", "ferramenta")
+        conteudo = str(evidencia.get("conteudo", ""))[:LIMITE_EVIDENCIA]
+
+        linha = f"- {ferramenta}: {conteudo}"
+        total += len(linha)
+
+        if total > LIMITE_EVIDENCIAS_TOTAL:
+            linhas.append("- (demais retornos omitidos por tamanho)")
+            break
+
+        linhas.append(linha)
+
+    return "\n".join(linhas)
+
+
+def _formatar_conversa(historico: list[dict]) -> str:
+    """
+    Ultimos turnos, para o juiz poder ver repeticao e insistencia.
+
+    Sem isto a regra de nao repetir pergunta ja respondida e inverificavel:
+    o juiz recebia so a mensagem da vez.
+    """
+
+    if not historico:
+        return "primeira mensagem da conversa"
+
+    linhas = []
+
+    for turno in historico[-TURNOS_PARA_O_JUIZ:]:
+        quem = "usuário" if turno.get("role") == "user" else "Ceris"
+        conteudo = str(turno.get("content", ""))[:LIMITE_EVIDENCIA]
+        linhas.append(f"- {quem}: {conteudo}")
+
+    return "\n".join(linhas)
+
+
+def _ler_veredito(texto: str) -> tuple[str, str]:
+    """
+    Le as duas linhas do juiz.
+
+    Falha para APROVADO de proposito: juiz que nao respondeu no formato, ou
+    que devolveu sem dizer o motivo, nao e razao para travar a resposta do
+    usuario.
+    """
+
+    veredito = "APROVADO"
+    motivo = ""
+
+    for linha in texto.splitlines():
+        limpa = linha.strip()
+
+        if limpa.upper().startswith("VEREDITO:"):
+            if "DEVOLVER" in limpa.split(":", 1)[1].upper():
+                veredito = "DEVOLVER"
+        elif limpa.upper().startswith("MOTIVO:"):
+            motivo = limpa.split(":", 1)[1].strip()
+
+    if veredito == "DEVOLVER" and not motivo:
+        return "APROVADO", ""
+
+    return veredito, motivo
+
+
+@traceable(name="juiz", **_TRACE_NO)
+def juiz(state: State) -> State:
+    with span(state["trace_id"], "juiz"):
+        evidencias = _formatar_evidencias(state.get("evidencias", []))
+
+        mensagem_usuario = (
+            f"Rota: {state.get('rota', '')}\n"
+            f"Conversa até agora:\n"
+            f"{_formatar_conversa(state.get('historico', []))}\n"
+            f"Pergunta: {state['mensagem']}\n"
+            f"Evidências:\n"
+            f"{evidencias}\n"
+            f"Resposta do agente:\n"
+            f"{state.get('resposta_agente', '')}"
+        )
+
+        resposta = fast_llm.invoke([
+            SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+            HumanMessage(content=mensagem_usuario),
+        ])
+
+        veredito, motivo = _ler_veredito(resposta.content)
+        devolucoes = state.get("devolucoes", 0)
+
+        if veredito == "DEVOLVER" and devolucoes < LIMITE_DEVOLUCOES:
+            state["devolucoes"] = devolucoes + 1
+            state["veredito_juiz"] = motivo
+            state["limite_devolucoes"] = False
+        else:
+            state["veredito_juiz"] = ""
+            state["limite_devolucoes"] = veredito == "DEVOLVER"
+
+        input_tokens, output_tokens = extrair_tokens(resposta)
+        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+        logger.info(
+            "juiz avaliou a resposta do agente",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "juiz",
+                "rota": state.get("rota", ""),
+                "veredito": veredito,
+                "motivo": motivo,
+                "devolucoes": state.get("devolucoes", 0),
+                "limite_devolucoes": state.get("limite_devolucoes", False),
+            },
+        )
+
+    return state
 
 
 
@@ -377,6 +597,9 @@ def orquestrador(state: State) -> State:
             f"Rota: {rota}\n"
             f"Resposta do agente: \"{resposta_agente}\""
         )
+
+        if state.get("limite_devolucoes"):
+            mensagem_usuario += "\nRevisão: não confirmada"
 
         resposta = fast_llm.invoke([
             SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
@@ -417,7 +640,15 @@ def guardrail_saida(state: State) -> State:
         )
 
         state["resposta_final"] = resultado["conteudo"]
-        state["saida_aprovada"] = True
+
+        bloqueado = resultado.get("bloqueado", False)
+        devolucoes = state.get("devolucoes", 0)
+
+        if bloqueado and devolucoes < LIMITE_DEVOLUCOES:
+            state["devolucoes"] = devolucoes + 1
+            state["saida_aprovada"] = False
+        else:
+            state["saida_aprovada"] = True
 
     return state
 
@@ -432,6 +663,18 @@ def decidir_pos_guardrail_entrada(state: State) -> str:
 
 def decidir_rota(state: State) -> str:
     return state["rota"]
+
+
+def decidir_pos_juiz(state: State) -> str:
+    if state.get("veredito_juiz"):
+        rota = state.get("rota", "")
+
+        if rota in ("receitas", "estoque", "eventos"):
+            return rota
+
+        return "orquestrador"
+
+    return "orquestrador"
 
 
 def decidir_pos_guardrail_saida(state: State) -> str:
@@ -489,6 +732,10 @@ def executar_chat(
                 "entrada_aprovada": False,
                 "saida_aprovada": False,
                 "mapa_pii": {},
+                "evidencias": [],
+                "veredito_juiz": "",
+                "devolucoes": 0,
+                "limite_devolucoes": False,
                 "household_account_id": household_account_id,
                 "account_id": account_id,
                 "trace_id": trace_id,
@@ -576,6 +823,11 @@ graph.add_node(
 )
 
 graph.add_node(
+    "juiz",
+    juiz,
+)
+
+graph.add_node(
     "orquestrador",
     orquestrador,
 )
@@ -626,19 +878,32 @@ graph.add_edge(
 
 graph.add_edge(
     "receitas",
-    "orquestrador",
+    "juiz",
 )
 
 graph.add_edge(
     "estoque",
-    "orquestrador",
+    "juiz",
 )
 
 graph.add_edge(
     "eventos",
-    "orquestrador",
+    "juiz",
 )
 
+
+
+
+graph.add_conditional_edges(
+    "juiz",
+    decidir_pos_juiz,
+    {
+        "receitas": "receitas",
+        "estoque": "estoque",
+        "eventos": "eventos",
+        "orquestrador": "orquestrador",
+    },
+)
 
 
 

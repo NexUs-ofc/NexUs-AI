@@ -15,6 +15,50 @@ from ..repository.pgsql.stock import StockRepository
 events_repository = EventsRepository()
 
 
+# O schema gerado a partir de `datetime` exige date-time completo, e o modelo
+# escreve "2026-09-30" quando a pergunta e sobre um dia. O Groq recusa a
+# chamada antes de ela chegar aqui, entao a data entra como texto e a conversao
+# acontece neste lado.
+_FORMATOS_DATA = (
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",
+    "%d/%m/%Y %H:%M",
+    "%d/%m/%Y",
+)
+
+
+def _para_datetime(valor: str | None) -> datetime | None:
+    """Converte a data recebida do modelo. Devolve None quando nao vem nada."""
+
+    if valor is None or isinstance(valor, datetime):
+        return valor
+
+    texto = str(valor).strip()
+
+    if not texto:
+        return None
+
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    for formato in _FORMATOS_DATA:
+        try:
+            # Naive de proposito: e o que o resto do app grava no Mongo.
+            return datetime.strptime(texto, formato)  # noqa: DTZ007
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Data '{texto}' nao reconhecida. Use o formato AAAA-MM-DD ou "
+        f"AAAA-MM-DDTHH:MM."
+    )
+
+
 def _scale_quantity(quantity: str, ratio: float) -> str:
     match = re.match(r"^([\d.,]+)\s*(.*)$", quantity.strip())
 
@@ -38,7 +82,7 @@ def create_event(
     household_id: int,
     titulo: str,
     descricao: str,
-    data: datetime,
+    data: str,
     duracao: int,
     local: str,
     qtd_pessoas: int
@@ -48,7 +92,7 @@ def create_event(
         - household_id: Identificador da conta/casa dona do evento;
         - titulo: Texto intuitivo sobre o evento;
         - descricao: Texto explicitando informações do evento, deve conter tipo do evento obrigatóriamente;
-        - data: Data do evento em Datetime;
+        - data: Data e hora do evento, no formato "AAAA-MM-DDTHH:MM";
         - duracao: Duração do evento em minutos;
         - local: Localização do evento;
         - qtd_pessoas: Total de participantes do evento;
@@ -58,7 +102,7 @@ def create_event(
         household_id=household_id,
         title=titulo,
         description=descricao,
-        date=data,
+        date=_para_datetime(data),
         duration=duracao,
         local=local,
         qtd_people=qtd_pessoas,
@@ -70,8 +114,8 @@ def create_event(
 @tool("get_events")
 def get_events(
     household_id: int,
-    inicio: datetime | None = None,
-    fim: datetime | None = None,
+    inicio: str | None = None,
+    fim: str | None = None,
     tipo: str | None = None,
     qtd_min: int | None = None,
     titulo_receitas: list[str] | None = None,
@@ -79,8 +123,8 @@ def get_events(
     """
     Busca eventos no banco de dados com base ou não nos seguintes filtros opcionais fornecidos:
         - household_id: Identificador da conta/casa dona dos eventos (obrigatório);
-        - inicio: Data mínima de intervalo que evento pode estar;
-        - fim: Data máxima de intervalo que evento pode estar;
+        - inicio: Data mínima do intervalo, no formato "AAAA-MM-DD";
+        - fim: Data máxima do intervalo, no formato "AAAA-MM-DD";
         - tipo: Tipo de evento que será validado na descrição (ex: Churrasco, festa, jantar, etc...);
         - qtd_min: Quantidade mínima de pessoas que evento deve ter;
         - titulo_receitas: Receitas que o evento deve ter;
@@ -88,8 +132,8 @@ def get_events(
 
     eventos = events_repository.get_events(
         household_id=household_id,
-        start=inicio,
-        end=fim,
+        start=_para_datetime(inicio),
+        end=_para_datetime(fim),
         type=tipo,
         qtd_min=qtd_min,
         recipes_titles=titulo_receitas
@@ -111,14 +155,14 @@ def get_events(
 @tool("postpone_event")
 def postpone_event(
     event_id: str,
-    new_date: datetime
+    new_date: str
 ) -> Event | None:
     """
     Adia um evento existente para uma nova data.
 
     Parâmetros:
         - event_id: Identificador do evento que será atualizado.
-        - new_date: Nova data do evento.
+        - new_date: Nova data do evento, no formato "AAAA-MM-DDTHH:MM".
     """
 
     event = events_repository.get_event_by_id(event_id)
@@ -126,7 +170,7 @@ def postpone_event(
     if event is None:
         return None
 
-    event.date = new_date
+    event.date = _para_datetime(new_date)
 
     return events_repository.update_event(event)
 

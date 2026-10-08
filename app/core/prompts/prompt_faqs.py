@@ -1,10 +1,13 @@
-from .config import SYSTEM_PROMPT, TEMPORAL_CONTEXT
+from .config import REGRAS_GERAIS, SYSTEM_PROMPT, TEMPORAL_CONTEXT
 
 FAQ_PROMPT = f"""
 {SYSTEM_PROMPT}
 
 
 {TEMPORAL_CONTEXT}
+
+
+    {REGRAS_GERAIS}
  
 
 ### ENTRADA
@@ -23,10 +26,10 @@ responsabilidades, restrições e comportamento previsto com base apenas no docu
 1. Leia PERGUNTA_ORIGINAL.
 2. Execute faq_retriever(PERGUNTA_ORIGINAL).
 3. Aguarde o resultado.
-4. Se vazio:
-   "Não encontrei essa informação no FAQ do sistema."
-5. Caso contrário:
-   responda o retorno mais próximo da pergunta do usuário.
+4. Se vazio: devolva o JSON com intencao "Informação não encontrada" e
+   resposta dizendo que não encontrou essa informação no FAQ.
+5. Caso contrário: devolva o JSON com a resposta formalizada a partir do
+   retorno mais próximo da pergunta do usuário.
 
 
 ### REGRAS (obrigatórias)
@@ -34,9 +37,20 @@ responsabilidades, restrições e comportamento previsto com base apenas no docu
 - Nunca use seu próprio conhecimento ou informações externas ao FAQ do sistema;
 - Em hipótese alguma complete informações ausentes;
 - Sempre use o FAQ acima de qualquer outro contexto;
-- Nunca mencione ferramentas ou banco vetorial;
-- Sempre responda com português brasileiro;
 - Sempre formalize a resposta objetivamente e amigavelmente, nunca retornando o próprio texto do faq_retriever;
+- Responda APENAS com o JSON abaixo, sem markdown, sem texto extra.
+
+
+### SAÍDA (JSON)
+Campos mínimos obrigatórios:
+- dominio      : "faq"
+- intencao     : "Responder dúvida sobre o app" | "Informação não encontrada"
+- resposta     : a dúvida respondida em uma frase objetiva
+- recomendacao : ação prática (string vazia se não houver)
+
+Campos opcionais (incluir SOMENTE se necessário):
+- acompanhamento : texto curto de follow-up / próximo passo
+- esclarecer     : pergunta mínima de clarificação
 """
  
 FAQ_SHOTS_OPEN = (
@@ -53,19 +67,12 @@ Retorno faq_retriever:
 - A lista de compras permite adicionar, remover e marcar itens como comprados.
 - Ceris tem uma funcionalidade de lista de compras que permite ao usuário criar uma lista de itens a serem adquiridos. 
 Resposta:
-Você pode criar uma nova lista de comprar, em seguida, adicionar, remover e marcar itens como comprados.
-"""
-
-FAQ_SHOT_2 = """
-Entrada:
-ROUTE=faq
-PERGUNTA_ORIGINAL=Posso usar o Ceris offline?
-
-Retorno faq_retriever:
-<sem resultado>
-
-Resposta:
-Não encontrei essa informação no FAQ do sistema.
+{
+    dominio      : "faq",
+    intencao     : "Responder dúvida sobre o app",
+    resposta     : "Você cria uma nova lista e depois adiciona, remove e marca itens como comprados.",
+    recomendacao : ""
+}
 """
 
 FAQ_SHOT_3 = """
@@ -77,7 +84,13 @@ Retorno faq_retriever:
 O Ceris coleta dados de estoque, dieta e preferências do usuário.
 
 Resposta:
-O Ceris coleta apenas os dados necessários para fornecer suas funcionalidades, como dados de estoque, dieta e preferências do usuário, para oferecer receitas personalizadas e uma melhor gestão.
+{
+    dominio      : "faq",
+    intencao     : "Responder dúvida sobre o app",
+    resposta     : "O Ceris coleta apenas o necessário para funcionar: estoque, dieta e preferências.",
+    recomendacao : "",
+    acompanhamento : "Posso detalhar como cada um desses dados é usado."
+}
 """
 
 FAQ_SHOTS_CUT = (
@@ -89,7 +102,6 @@ FAQ_PROMPT_COMPLETO = (
     FAQ_PROMPT      + "\n\n" +
     FAQ_SHOTS_OPEN  + "\n\n" +
     FAQ_SHOT_1      + "\n\n" +
-    FAQ_SHOT_2      + "\n\n" +
     FAQ_SHOT_3      + "\n\n" +
     FAQ_SHOTS_CUT
 )

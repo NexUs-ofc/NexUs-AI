@@ -4,6 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from langchain.agents import create_agent
 
+from ..tools.calc_tools import (
+    calcular_percentual,
+    escalar_quantidades,
+    somar_valores,
+)
+from ..tools.date_tools import resolver_data
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
 from ..tools.memory_tools import buscar_historico
@@ -32,6 +38,7 @@ from ..tools.pg_tools import (
     get_missing_products,
     get_stock,
     remove_product,
+    resolver_alimento,
 )
 from ..tools.preference_tools import consultar_preferencias
 from .llms import fast_llm, specialist_llm
@@ -94,6 +101,9 @@ recipe_app = create_agent(
         get_expired_products,
         consultar_preferencias,
         buscar_historico,
+        somar_valores,
+        escalar_quantidades,
+        calcular_percentual,
         *tavily_tools
     ],
     system_prompt=RECEITAS_PROMPT_COMPLETO,
@@ -103,6 +113,7 @@ recipe_app = create_agent(
 events_app = create_agent(
     model=specialist_llm,
     tools=[
+        resolver_data,
         create_event,
         get_events,
         postpone_event,
@@ -116,6 +127,8 @@ events_app = create_agent(
         update_list,
         consultar_preferencias,
         buscar_historico,
+        somar_valores,
+        calcular_percentual,
     ],
     system_prompt=EVENTS_PROMPT_COMPLETO,
 )
@@ -125,6 +138,8 @@ events_app = create_agent(
 stock_app = create_agent(
     model=specialist_llm,
     tools=[
+        resolver_data,
+        resolver_alimento,
         add_product,
         remove_product,
         get_stock,
@@ -133,6 +148,8 @@ stock_app = create_agent(
         get_category_info,
         get_brand_info,
         get_foods,
+        somar_valores,
+        calcular_percentual,
     ],
     system_prompt=ESTOQUE_PROMPT_COMPLETO,
 )
