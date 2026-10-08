@@ -1,4 +1,6 @@
-import asyncio
+﻿import asyncio
+import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain.agents import create_agent
 
@@ -39,19 +41,41 @@ from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
 
+logger = logging.getLogger(__name__)
+
 TAVILY_HABILITADAS = {"tavily_search"}
 
-tavily_tools = []
 
-
-async def initialize_tavily_tools():
-    
-    global tavily_tools
+async def _carregar_tavily():
+   
     all_tools = await load_tavily_tools()
-    tavily_tools = [t for t in all_tools if t.name in TAVILY_HABILITADAS]
+    return [t for t in all_tools if t.name in TAVILY_HABILITADAS]
 
 
-asyncio.run(initialize_tavily_tools())
+def carregar_tavily_tools():
+    
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        tem_loop = False
+    else:
+        tem_loop = True
+
+    try:
+        if not tem_loop:
+            return asyncio.run(_carregar_tavily())
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(asyncio.run, _carregar_tavily()).result()
+    except Exception:
+        logger.exception(
+            "Não foi possível carregar as tools da Tavily; "
+            "o agente de receitas segue sem busca na web."
+        )
+        return []
+
+
+tavily_tools = carregar_tavily_tools()
 
 faq_app = create_agent(
     model=fast_llm,
