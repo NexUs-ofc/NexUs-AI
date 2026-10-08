@@ -22,7 +22,7 @@ def get_catalog_lookup():
 
 
 @router.post("/scan", response_model=ReceiptScanResponse)
-async def scan(image: UploadFile = File(...), profile_id: int | None = Form(None)) -> ReceiptScanResponse:
+async def scan(image: UploadFile = File(...), profile_id: int | None = Form(None)) -> ReceiptScanResponse:  # noqa: B008
     if image.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Envie uma imagem JPEG, PNG ou WEBP.")
     data = await image.read()

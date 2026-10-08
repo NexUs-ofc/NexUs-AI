@@ -2,8 +2,8 @@ import base64
 import json
 import logging
 import os
-from datetime import date, timedelta
-from typing import Callable
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
 
 from app.bases.shelf_life import DEFAULT_CATEGORIES, is_storable_food, shelf_life_days
 from app.core.prompts.receipt import (
@@ -67,7 +67,7 @@ def _ask_json(model: str, system: str, user_content) -> dict | None:
         msg = _llm(model).invoke([("system", system), ("user", user_content)])
         text = msg.content if isinstance(msg.content, str) else json.dumps(msg.content)
         return json.loads(text[text.find("{") : text.rfind("}") + 1])
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("receipt_llm_failed model=%s error=%s", model, exc)
         return None
 
@@ -169,7 +169,7 @@ def _apply_catalog(items: list[dict], lookup: CatalogLookup | None) -> None:
         return
     try:
         found = lookup(sorted(codes))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("receipt_catalog_lookup_failed error=%s", exc)
         return
     for it in items:
@@ -188,7 +188,7 @@ def _apply_catalog(items: list[dict], lookup: CatalogLookup | None) -> None:
 def _build_response(
     header: dict, items: list[dict], source: str, conf: float, warnings: list[str], categories: list[str]
 ) -> ReceiptScanResponse:
-    today = date.today()
+    today = datetime.now().astimezone().date()
     purchase = header.get("purchase_date")
     if isinstance(purchase, str):
         try:

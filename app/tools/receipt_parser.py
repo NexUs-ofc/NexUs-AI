@@ -5,7 +5,7 @@ from difflib import SequenceMatcher
 
 QTY_RE = re.compile(
     r"(\d+(?:[.,]\d{1,3})?)[\s\-.*:]*(UN|UND|KG|G|L|LT|ML|PC|PCT|CX|FD|DZ)[\s\-.*:]*[XxK×][\s\-.*:]*(\d+[.,]\s?\d{2})",
-    re.I,
+    re.IGNORECASE,
 )
 ITEM_RE = re.compile(r"^\s*(\d{1,3})?\s*(\d{7,15})\s*([A-Za-z].*)$")
 EAN_ONLY_RE = re.compile(r"^\s*(\d{1,3})?\s*(\d{7,15})\s*$")
@@ -34,7 +34,7 @@ def ean_valid(code: str | None) -> bool:
 
 
 CONFUSIONS = {"0": "86", "1": "7", "3": "8", "5": "6", "6": "85", "7": "1", "8": "063", "9": "8"}
-TRAILING_RE = re.compile(r"\s+(F\s?[1T]|FT|F1T|I\d?|N\d?)\b.*$", re.I)
+TRAILING_RE = re.compile(r"\s+(F\s?[1T]|FT|F1T|I\d?|N\d?)\b.*$", re.IGNORECASE)
 
 
 def ean_candidates(code: str | None) -> list[str]:
@@ -61,7 +61,7 @@ def looks_like_desc(ln: str) -> bool:
 
 
 def split_index_ean(digits: str, expected_idx: int) -> tuple[int | None, str | None]:
-    for k in range(0, 4):
+    for k in range(4):
         idx, ean = digits[:k], digits[k:]
         if ean_valid(ean) and (not idx or int(idx) <= expected_idx + 2):
             return (int(idx) if idx else None), ean
@@ -118,7 +118,7 @@ def parse_items(lines: list[str]) -> list[dict]:
         e = EAN_ONLY_RE.match(ln) if not q and not m else None
         if m or e:
             digits = (m or e).group(2)
-            idx, ean = split_index_ean(((m or e).group(1) or "") + digits, seq)
+            _idx, ean = split_index_ean(((m or e).group(1) or "") + digits, seq)
             if ean is None and ean_valid(digits):
                 ean = digits
             raw_ean = ean or (digits[-13:] if len(digits) >= 13 else digits)

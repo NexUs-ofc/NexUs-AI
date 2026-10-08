@@ -8,8 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from groq import APIConnectionError, APIStatusError, RateLimitError
 
 from .controller.chat import router as chat_router
-from .controller.receipt import router as receipt_router
 from .controller.health import router as health_router
+from .controller.receipt import router as receipt_router
 
 logger = logging.getLogger(__name__)
 
