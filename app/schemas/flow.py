@@ -6,16 +6,12 @@ from langgraph.graph import END, StateGraph
 from langsmith import trace, traceable
 
 from app.controller.config import logging
-from app.core.agents import (
-    events_app,
-    faq_app,
-    recipe_app,
-    stock_app,
-)
+from app.core.agents import AGENTES_DAS_SKILLS, faq_app
 from app.core.llms import fast_llm
 from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
+from app.core.skills import catalogo, do_agente
 from app.guardrails.guardrails import (
     PII,
     anonimizar,
@@ -41,6 +37,14 @@ TURNOS_PARA_O_AGENTE = 10
 
 # As rotas que o grafo sabe atender. Qualquer outra coisa vira fallback.
 ROTAS = ("faq", "receitas", "estoque", "eventos", "fallback")
+
+# Quando o seletor nao decide, cai na skill que so le. Dar ferramenta de
+# escrita a um palpite e pior do que responder de menos.
+SKILL_PADRAO = {
+    "receitas": "receita-do-estoque",
+    "eventos": "evento-gerenciar",
+    "estoque": "estoque-consultar",
+}
 
 
 def _mascarar(valor):
@@ -325,7 +329,7 @@ def agente_receitas(state: State) -> State:
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            recipe_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("receitas", state)],
             mensagem,
             historico,
             state["trace_id"],
@@ -371,7 +375,7 @@ def agente_estoque(state: State) -> State:
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            stock_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("estoque", state)],
             mensagem,
             historico,
             state["trace_id"],
@@ -424,7 +428,7 @@ def agente_eventos(state: State) -> State:
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            events_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("eventos", state)],
             mensagem,
             historico,
             state["trace_id"],
@@ -578,6 +582,78 @@ def juiz(state: State) -> State:
 
     return state
 
+
+
+PROMPT_SELETOR = """\
+Escolha qual capacidade atende o pedido abaixo.
+
+Capacidades:
+{catalogo}
+
+Conversa até agora:
+{conversa}
+
+Pedido: {pedido}
+
+Responda APENAS com o nome da capacidade, nada mais.
+"""
+
+
+def _escolher_skill(agente: str, state: State) -> str:
+    """
+    O proprio agente escolhe a sua skill, entre as 3 a 5 do dominio dele.
+
+    Fica aqui, e nao no roteador, por dois motivos: o roteador escolheria entre
+    13 opcoes em vez de 5, e a escolha costuma depender do que o dominio sabe.
+    O catalogo custa ~160 tokens e poupa ~1800 no prompt do agente.
+
+    Nome irreconhecivel cai na skill padrao, que e a de leitura.
+    """
+
+    skills = do_agente(agente)
+    padrao = SKILL_PADRAO.get(agente, skills[0].nome if skills else "")
+
+    if len(skills) < 2:
+        return padrao
+
+    pedido = PROMPT_SELETOR.format(
+        catalogo=catalogo(agente),
+        conversa=_formatar_conversa(state.get("historico", [])),
+        pedido=state["mensagem"],
+    )
+
+    try:
+        resposta = fast_llm.invoke([HumanMessage(content=pedido)])
+    except Exception:
+        logger.exception(
+            "seletor de skill falhou; usando a padrao",
+            extra={"trace_id": state.get("trace_id", ""), "stage": "seletor"},
+        )
+        return padrao
+
+    bruto = (resposta.content or "").strip().lower()
+    nomes = [x.nome for x in skills]
+
+    escolhida = next((n for n in nomes if n == bruto), None)
+    if escolhida is None:
+        escolhida = next((n for n in nomes if n in bruto), padrao)
+
+    input_tokens, output_tokens = extrair_tokens(resposta)
+    state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+    state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+    logger.info(
+        "skill escolhida",
+        extra={
+            "trace_id": state.get("trace_id", ""),
+            "stage": "seletor",
+            "agente": agente,
+            "skill": escolhida,
+            "bruto": bruto[:60],
+        },
+    )
+
+    return escolhida
 
 
 @traceable(name="orquestrador", **_TRACE_NO)

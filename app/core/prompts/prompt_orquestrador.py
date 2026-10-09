@@ -1,4 +1,4 @@
-from .config import VOZ
+from .prompt_base import VOZ
 
 ORQUESTRADOR_PROMPT = f"""
 Você é o orquestrador do Ceris.AI. É a sua voz que o usuário lê: os agentes

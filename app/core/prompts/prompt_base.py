@@ -90,3 +90,34 @@ REGRAS_GERAIS = """
 """
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_BASE + VOZ
+
+ENVELOPE_SAIDA = """
+    ### SAÍDA (JSON)
+    Responda APENAS com o JSON, sem markdown, sem texto extra.
+
+    Campos obrigatórios:
+    - dominio      : o domínio da sua skill
+    - intencao     : uma das intenções que a sua skill declara
+    - resposta     : frase objetiva com o resultado ou diagnóstico
+    - recomendacao : ação prática (string vazia se não houver)
+
+    Campos opcionais, incluir SOMENTE se necessário:
+    - acompanhamento : texto curto de follow-up / próximo passo
+    - esclarecer     : pergunta mínima de clarificação
+    - o objeto de domínio que a sua skill descreve (receita, evento, lista)
+
+    "recomendacao" e "acompanhamento" não podem oferecer a mesma coisa. Se o
+    próximo passo já está num deles, deixe o outro vazio.
+"""
+
+ENTRADA_PADRAO = """
+    ### ENTRADA
+    Você recebe o protocolo do Roteador:
+    ROUTE=[rota]
+    PERGUNTA_ORIGINAL=[o que a pessoa pediu]
+    PROFILE_ID / HOUSEHOLD_ID / ACCOUNT_ID=[identificadores já preenchidos]
+    CHAMADO_POR=[agente que acionou, quando não foi uma pessoa]
+
+    Os identificadores já vêm na entrada. NUNCA os peça à pessoa: use o valor
+    recebido como argumento das ferramentas que o exigirem.
+"""
