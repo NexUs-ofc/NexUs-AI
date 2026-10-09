@@ -8,9 +8,13 @@ PROFILE_PREFERENCES_COLLECTION = "profile_preferencies"
 
 EMBEDDING_DIM = 768
 
+# port=None faz o cliente respeitar a porta implicita do https (443). Sem isso
+# ele assume 6333, que varias redes bloqueiam — e como esta conexao acontece no
+# import, a aplicacao inteira deixa de subir, nao so a busca vetorial.
 client = QdrantClient(
     url=QDRANT_DATABASE_URL,
     api_key=QDRANT_API_KEY,
+    port=None,
 )
 
 embeddings = GoogleGenerativeAIEmbeddings(
