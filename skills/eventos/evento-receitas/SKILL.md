@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Adicionar receita ao evento | Remover receita ao evento
-  ferramentas: [get_events, recomendar_receita, add_recipe, remove_recipe]
+  ferramentas: [get_events, recomend_recipe, add_recipe, remove_recipe]
   version: 1.0.0
 ---
 
@@ -23,13 +23,13 @@ use `evento-criar`.
 
 1. `get_events` para achar o evento e descobrir `qtd_pessoas`. Case pelo
    título ou pela data.
-2. `recomendar_receita` para as sugestões. Passe o tipo do evento e a
+2. `recomend_recipe` para as sugestões. Passe o tipo do evento e a
    quantidade de pessoas — é isso que faz as quantidades saírem escaladas.
 3. `add_recipe` ou `remove_recipe` conforme o pedido, depois de confirmado.
 
 ## Regras
 
-- `recomendar_receita` devolve as quantidades já escaladas para o total de
+- `recomend_recipe` devolve as quantidades já escaladas para o total de
   pessoas. Repasse como vieram; não recalcule.
 - Nunca peça `event_id` nem `recipe_id`. Resolva por `get_events` e case pelo
   título.
@@ -72,7 +72,7 @@ HOUSEHOLD_ID=1
 ACCOUNT_ID=1
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
-(recomendar_receita -> {"titulo": "Pão de alho", "ingredientes": [
+(recomend_recipe -> {"titulo": "Pão de alho", "ingredientes": [
     {"ingrediente": "Pão de alho", "quantidade_total": "20 unidades", "tem_suficiente": false}]})
 (add_recipe -> ok)
 

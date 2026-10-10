@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Criar lista de compras
-  ferramentas: [create_list, get_list, get_missing_products, get_events, recomendar_receita, somar_valores]
+  ferramentas: [create_list, get_list, get_missing_products, get_events, recomend_recipe, somar_valores]
   version: 1.0.0
 ---
 
@@ -67,7 +67,7 @@ PROFILE_ID=1
 ACCOUNT_ID=1
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
-(recomendar_receita -> {"ingredientes_faltantes": ["Picanha", "Linguiça"]})
+(recomend_recipe -> {"ingredientes_faltantes": ["Picanha", "Linguiça"]})
 (create_list -> {"id": "l1", "titulo": "Churrasco"})
 
 Resposta:

@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Criar evento
-  ferramentas: [resolver_data, create_event, recomendar_receita]
+  ferramentas: [resolver_data, create_event, recomend_recipe]
   version: 1.0.0
 ---
 
@@ -27,7 +27,7 @@ Se o evento já existe e ela quer alterar ou consultar, use
 2. Reúna o que falta. São obrigatórios: título, data, duração, local e
    quantidade de pessoas.
 3. `create_event` com os dados completos.
-4. `recomendar_receita` só se a pessoa pedir sugestão de cardápio.
+4. `recomend_recipe` só se a pessoa pedir sugestão de cardápio.
 
 ## Regras
 
