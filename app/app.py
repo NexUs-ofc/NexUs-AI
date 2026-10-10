@@ -1,4 +1,5 @@
 import logging
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -14,6 +15,70 @@ from .controller.receipt import router as receipt_router
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def esquentar_conexoes() -> None:
+    """
+    Abre as conexões antes da primeira pergunta.
+
+    A primeira chamada de get_stock levava 4,0–4,6s contra 0,8s nas seguintes:
+    não era a consulta, era o handshake de TCP e TLS com o Aiven e o Atlas. A
+    pessoa pagava isso na primeira pergunta de cada rota.
+
+    Cada banco vai no seu try: subir sem um deles e falhar na requisição é
+    melhor do que não subir.
+    """
+
+    # Sob pytest nao aquece: a suite nao toca rede, e abrir conexao aqui a
+    # fazia bater no Aiven e no Atlas a cada TestClient — 25s a mais por
+    # rodada, sem testar nada. Checa sys.modules e nao PYTEST_CURRENT_TEST,
+    # que so existe durante um teste: o TestClient nasce na importacao.
+    if "pytest" in sys.modules:
+        return
+
+    from .observability.background import avisar, em_segundo_plano
+
+    def postgres() -> None:
+        from sqlalchemy import text
+
+        from .repository.pgsql.config import SessionLocal
+
+        with SessionLocal() as sessao:
+            sessao.execute(text("SELECT 1"))
+
+    def mongo() -> None:
+        # Cada repositorio tem o SEU MongoClient, e o pymongo conecta de forma
+        # preguicosa: sem isto, o primeiro uso de cada um paga ~1s de handshake
+        # separado. Sao os quatro que ficam no caminho de uma requisicao.
+        from .repository.mongodb.conversations import ConversationsRepository
+        from .repository.mongodb.metrics import MetricsRepository
+        from .repository.mongodb.tool_metrics import ToolMetricsRepository
+        from .repository.mongodb.traces import TracesRepository
+
+        for repositorio in (
+            TracesRepository,
+            ToolMetricsRepository,
+            MetricsRepository,
+            ConversationsRepository,
+        ):
+            repositorio.client.admin.command("ping")
+
+    def aquecer(nome, abrir) -> None:
+        try:
+            abrir()
+            avisar("info", f"conexao com {nome} aquecida")
+        except Exception:  # noqa: BLE001 - o avisar() abaixo registra com exc_info
+            avisar(
+                "warning",
+                f"nao foi possivel aquecer {nome}; a primeira requisicao paga "
+                f"o handshake",
+                exc_info=True,
+            )
+
+    for nome, abrir in (("postgres", postgres), ("mongodb", mongo)):
+        em_segundo_plano(aquecer, nome, abrir)
+
 
 app.add_middleware(
     CORSMiddleware,
