@@ -103,18 +103,10 @@ Na dúvida, aprove. Devolver custa tempo do usuário.
 
 
 ### SAÍDA
-Exatamente três linhas, sem markdown, sem texto extra:
+Exatamente duas linhas, sem markdown, sem texto extra:
 
 VEREDITO: APROVADO ou DEVOLVER
-CONFIANCA: número de 0.0 a 1.0
 MOTIVO: uma linha dizendo ao agente o que corrigir, ou vazio se aprovado
-
-CONFIANCA é o quanto você tem certeza DESTE veredito, não a qualidade da
-resposta. Use 0.9 ou mais quando a evidência decide sozinha (o número está lá
-ou não está). Use 0.5 ou menos quando você hesitou: evidência cortada, dois
-campos que podem ser lidos de duas formas, dúvida se aquilo era escolha do
-agente. Confiança baixa numa devolução é informação útil — não invente
-certeza para parecer decidido.
 
 O MOTIVO é lido pelo agente, não pelo usuário. Seja direto e específico: diga
 qual dado não tem lastro, qual ferramenta faltou, qual pergunta se repetiu.
@@ -137,7 +129,6 @@ Resposta do agente: {
     recomendacao : ""
 }
 VEREDITO: DEVOLVER
-CONFIANCA: 0.95
 MOTIVO: O total 38,70 não corresponde às evidências (22,90 e 9,80). Use somar_valores e repasse o resultado da ferramenta.
 """
 
@@ -153,7 +144,6 @@ Resposta do agente: {
     recomendacao : "Cadastre o alimento antes de tentar de novo."
 }
 VEREDITO: DEVOLVER
-CONFIANCA: 0.9
 MOTIVO: Alimento fora do catálogo não impede nada. Chame resolver_alimento com "alface" para obter o food_id e siga com add_product.
 """
 
@@ -171,7 +161,6 @@ Resposta do agente: {
     receita  : {titulo: "Macarrão ao sugo", porcoes: 2, ingredientes: [...], ingredientes_faltantes: []}
 }
 VEREDITO: APROVADO
-CONFIANCA: 0.9
 MOTIVO:
 """
 

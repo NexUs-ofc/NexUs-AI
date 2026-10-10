@@ -12,14 +12,12 @@ import pytest
 
 from app.repository.mongodb.metrics import _percentil
 from app.schemas.flow import (
-    CONFIANCA_PARA_DEVOLVER,
     LIMITE_DEVOLUCOES,
     ROTAS,
     TURNOS_PARA_O_AGENTE,
     _formatar_conversa,
     _formatar_evidencias,
     _ler_veredito,
-    _ler_veredito_completo,
     _normalizar_rota,
     _ultimos_turnos,
     decidir_pos_juiz,
@@ -160,57 +158,14 @@ def test_evidencia_sem_campos_nao_quebra():
     assert _formatar_evidencias([{}]) .startswith("- ferramenta:")
 
 
-# ------------------------------------------------- confiança do juiz
-
-def test_confianca_ausente_conta_como_certeza():
-    _, _, confianca = _ler_veredito_completo("VEREDITO: DEVOLVER\nMOTIVO: x")
-
-    assert confianca == 1.0
-
-
-def test_confianca_aceita_decimal_virgula_e_porcentagem():
-    for texto, esperado in (
-        ("CONFIANCA: 0.4", 0.4),
-        ("CONFIANCA: 0,55", 0.55),
-        ("CONFIANCA: 85%", 0.85),
-        ("CONFIANÇA: 30%", 0.3),
-    ):
-        _, _, confianca = _ler_veredito_completo(
-            f"VEREDITO: DEVOLVER\n{texto}\nMOTIVO: x"
-        )
-
-        assert confianca == esperado, texto
-
-
-def test_confianca_fica_na_faixa():
-    for texto in ("CONFIANCA: -3", "CONFIANCA: 9999"):
-        _, _, confianca = _ler_veredito_completo(
-            f"VEREDITO: DEVOLVER\n{texto}\nMOTIVO: x"
-        )
-
-        assert 0.0 <= confianca <= 1.0, texto
-
-
-def test_devolucao_sem_motivo_continua_aprovando():
-    veredito, motivo, _ = _ler_veredito_completo("VEREDITO: DEVOLVER\nCONFIANCA: 0.2")
-
-    assert veredito == "APROVADO"
-    assert motivo == ""
-
-
-def test_segunda_leitura_so_para_devolucao_insegura():
-    def pede_segunda(texto):
-        veredito, _, confianca = _ler_veredito_completo(texto)
-
-        return veredito == "DEVOLVER" and confianca < CONFIANCA_PARA_DEVOLVER
-
-    assert pede_segunda("VEREDITO: DEVOLVER\nCONFIANCA: 0.4\nMOTIVO: x")
-    assert not pede_segunda("VEREDITO: DEVOLVER\nCONFIANCA: 0.9\nMOTIVO: x")
-    assert not pede_segunda("VEREDITO: APROVADO\nCONFIANCA: 0.4\nMOTIVO:")
-
+# ------------------------------------------------- segunda leitura do juiz
 
 def test_segunda_opiniao_usa_semente_diferente():
-    """Mesma semente e temperatura zero devolveriam o mesmo veredito."""
+    """
+    Com a mesma semente e temperatura zero, repetir a chamada devolveria o
+    MESMO veredito — e segunda opinião nenhuma. Se alguém "padronizar" as
+    sementes, o mecanismo morre em silêncio e este teste avisa.
+    """
 
     from app.core.llms import juiz_llm, revisao_segunda_llm
 
@@ -220,6 +175,13 @@ def test_segunda_opiniao_usa_semente_diferente():
     assert primeira is not None
     assert segunda is not None
     assert primeira != segunda
+
+
+def test_devolucao_sem_motivo_continua_aprovando():
+    veredito, motivo = _ler_veredito("VEREDITO: DEVOLVER")
+
+    assert veredito == "APROVADO"
+    assert motivo == ""
 
 
 # ------------------------------------------------- percentil das métricas

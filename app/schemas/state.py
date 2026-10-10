@@ -14,7 +14,6 @@ class State(TypedDict):
     veredito_juiz: str
     devolucoes: int
     limite_devolucoes: bool
-    confianca_juiz: float
     household_account_id: int
     account_id: int
     trace_id: str
