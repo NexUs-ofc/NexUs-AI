@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 
 from ..auth.tracing_key_validator import validate_api_key
+from ..repository.mongodb.metrics import MetricsRepository
+from ..repository.mongodb.traces import TracesRepository
 from ..schemas.health import checar_saude, checar_vivo
 from ..schemas.report import gerar_relatorio
 from ..schemas.report_html import montar_html
@@ -30,6 +32,24 @@ def dependencies(api_key: Annotated[str, Depends(validate_api_key)]):
     """
 
     return checar_saude()
+
+
+@router.get("/metrics")
+def metrics(
+    api_key: Annotated[str, Depends(validate_api_key)],
+    horas: int = Query(default=24, ge=1, le=720),
+):
+    """
+    Dados agregados para o painel do admin: p50 e p95 por rota e por nó do
+    grafo, taxa de erro, custo por requisição e projeção.
+
+    Só JSON, sem página: a interface é do painel.
+    """
+
+    return {
+        "requisicoes": MetricsRepository.resumo(horas),
+        "latencia_por_no": TracesRepository.latencia_por_no(horas),
+    }
 
 
 @router.get("/page", response_class=HTMLResponse)

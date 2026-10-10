@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from pymongo import ASCENDING, MongoClient
 from pymongo.errors import PyMongoError
@@ -60,4 +60,54 @@ class TracesRepository:
 
         except PyMongoError:
             logger.exception(f"Erro ao buscar spans da requisição {trace_id}")
+            return []
+
+    @staticmethod
+    def latencia_por_no(horas: int = 24) -> list[dict]:
+        """
+        p50 e p95 de cada nó do grafo na janela.
+
+        É a pergunta "onde o tempo foi" respondida sem ler log: ordenado pelo
+        p95, o primeiro da lista é onde mexer. Gravávamos cada span desde
+        sempre e ninguém somava.
+        """
+
+        desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+
+        try:
+            logger.info(f"Agregando latência por nó das últimas {horas}h")
+
+            etapas = [
+                {"$match": {"started_at": {"$gte": desde}}},
+                {"$group": {
+                    "_id": "$span_name",
+                    "execucoes": {"$sum": 1},
+                    "duracoes": {"$push": "$duration_ms"},
+                }},
+            ]
+
+            linhas = []
+
+            for doc in TracesRepository.traces_collection.aggregate(etapas):
+                duracoes = sorted(doc.get("duracoes") or [])
+
+                if not duracoes:
+                    continue
+
+                def indice(posicao: int, total: int = len(duracoes)) -> int:
+                    return min(total - 1, round((posicao / 100) * (total - 1)))
+
+                linhas.append({
+                    "no": doc["_id"] or "desconhecido",
+                    "execucoes": doc["execucoes"],
+                    "p50_ms": round(duracoes[indice(50)], 1),
+                    "p95_ms": round(duracoes[indice(95)], 1),
+                    "total_s": round(sum(duracoes) / 1000, 1),
+                })
+
+            return sorted(linhas, key=lambda linha: linha["p95_ms"], reverse=True)
+
+        except PyMongoError:
+            logger.exception("Erro ao agregar latência por nó")
+
             return []
