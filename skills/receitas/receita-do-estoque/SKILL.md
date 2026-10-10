@@ -5,7 +5,7 @@ metadata:
   dominio: receitas
   rota: receitas
   intencao: Sugerir receita
-  ferramentas: [consultar_preferencias, get_stock, get_expired_products, buscar_receitas_usuario, escalar_quantidades]
+  ferramentas: [consultar_preferencias, get_stock, buscar_receitas_usuario, escalar_quantidades]
   version: 1.0.0
 ---
 
@@ -22,18 +22,30 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
 
 ## Fluxo
 
-1. `consultar_preferencias`, para saber gostos e restrições registrados.
-2. `get_stock`, para o estoque com a validade de cada item.
-3. `get_expired_products`, para saber o que corre risco de vencer.
-4. Escolha uma receita cujos ingredientes principais já estejam no estoque,
+1. As preferências já vêm na linha PREFERENCIAS da entrada. Comece direto por
+   `get_stock` — não gaste uma rodada pedindo o que já está na sua frente.
+2. `get_stock` já traz a validade de cada item, e você tem a data de hoje no
+   contexto. O que está vencido ou vencendo sai dessa lista por comparação —
+   não existe ferramenta a chamar para isso.
+3. Escolha uma receita cujos ingredientes principais já estejam no estoque,
    com preferência pelos de validade mais curta.
-5. `buscar_receitas_usuario` SOMENTE se a pessoa pedir algo diferente do que
+4. `buscar_receitas_usuario` SOMENTE se a pessoa pedir algo diferente do que
    já foi sugerido antes.
-6. `escalar_quantidades` para ajustar as quantidades. Não multiplique de
+5. `escalar_quantidades` para ajustar as quantidades. Não multiplique de
    cabeça.
 
 ## Regras
 
+- **Prioridade, não exclusão:** use primeiro o de validade mais curta que
+  ainda não venceu, mas o resto do estoque continua disponível e entra quando
+  a receita pede. Não faça prato pobre só para gastar o que vence antes.
+- **PREFERENCIAS escolhe o prato**, validade só ordena dentro do que é
+  compatível. Restrição alimentar nunca cede para aproveitar validade.
+- **Vencido não entra na receita** (compare `expiry_date` com a data de hoje),
+  nem nos ingredientes nem nas `instrucoes`. Cite uma vez no fim, para
+  descarte.
+- Se o não vencido não dá prato, diga o que dá, avise do vencido e ofereça a
+  lista de compras.
 - A receita nasce do estoque, não do seu repertório. Se faltar ingrediente
   principal, diga o que falta em vez de fingir que tem.
 - Ingrediente que a pessoa não tem entra em `ingredientes_faltantes`, nunca
@@ -65,6 +77,10 @@ receita: {
 - `tem_suficiente` compara essa quantidade com o que `get_stock` devolveu.
 - `ingredientes_faltantes` lista os nomes com `tem_suficiente: false`. Os dois
   campos têm que concordar entre si.
+- Peso, volume e medida de cozinha ("200 ml", "400 g", "½ xícara") existem
+  SOMENTE dentro de `receita`. Em `resposta` e `recomendacao` cite o
+  ingrediente pelo nome, sem quantidade: o estoque conta unidades e não pesos,
+  então medida nesses campos é número sem origem.
 
 ## Exemplo
 
