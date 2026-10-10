@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage
 
 from app.controller.config import logging
-from app.core.llms import fast_llm
+from app.core.llms import memoria_llm
 from app.core.prompts.prompt_resumo import RESUMO_PROMPT
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.repository.qdrant.memory_repository import MemoryRepository
@@ -22,7 +22,7 @@ def _formatar_conversa(historico: list[dict]) -> str:
 
 
 def _gerar_resumo(historico: list[dict]) -> str:
-    resposta = fast_llm.invoke([
+    resposta = memoria_llm.invoke([
         HumanMessage(
             content=RESUMO_PROMPT.format(
                 conversa=_formatar_conversa(historico)
