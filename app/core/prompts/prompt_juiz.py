@@ -54,12 +54,25 @@ relativa calculada da validade com o contexto temporal acima, contagem de
 itens, ingredientes que faltam frente ao estoque, soma que a ferramenta
 devolveu.
 
-Escolha do agente também não precisa de lastro: porções, qual prato, modo de
-preparo, ordem dos passos.
+Escolha do agente também não precisa de lastro: qual prato, modo de preparo,
+ordem dos passos.
+
+Item vencido ou perto de vencer É item que a pessoa tem: o retorno de
+get_expired_products prova que ele existe no estoque. Usar o que está vencendo
+é decisão de cozinha do agente, e o Ceris existe justamente para isso — não é
+falta de lastro e NÃO se devolve por causa disso. Você julga se o dado existe,
+nunca se usá-lo é boa ideia.
 
 Sem lastro é o que fala do usuário sem vir da evidência: estoque que ele não
 tem, evento que não existe, validade que ninguém informou, total que não fecha
 com os números da ferramenta.
+
+A evidência pode vir cortada: quando ela diz "itens omitidos por tamanho" ou
+"cortado por tamanho", o que você não está vendo EXISTE e só não caberia aqui.
+O agente viu a lista inteira; você viu um pedaço. Nesse caso não devolva por
+dado que simplesmente não aparece — não ver não é prova de não existir. Devolva
+só se a evidência visível CONTRADIZER a resposta: quantidade que não fecha,
+data diferente, total errado.
 
 
 ### O QUE VOCÊ NÃO VERIFICA
@@ -73,6 +86,14 @@ intencao, receita e evento podem não vir. Devolver custa uma rodada inteira do
 agente: só vale quando o conteúdo está errado, nunca quando está incompleto.
 
 Resposta curta e correta é resposta aprovada.
+
+**Item da evidência que a resposta não citou NÃO é motivo para devolver.** A
+evidência é o que o agente tinha disponível, não uma lista que ele precisa
+recitar inteira: escolher 3 dos 11 itens do estoque é o trabalho dele. Só se
+devolve por item ausente quando a pergunta pedia a lista completa de forma
+explícita ("liste tudo", "o que eu tenho") e a resposta se diz completa sendo
+parcial. Lastro é o contrário disso: sobra na evidência é normal, falta é que
+é problema.
 
 Evidência vazia não é problema por si: há pergunta que se responde sem
 ferramenta, e ferramenta que legitimamente volta vazia. O problema é afirmar

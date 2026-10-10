@@ -23,8 +23,9 @@ from .prompts.prompt_base import (
     ENTRADA_PADRAO,
     ENVELOPE_SAIDA,
     REGRAS_GERAIS,
-    SYSTEM_PROMPT,
+    SYSTEM_PROMPT_AGENTE,
     TEMPORAL_CONTEXT,
+    USO_DE_FERRAMENTAS,
 )
 
 PASTA = Path(__file__).resolve().parents[2] / "skills"
@@ -43,7 +44,13 @@ class Skill:
     corpo: str
 
     def prompt(self, preambulo: str = "") -> str:
-        camadas = [SYSTEM_PROMPT, TEMPORAL_CONTEXT, REGRAS_GERAIS, ENTRADA_PADRAO]
+        camadas = [
+            SYSTEM_PROMPT_AGENTE,
+            TEMPORAL_CONTEXT,
+            REGRAS_GERAIS,
+            ENTRADA_PADRAO,
+            USO_DE_FERRAMENTAS,
+        ]
 
         if preambulo:
             camadas.append(preambulo.strip())
