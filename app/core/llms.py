@@ -89,6 +89,12 @@ texto_llm = _cliente(0, RACIOCINIO_CURTO)
 # sugestão ganham com variedade.
 specialist_llm = _cliente(0.7)
 
+# Segunda opinião do juiz. Semente diferente de proposito: com a mesma semente
+# e temperatura zero, repetir a chamada devolve o MESMO veredito, e segunda
+# opinião nenhuma. O sorteio precisa ser independente para a divergencia
+# aparecer — e e a divergencia que diz que a primeira reprovacao foi ruido.
+revisao_segunda_llm = _cliente(0, RACIOCINIO_CURTO, TETO_VEREDITO, semente=20261010)
+
 # Apelidos por papel. Apontam para a mesma instância enquanto a configuração
 # for a mesma; separar um deles depois é trocar uma linha.
 roteador_llm = escolha_llm

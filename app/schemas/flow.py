@@ -8,7 +8,13 @@ from langsmith import trace, traceable
 
 from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
-from app.core.llms import juiz_llm, orquestrador_llm, roteador_llm, seletor_llm
+from app.core.llms import (
+    juiz_llm,
+    orquestrador_llm,
+    revisao_segunda_llm,
+    roteador_llm,
+    seletor_llm,
+)
 from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
@@ -36,6 +42,8 @@ logger = logging.getLogger(__name__)
 # ferramentas de novo. No agente de receitas isso custa ~50s por rodada, e a
 # segunda tentativa quase nunca salva o que a primeira nao salvou.
 LIMITE_DEVOLUCOES = 1
+# Abaixo disto, o juiz admite que hesitou e a devolucao pede segunda leitura.
+CONFIANCA_PARA_DEVOLVER = 0.7
 LIMITE_EVIDENCIA = 1500
 LIMITE_EVIDENCIAS_TOTAL = 4000
 TURNOS_PARA_O_JUIZ = 4
@@ -660,15 +668,24 @@ def _formatar_conversa(historico: list[dict]) -> str:
 
 def _ler_veredito(texto: str) -> tuple[str, str]:
     """
-    Le as duas linhas do juiz.
+    Le as linhas do juiz.
 
     Falha para APROVADO de proposito: juiz que nao respondeu no formato, ou
     que devolveu sem dizer o motivo, nao e razao para travar a resposta do
     usuario.
     """
 
+    veredito, motivo, _ = _ler_veredito_completo(texto)
+
+    return veredito, motivo
+
+
+def _ler_veredito_completo(texto: str) -> tuple[str, str, float]:
+    """Veredito, motivo e confianca. Confianca ausente conta como certeza."""
+
     veredito = "APROVADO"
     motivo = ""
+    confianca = 1.0
 
     for linha in texto.splitlines():
         limpa = linha.strip()
@@ -676,13 +693,26 @@ def _ler_veredito(texto: str) -> tuple[str, str]:
         if limpa.upper().startswith("VEREDITO:"):
             if "DEVOLVER" in limpa.split(":", 1)[1].upper():
                 veredito = "DEVOLVER"
+        elif limpa.upper().startswith(("CONFIANCA", "CONFIANÇA")):
+            bruto = limpa.split(":", 1)[-1]
+            achado = re.search(r"\d+(?:[.,]\d+)?", bruto)
+
+            if achado:
+                valor = float(achado.group(0).replace(",", "."))
+
+                # Aceita "0.8", "80%" e "80": o modelo escreve das tres formas,
+                # e ler 80 como certeza total inverteria o sinal.
+                if valor > 1:
+                    valor /= 100
+
+                confianca = min(1.0, max(0.0, valor))
         elif limpa.upper().startswith("MOTIVO:"):
             motivo = limpa.split(":", 1)[1].strip()
 
     if veredito == "DEVOLVER" and not motivo:
-        return "APROVADO", ""
+        return "APROVADO", "", confianca
 
-    return veredito, motivo
+    return veredito, motivo, confianca
 
 
 # Campos que sao escolha de oficio do agente e NAO tem como ser conferidos
@@ -748,7 +778,34 @@ def juiz(state: State) -> State:
             HumanMessage(content=mensagem_usuario),
         ])
 
-        veredito, motivo = _ler_veredito(resposta.content)
+        veredito, motivo, confianca = _ler_veredito_completo(resposta.content)
+
+        input_tokens, output_tokens = extrair_tokens(resposta)
+
+        # Devolver custa a re-execucao completa do agente: 43s em estoque e
+        # 41,7s em receitas, medidos. Uma segunda leitura custa ~0,5s. Quando o
+        # proprio juiz diz que hesitou, vale perguntar de novo antes de pagar a
+        # rodada — com semente diferente, senao o veredito volta identico.
+        segunda = None
+
+        if veredito == "DEVOLVER" and confianca < CONFIANCA_PARA_DEVOLVER:
+            segunda = revisao_segunda_llm.invoke([
+                SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+                HumanMessage(content=mensagem_usuario),
+            ])
+
+            veredito_2, motivo_2, confianca_2 = _ler_veredito_completo(segunda.content)
+
+            entrada_2, saida_2 = extrair_tokens(segunda)
+            input_tokens += entrada_2
+            output_tokens += saida_2
+
+            # Divergencia absolve: a reprovacao era ruido do sorteio.
+            if veredito_2 == "APROVADO":
+                veredito, motivo, confianca = "APROVADO", "", confianca_2
+            else:
+                motivo, confianca = motivo_2 or motivo, max(confianca, confianca_2)
+
         devolucoes = state.get("devolucoes", 0)
 
         if veredito == "DEVOLVER" and devolucoes < LIMITE_DEVOLUCOES:
@@ -759,9 +816,9 @@ def juiz(state: State) -> State:
             state["veredito_juiz"] = ""
             state["limite_devolucoes"] = veredito == "DEVOLVER"
 
-        input_tokens, output_tokens = extrair_tokens(resposta)
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+        state["confianca_juiz"] = confianca
 
         logger.info(
             "juiz avaliou a resposta do agente",
@@ -771,6 +828,8 @@ def juiz(state: State) -> State:
                 "rota": state.get("rota", ""),
                 "veredito": veredito,
                 "motivo": motivo,
+                "confianca": confianca,
+                "segunda_leitura": segunda is not None,
                 "devolucoes": state.get("devolucoes", 0),
                 "limite_devolucoes": state.get("limite_devolucoes", False),
             },
