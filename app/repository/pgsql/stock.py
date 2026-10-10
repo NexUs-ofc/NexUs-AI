@@ -14,6 +14,11 @@ from ...model.pgsql.pantry_product_setting import Pantry_Product_Setting
 logger = logging.getLogger(__name__)
 
 
+class ConsultaIndisponivel(RuntimeError):
+    """A consulta nao pode ser feita. NAO significa que nao ha dado."""
+
+
+
 class StockRepository:
 
     def __init__(self, session: Session):
@@ -115,10 +120,13 @@ class StockRepository:
 
             return itens
 
-        except SQLAlchemyError:
+        except SQLAlchemyError as erro:
             logger.exception("Erro ao listar estoque")
 
-            return []
+            # Lista vazia aqui era indistinguivel de estoque vazio: a tool
+            # dizia "o usuario nao possui nenhum produto" e a pessoa ouvia
+            # que a despensa estava vazia por causa de uma falha de rede.
+            raise ConsultaIndisponivel("listar o estoque") from erro
 
     def get_expired_products(
         self,
@@ -141,10 +149,13 @@ class StockRepository:
 
             return itens
 
-        except SQLAlchemyError:
+        except SQLAlchemyError as erro:
             logger.exception("Erro ao buscar produtos vencidos")
 
-            return []
+            # Lista vazia aqui era indistinguivel de estoque vazio: a tool
+            # dizia "o usuario nao possui nenhum produto" e a pessoa ouvia
+            # que a despensa estava vazia por causa de uma falha de rede.
+            raise ConsultaIndisponivel("buscar os produtos vencidos") from erro
 
     def get_missing_products(
         self,
@@ -183,10 +194,13 @@ class StockRepository:
 
             return rows
 
-        except SQLAlchemyError:
+        except SQLAlchemyError as erro:
             logger.exception("Erro ao buscar produtos em falta")
 
-            return []
+            # Lista vazia aqui era indistinguivel de estoque vazio: a tool
+            # dizia "o usuario nao possui nenhum produto" e a pessoa ouvia
+            # que a despensa estava vazia por causa de uma falha de rede.
+            raise ConsultaIndisponivel("buscar os produtos em falta") from erro
 
     def get_category_info(
         self,
