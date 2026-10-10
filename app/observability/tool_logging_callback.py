@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
 
 from app.controller.config import logging
+from app.observability.background import em_segundo_plano
 from app.repository.mongodb.tool_metrics import ToolMetricsRepository
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,8 @@ class ToolLoggingCallback(BaseCallbackHandler):
             },
         )
 
-        ToolMetricsRepository.save_tool_call(
+        em_segundo_plano(
+            ToolMetricsRepository.save_tool_call,
             trace_id=trace_id,
             tool_name=tool_name,
             started_at=started_at,
@@ -91,7 +93,8 @@ class ToolLoggingCallback(BaseCallbackHandler):
             },
         )
 
-        ToolMetricsRepository.save_tool_call(
+        em_segundo_plano(
+            ToolMetricsRepository.save_tool_call,
             trace_id=trace_id,
             tool_name=tool_name,
             started_at=started_at,

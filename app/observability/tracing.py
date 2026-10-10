@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from app.controller.config import logging
+from app.observability.background import em_segundo_plano
 from app.repository.mongodb.traces import TracesRepository
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def span(trace_id: str, name: str, extra: dict | None = None):
 
         logger.info(f"span {name}", extra=log_extra)
 
-        TracesRepository.save_span(
+        em_segundo_plano(
+            TracesRepository.save_span,
             trace_id=trace_id,
             span_name=name,
             started_at=started_at,
