@@ -134,8 +134,8 @@ def test_veredito_falha_para_aprovado(texto, esperado):
     assert _ler_veredito(texto) == esperado
 
 
-def test_teto_de_devolucoes_e_dois():
-    assert LIMITE_DEVOLUCOES == 2
+def test_teto_de_devolucoes_e_uma():
+    assert LIMITE_DEVOLUCOES == 1
 
 
 # ----------------------------------------------------------- evidências
