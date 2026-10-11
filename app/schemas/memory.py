@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.messages import HumanMessage
 
@@ -63,7 +63,7 @@ def resumir_sessao(session_id: str, account_id: int) -> str:
         session_id=session_id,
         account_id=account_id,
         resumo=resumo,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     return resumo

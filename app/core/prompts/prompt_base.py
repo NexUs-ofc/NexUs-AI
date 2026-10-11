@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
- 
-now = datetime.now(timezone.utc).astimezone()
+from datetime import UTC, datetime
+
+now = datetime.now(UTC).astimezone()
 date_time = now.strftime("%A, %d de %B de %Y — %H:%M:%S %Z")
  
 

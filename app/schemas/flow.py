@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
@@ -1127,7 +1127,7 @@ def executar_chat(
 
         historico = []
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     resultado = None
     erro = False
 
@@ -1171,7 +1171,7 @@ def executar_chat(
 
         raise
     finally:
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         duration_ms = (finished_at - started_at).total_seconds() * 1000
 
         if resultado is not None and not resultado.get("entrada_aprovada", True):

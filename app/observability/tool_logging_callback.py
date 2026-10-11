@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.callbacks import BaseCallbackHandler
 
@@ -27,7 +27,7 @@ class ToolLoggingCallback(BaseCallbackHandler):
 
         self._starts[run_id] = (
             time.perf_counter(),
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
             tool_name,
             trace_id,
         )
@@ -46,10 +46,10 @@ class ToolLoggingCallback(BaseCallbackHandler):
         run_id = kwargs.get("run_id")
         started_perf, started_at, tool_name, trace_id = self._starts.pop(
             run_id,
-            (time.perf_counter(), datetime.now(timezone.utc), "unknown", self._resolve_trace_id(kwargs)),
+            (time.perf_counter(), datetime.now(UTC), "unknown", self._resolve_trace_id(kwargs)),
         )
 
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         duration_ms = (time.perf_counter() - started_perf) * 1000
 
         logger.info(
@@ -77,10 +77,10 @@ class ToolLoggingCallback(BaseCallbackHandler):
         run_id = kwargs.get("run_id")
         started_perf, started_at, tool_name, trace_id = self._starts.pop(
             run_id,
-            (time.perf_counter(), datetime.now(timezone.utc), "unknown", self._resolve_trace_id(kwargs)),
+            (time.perf_counter(), datetime.now(UTC), "unknown", self._resolve_trace_id(kwargs)),
         )
 
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         duration_ms = (time.perf_counter() - started_perf) * 1000
 
         logger.error(

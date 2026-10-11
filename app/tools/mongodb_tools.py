@@ -42,14 +42,14 @@ def _para_datetime(valor: str | None) -> datetime | None:
         return None
 
     try:
-        return datetime.fromisoformat(texto.replace("Z", "+00:00"))
+        return datetime.fromisoformat(texto)
     except ValueError:
         pass
 
     for formato in _FORMATOS_DATA:
         try:
             # Naive de proposito: e o que o resto do app grava no Mongo.
-            return datetime.strptime(texto, formato)  # noqa: DTZ007
+            return datetime.strptime(texto, formato)
         except ValueError:
             continue
 

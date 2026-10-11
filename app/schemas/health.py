@@ -1,6 +1,6 @@
 import socket
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from app.config import (
@@ -13,7 +13,7 @@ from app.controller.config import logging
 
 logger = logging.getLogger(__name__)
 
-INICIADO_EM = datetime.now(timezone.utc)
+INICIADO_EM = datetime.now(UTC)
 
 TIMEOUT_SEGUNDOS = 5
 
@@ -102,7 +102,7 @@ def _checar_langsmith() -> str:
 
 
 def _uptime_segundos() -> float:
-    return round((datetime.now(timezone.utc) - INICIADO_EM).total_seconds(), 1)
+    return round((datetime.now(UTC) - INICIADO_EM).total_seconds(), 1)
 
 
 def _recursos() -> dict:
@@ -153,7 +153,7 @@ def checar_saude() -> dict:
 
     return {
         "estado": estado,
-        "verificado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "verificado_em": datetime.now(UTC).isoformat(timespec="seconds"),
         "uptime_segundos": _uptime_segundos(),
         "recursos": _recursos(),
         "dependencias": checagens,
@@ -170,5 +170,5 @@ def checar_vivo() -> dict:
     return {
         "estado": "vivo",
         "uptime_segundos": _uptime_segundos(),
-        "verificado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "verificado_em": datetime.now(UTC).isoformat(timespec="seconds"),
     }

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pymongo import ASCENDING, MongoClient
 from pymongo.errors import PyMongoError
@@ -72,7 +72,7 @@ class TracesRepository:
         sempre e ninguém somava.
         """
 
-        desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+        desde = datetime.now(UTC) - timedelta(hours=horas)
 
         try:
             logger.info(f"Agregando latência por nó das últimas {horas}h")

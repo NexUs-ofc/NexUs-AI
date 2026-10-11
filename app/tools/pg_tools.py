@@ -33,7 +33,7 @@ def _para_data(valor: str | None) -> date | None:
 
     for formato in _FORMATOS_DATA:
         try:
-            return datetime.strptime(texto, formato).date()  # noqa: DTZ007
+            return datetime.strptime(texto, formato).date()
         except ValueError:
             continue
 

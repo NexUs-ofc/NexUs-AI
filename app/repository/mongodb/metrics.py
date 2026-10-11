@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
@@ -83,7 +83,7 @@ class MetricsRepository:
         janela, não previsão: serve para dimensionar, não para orçar.
         """
 
-        desde = datetime.now(timezone.utc) - timedelta(hours=horas)
+        desde = datetime.now(UTC) - timedelta(hours=horas)
 
         try:
             logger.info(f"Agregando métricas das últimas {horas}h")

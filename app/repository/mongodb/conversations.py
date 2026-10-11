@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bson import ObjectId
 from pymongo import MongoClient
@@ -20,8 +20,8 @@ class ConversationsRepository:
             result = ConversationsRepository.conversations_collection.insert_one({
                 "account_id": account_id,
                 "historico": [],
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             })
 
             logger.info(f"Sessão criada: {result.inserted_id}")
@@ -83,7 +83,7 @@ class ConversationsRepository:
                 {"_id": ObjectId(session_id)},
                 {
                     "$set": {
-                        "ended_at": datetime.now(timezone.utc),
+                        "ended_at": datetime.now(UTC),
                         "status": "closed",
                     }
                 }
@@ -113,7 +113,7 @@ class ConversationsRepository:
                             ]
                         }
                     },
-                    "$set": {"updated_at": datetime.now(timezone.utc)}
+                    "$set": {"updated_at": datetime.now(UTC)}
                 }
             )
 
