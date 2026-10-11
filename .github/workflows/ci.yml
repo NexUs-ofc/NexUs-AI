@@ -62,10 +62,10 @@ jobs:
 
       - name: Check base files exist
         run: |
-          test -f app/bases/NexUs_doc.pdf || (echo "Missing app/bases/NexUs_doc.pdf" && exit 1)
-          test -f app/bases/NexUs_FAQs.json || (echo "Missing app/bases/NexUs_FAQs.json" && exit 1)
-          test -f app/bases/NexUs_FAQs.md || (echo "Missing app/bases/NexUs_FAQs.md" && exit 1)
+          test -f scripts/bases/NexUs_doc.pdf || (echo "Missing scripts/bases/NexUs_doc.pdf" && exit 1)
+          test -f scripts/bases/NexUs_FAQs.json || (echo "Missing scripts/bases/NexUs_FAQs.json" && exit 1)
+          test -f scripts/bases/NexUs_FAQs.md || (echo "Missing scripts/bases/NexUs_FAQs.md" && exit 1)
 
       - name: Validate FAQs JSON
         run: |
-          python -c "import json; d=json.load(open('app/bases/NexUs_FAQs.json', encoding='utf-8')); assert isinstance(d, list) and len(d) > 0; print(f'FAQs OK: {len(d)} entradas')"
+          python -c "import json; d=json.load(open('scripts/bases/NexUs_FAQs.json', encoding='utf-8')); assert isinstance(d, list) and len(d) > 0; print(f'FAQs OK: {len(d)} entradas')"
