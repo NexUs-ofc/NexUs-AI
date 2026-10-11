@@ -1,11 +1,9 @@
 import logging
 import sys
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from groq import APIConnectionError, APIStatusError, RateLimitError
 
 from .controller.chat import router as chat_router
@@ -172,12 +170,6 @@ def falha_inesperada(request: Request, exc: Exception) -> JSONResponse:
 app.include_router(chat_router)
 app.include_router(receipt_router)
 app.include_router(health_router, tags=["Health"])
-
-app.mount(
-    "/static",
-    StaticFiles(directory=Path(__file__).resolve().parent / "static"),
-    name="static",
-)
 
 @app.get("/")
 def check() -> dict:
