@@ -1,9 +1,10 @@
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.controller.config import logging
+from app.observability.background import em_segundo_plano
 from app.repository.mongodb.traces import TracesRepository
 
 logger = logging.getLogger(__name__)
@@ -15,13 +16,13 @@ def generate_trace_id() -> str:
 
 @contextmanager
 def span(trace_id: str, name: str, extra: dict | None = None):
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     started_perf = time.perf_counter()
 
     try:
         yield
     finally:
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         duration_ms = (time.perf_counter() - started_perf) * 1000
 
         log_extra = {
@@ -36,7 +37,8 @@ def span(trace_id: str, name: str, extra: dict | None = None):
 
         logger.info(f"span {name}", extra=log_extra)
 
-        TracesRepository.save_span(
+        em_segundo_plano(
+            TracesRepository.save_span,
             trace_id=trace_id,
             span_name=name,
             started_at=started_at,

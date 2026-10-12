@@ -1,17 +1,14 @@
-from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Query
 
 from ..auth.tracing_key_validator import validate_api_key
+from ..repository.mongodb.metrics import MetricsRepository
+from ..repository.mongodb.traces import TracesRepository
 from ..schemas.health import checar_saude, checar_vivo
 from ..schemas.report import gerar_relatorio
-from ..schemas.report_html import montar_html
 
 router = APIRouter(prefix="/health")
-
-_PAGINA = Path(__file__).resolve().parent.parent / "static" / "health" / "page.html"
 
 
 @router.get("/")
@@ -32,12 +29,25 @@ def dependencies(api_key: Annotated[str, Depends(validate_api_key)]):
     return checar_saude()
 
 
-@router.get("/page", response_class=HTMLResponse)
-def page():
-    return HTMLResponse(content=_PAGINA.read_text(encoding="utf-8"))
+@router.get("/metrics")
+def metrics(
+    api_key: Annotated[str, Depends(validate_api_key)],
+    horas: int = Query(default=24, ge=1, le=720),
+):
+    """
+    Dados agregados para o painel do admin: p50 e p95 por rota e por nó do
+    grafo, taxa de erro, custo por requisição e projeção.
+
+    Só JSON, sem página: a interface é do painel.
+    """
+
+    return {
+        "requisicoes": MetricsRepository.resumo(horas),
+        "latencia_por_no": TracesRepository.latencia_por_no(horas),
+    }
 
 
-@router.get("/report", response_class=HTMLResponse)
+@router.get("/report")
 def report(
     api_key: Annotated[str, Depends(validate_api_key)],
     dias: int = 7,
@@ -47,13 +57,14 @@ def report(
 ):
     """
     Relatório de observabilidade a partir do LangSmith, com valores em real.
+
+    Só os dados. A apresentação é do painel do admin, que consome as APIs do
+    NexUs todas pelo mesmo lugar.
     """
 
-    dados = gerar_relatorio(
+    return gerar_relatorio(
         dias=dias,
         mensagens_semana=mensagens_semana,
         economia_mensal_brl=economia_mensal_brl,
         projeto=projeto,
     )
-
-    return HTMLResponse(content=montar_html(dados))

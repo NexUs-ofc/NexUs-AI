@@ -46,7 +46,7 @@ def _limpar(texto: str) -> str:
 def _data_explicita(texto: str) -> date | None:
     for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y"):
         try:
-            return datetime.strptime(texto, formato).date()  # noqa: DTZ007
+            return datetime.strptime(texto, formato).date()
         except ValueError:
             continue
 
@@ -167,7 +167,7 @@ def resolver_data(referencia: str, hora: str | None = None) -> str:
 
     if marcada is not None:
         # Naive de proposito: e o que as ferramentas de evento gravam.
-        saida["inicio"] = datetime(  # noqa: DTZ001
+        saida["inicio"] = datetime(
             resolvida.year, resolvida.month, resolvida.day,
             marcada[0], marcada[1],
         ).isoformat()

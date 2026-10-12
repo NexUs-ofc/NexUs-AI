@@ -10,6 +10,7 @@ Nenhum deles chama LLM, banco ou rede.
 
 import pytest
 
+from app.repository.mongodb.metrics import _percentil
 from app.schemas.flow import (
     LIMITE_DEVOLUCOES,
     ROTAS,
@@ -134,8 +135,8 @@ def test_veredito_falha_para_aprovado(texto, esperado):
     assert _ler_veredito(texto) == esperado
 
 
-def test_teto_de_devolucoes_e_dois():
-    assert LIMITE_DEVOLUCOES == 2
+def test_teto_de_devolucoes_e_uma():
+    assert LIMITE_DEVOLUCOES == 1
 
 
 # ----------------------------------------------------------- evidências
@@ -155,3 +156,45 @@ def test_evidencia_longa_e_truncada_com_aviso():
 
 def test_evidencia_sem_campos_nao_quebra():
     assert _formatar_evidencias([{}]) .startswith("- ferramenta:")
+
+
+# ------------------------------------------------- segunda leitura do juiz
+
+def test_segunda_opiniao_usa_semente_diferente():
+    """
+    Com a mesma semente e temperatura zero, repetir a chamada devolveria o
+    MESMO veredito — e segunda opinião nenhuma. Se alguém "padronizar" as
+    sementes, o mecanismo morre em silêncio e este teste avisa.
+    """
+
+    from app.core.llms import juiz_llm, revisao_segunda_llm
+
+    primeira = juiz_llm.model_kwargs.get("seed")
+    segunda = revisao_segunda_llm.model_kwargs.get("seed")
+
+    assert primeira is not None
+    assert segunda is not None
+    assert primeira != segunda
+
+
+def test_devolucao_sem_motivo_continua_aprovando():
+    veredito, motivo = _ler_veredito("VEREDITO: DEVOLVER")
+
+    assert veredito == "APROVADO"
+    assert motivo == ""
+
+
+# ------------------------------------------------- percentil das métricas
+
+def test_percentil_sem_dados_e_zero():
+    assert _percentil([], 95) == 0.0
+
+
+def test_percentil_pega_o_extremo_certo():
+    valores = [float(n) for n in range(1, 101)]
+
+    # Percentil por indice: p95 e o elemento 95 de 100, nao interpolacao.
+    assert _percentil(valores, 0) == 1.0
+    assert _percentil(valores, 50) == 51.0
+    assert _percentil(valores, 95) == 95.0
+    assert _percentil(valores, 100) == 100.0

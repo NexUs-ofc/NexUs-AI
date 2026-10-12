@@ -1,18 +1,30 @@
 # Arquivo de embedding, rodar apenas para subir a documentação técnica para o Qdrant Cloud. Não é necessário rodar em produção.
 
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from ...config import (
+from app.config import (
     DOC_FILE_PATH,
     GEMINI_API_KEY,
     QDRANT_API_KEY,
     QDRANT_DATABASE_URL,
 )
-from .doc_repository import DOCS_COLLECTION
+from app.repository.qdrant.doc_repository import DOCS_COLLECTION
 
 embeddings = GoogleGenerativeAIEmbeddings(
     model="gemini-embedding-2-preview",

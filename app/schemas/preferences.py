@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage
 
 from app.controller.config import logging
-from app.core.llms import fast_llm
+from app.core.llms import memoria_llm
 from app.core.prompts.prompt_preferencias import PREFERENCIAS_PROMPT
 from app.repository.mongodb.activity import ActivityRepository
 from app.repository.qdrant.preferences_repository import PreferencesRepository
@@ -110,7 +110,7 @@ def derivar_preferencias(account_id: int, household_id: int) -> list[str]:
         return []
 
     try:
-        resposta = fast_llm.invoke([
+        resposta = memoria_llm.invoke([
             HumanMessage(
                 content=PREFERENCIAS_PROMPT.format(atividade=atividade)
             )

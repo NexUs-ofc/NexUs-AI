@@ -1,7 +1,7 @@
 import math
 import statistics
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -138,7 +138,7 @@ def _buscar_runs(projeto_id: str, inicio: datetime) -> list[dict]:
 
 
 def _cotacao_dolar() -> dict:
-    hoje = datetime.now(timezone.utc).date()
+    hoje = datetime.now(UTC).date()
 
     for atraso in range(8):
         dia = hoje - timedelta(days=atraso)
@@ -168,8 +168,8 @@ def _duracao(run: dict) -> float | None:
     if not run.get("start_time") or not run.get("end_time"):
         return None
 
-    inicio = datetime.fromisoformat(run["start_time"].replace("Z", "+00:00"))
-    fim = datetime.fromisoformat(run["end_time"].replace("Z", "+00:00"))
+    inicio = datetime.fromisoformat(run["start_time"])
+    fim = datetime.fromisoformat(run["end_time"])
 
     return (fim - inicio).total_seconds()
 
@@ -243,7 +243,7 @@ def gerar_relatorio(
     """
 
     projeto = projeto or LANGCHAIN_PROJECT
-    inicio = datetime.now(timezone.utc) - timedelta(days=dias)
+    inicio = datetime.now(UTC) - timedelta(days=dias)
 
     projeto_id = _id_do_projeto(projeto)
 
@@ -313,7 +313,7 @@ def gerar_relatorio(
 
     return {
         "projeto": projeto,
-        "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "gerado_em": datetime.now(UTC).isoformat(timespec="seconds"),
         "periodo": {
             "dias": dias,
             "inicio": inicio.isoformat(timespec="seconds"),

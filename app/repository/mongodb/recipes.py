@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bson import ObjectId
 from pymongo import MongoClient
@@ -28,7 +28,7 @@ class RecipesRepository:
             RecipesRepository.recipe_accounts_collection.insert_one({
                 "id_recipe": recipe.id,
                 "id_account": account_id,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             })
 
             logger.info("Receita inserida com sucesso")

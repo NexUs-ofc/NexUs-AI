@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -12,6 +12,7 @@ from ..tools.calc_tools import (
 from ..tools.date_tools import resolver_data
 from ..tools.faq_tools import faq_retriever
 from ..tools.general_tools import recomendar_receita
+from ..tools.mcp.tavily_mcp import load_tavily_tools
 from ..tools.memory_tools import buscar_historico
 from ..tools.mongo_recipe_tools import (
     buscar_receitas_usuario,
@@ -42,11 +43,11 @@ from ..tools.pg_tools import (
 )
 from ..tools.preference_tools import consultar_preferencias
 from .llms import fast_llm, specialist_llm
-from .mcp.tavily_mcp import load_tavily_tools
-from .prompts.prompt_estoque import ESTOQUE_PROMPT_COMPLETO
-from .prompts.prompt_events import EVENTS_PROMPT_COMPLETO
+from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
+from .prompts.prompt_events import EVENTS_PREAMBULO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
-from .prompts.prompt_receitas import RECEITAS_PROMPT_COMPLETO
+from .prompts.prompt_receitas import RECEITAS_PREAMBULO
+from .skills import SKILLS
 
 logger = logging.getLogger(__name__)
 
@@ -92,28 +93,38 @@ faq_app = create_agent(
     system_prompt=FAQ_PROMPT_COMPLETO,
 )
 
-recipe_app = create_agent(
-    model=specialist_llm,
-    tools=[
-        buscar_receitas_usuario,
-        salvar_receita,
+
+
+
+
+
+
+
+# Um agente por skill, montado no import.
+#
+# Cada um recebe o prompt da sua skill e SO as ferramentas que ela declara. E o
+# que faz o pedido pagar ~1800 tokens em vez de ~3600, e o modelo percorrer 3 a
+# 7 ferramentas em vez de 12 a 15 a cada passo do loop.
+#
+# O preambulo do dominio vem do prompt_<dominio>: e o que diz quem o agente e e
+# ate onde ele vai, igual para todas as skills daquele agente.
+
+CATALOGO_FERRAMENTAS = {
+    f.name: f
+    for f in (
+        resolver_data,
+        resolver_alimento,
+        add_product,
+        remove_product,
         get_stock,
+        get_missing_products,
         get_expired_products,
-        consultar_preferencias,
-        buscar_historico,
+        get_category_info,
+        get_brand_info,
+        get_foods,
         somar_valores,
         escalar_quantidades,
         calcular_percentual,
-        *tavily_tools
-    ],
-    system_prompt=RECEITAS_PROMPT_COMPLETO,
-)
-
-
-events_app = create_agent(
-    model=specialist_llm,
-    tools=[
-        resolver_data,
         create_event,
         get_events,
         postpone_event,
@@ -127,29 +138,45 @@ events_app = create_agent(
         update_list,
         consultar_preferencias,
         buscar_historico,
-        somar_valores,
-        calcular_percentual,
-    ],
-    system_prompt=EVENTS_PROMPT_COMPLETO,
-)
+        buscar_receitas_usuario,
+        salvar_receita,
+        *tavily_tools,
+    )
+}
+
+PREAMBULO_DO_AGENTE = {
+    "receitas": RECEITAS_PREAMBULO,
+    "eventos": EVENTS_PREAMBULO,
+    "estoque": ESTOQUE_PREAMBULO,
+}
 
 
+def _ferramentas_da_skill(skill):
+    faltando = [n for n in skill.ferramentas if n not in CATALOGO_FERRAMENTAS]
 
-stock_app = create_agent(
-    model=specialist_llm,
-    tools=[
-        resolver_data,
-        resolver_alimento,
-        add_product,
-        remove_product,
-        get_stock,
-        get_missing_products,
-        get_expired_products,
-        get_category_info,
-        get_brand_info,
-        get_foods,
-        somar_valores,
-        calcular_percentual,
-    ],
-    system_prompt=ESTOQUE_PROMPT_COMPLETO,
-)
+    if faltando:
+        logger.warning(
+            "skill %s declara ferramenta inexistente: %s",
+            skill.nome,
+            ", ".join(faltando),
+        )
+
+    return [CATALOGO_FERRAMENTAS[n] for n in skill.ferramentas if n in CATALOGO_FERRAMENTAS]
+
+
+def _montar_agentes_das_skills():
+    agentes = {}
+
+    for nome, skill in SKILLS.items():
+        preambulo = PREAMBULO_DO_AGENTE.get(skill.agente, "")
+
+        agentes[nome] = create_agent(
+            model=specialist_llm,
+            tools=_ferramentas_da_skill(skill),
+            system_prompt=skill.prompt(preambulo),
+        )
+
+    return agentes
+
+
+AGENTES_DAS_SKILLS = _montar_agentes_das_skills()

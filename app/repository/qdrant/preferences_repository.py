@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from qdrant_client import models
 
@@ -41,7 +41,7 @@ class PreferencesRepository:
                         payload={
                             "user_id": str(account_id),
                             "preferencia": texto,
-                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "created_at": datetime.now(UTC).isoformat(),
                         },
                     )
                 ],

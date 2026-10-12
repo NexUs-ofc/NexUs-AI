@@ -5,12 +5,12 @@ import os
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
-from app.bases.shelf_life import DEFAULT_CATEGORIES, is_storable_food, shelf_life_days
 from app.core.prompts.receipt import (
     RECEIPT_CLASSIFY_PROMPT,
     RECEIPT_ENRICH_PROMPT,
     RECEIPT_EXTRACT_PROMPT,
 )
+from app.core.shelf_life import DEFAULT_CATEGORIES, is_storable_food, shelf_life_days
 from app.schemas.receipt import ReceiptItem, ReceiptScanResponse
 from app.tools.ocr_tools import decode_image, preprocess, read_receipt
 from app.tools.receipt_parser import (

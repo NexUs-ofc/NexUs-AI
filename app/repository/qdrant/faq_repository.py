@@ -22,6 +22,7 @@ class FAQRepository:
         self.client = qdrant_client.QdrantClient(
             url=self.url,
             api_key=self.api_key,
+            port=None,
         )
 
         self.db = QdrantVectorStore(

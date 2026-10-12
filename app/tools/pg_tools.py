@@ -7,7 +7,7 @@ from ..model.pgsql.food import Food
 from ..model.pgsql.pantry_item import Pantry_Item
 from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
-from ..repository.pgsql.stock import StockRepository
+from ..repository.pgsql.stock import ConsultaIndisponivel, StockRepository
 
 # O schema gerado a partir de `date` exige AAAA-MM-DD, e o modelo repete o
 # formato que o usuario escreveu — em portugues, 20/10/2026. O Groq recusa a
@@ -33,7 +33,7 @@ def _para_data(valor: str | None) -> date | None:
 
     for formato in _FORMATOS_DATA:
         try:
-            return datetime.strptime(texto, formato).date()  # noqa: DTZ007
+            return datetime.strptime(texto, formato).date()
         except ValueError:
             continue
 
@@ -225,8 +225,17 @@ def get_stock(
     with SessionLocal() as session:
         repository = StockRepository(session)
 
-        itens = repository.get_stock(profile_id)
-        foods = _food_lookup(session)
+        try:
+            itens = repository.get_stock(profile_id)
+            foods = _food_lookup(session)
+        except ConsultaIndisponivel:
+            # Dizer que falhou, nunca que nao ha nada: a regra geral do
+            # agente manda contar o que nao deu em vez de preencher.
+            return (
+                "FALHA: nao foi possivel consultar estoque agora. "
+                "Isto NAO significa que esta vazio — avise a pessoa que "
+                "a consulta nao funcionou e ofereca tentar de novo."
+            )
 
         return _to_json(
             [_pantry_item_to_dict(item, foods) for item in itens],
@@ -248,8 +257,17 @@ def get_expired_products(
     with SessionLocal() as session:
         repository = StockRepository(session)
 
-        itens = repository.get_expired_products(profile_id)
-        foods = _food_lookup(session)
+        try:
+            itens = repository.get_expired_products(profile_id)
+            foods = _food_lookup(session)
+        except ConsultaIndisponivel:
+            # Dizer que falhou, nunca que nao ha nada: a regra geral do
+            # agente manda contar o que nao deu em vez de preencher.
+            return (
+                "FALHA: nao foi possivel consultar produtos vencidos agora. "
+                "Isto NAO significa que esta vazio — avise a pessoa que "
+                "a consulta nao funcionou e ofereca tentar de novo."
+            )
 
         return _to_json(
             [_pantry_item_to_dict(item, foods) for item in itens],
@@ -271,8 +289,17 @@ def get_missing_products(
     with SessionLocal() as session:
         repository = StockRepository(session)
 
-        rows = repository.get_missing_products(profile_id)
-        foods = _food_lookup(session)
+        try:
+            rows = repository.get_missing_products(profile_id)
+            foods = _food_lookup(session)
+        except ConsultaIndisponivel:
+            # Dizer que falhou, nunca que nao ha nada: a regra geral do
+            # agente manda contar o que nao deu em vez de preencher.
+            return (
+                "FALHA: nao foi possivel consultar produtos em falta agora. "
+                "Isto NAO significa que esta vazio — avise a pessoa que "
+                "a consulta nao funcionou e ofereca tentar de novo."
+            )
 
         data = [
             {

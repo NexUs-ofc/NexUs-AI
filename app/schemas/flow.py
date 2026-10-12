@@ -1,46 +1,102 @@
+import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langsmith import trace, traceable
 
 from app.controller.config import logging
-from app.core.agents import (
-    events_app,
-    faq_app,
-    recipe_app,
-    stock_app,
+from app.core.agents import AGENTES_DAS_SKILLS, faq_app
+from app.core.llms import (
+    juiz_llm,
+    orquestrador_llm,
+    revisao_segunda_llm,
+    roteador_llm,
+    seletor_llm,
 )
-from app.core.llms import fast_llm
 from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
+from app.core.skills import catalogo, do_agente
 from app.guardrails.guardrails import (
     PII,
     anonimizar,
     checar_entrada,
     checar_saida,
 )
+from app.observability.background import em_segundo_plano
 from app.observability.cost import estimate_cost_usd, extrair_tokens
 from app.observability.tool_logging_callback import ToolLoggingCallback
 from app.observability.tracing import generate_trace_id, span
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.repository.mongodb.metrics import MetricsRepository
 from app.repository.mongodb.tool_metrics import ToolMetricsRepository
+from app.repository.qdrant.preferences_repository import PreferencesRepository
 
 from .state import State
 
 logger = logging.getLogger(__name__)
 
-LIMITE_DEVOLUCOES = 2
-LIMITE_EVIDENCIA = 400
-LIMITE_EVIDENCIAS_TOTAL = 2000
+# Uma devolucao, nao duas: cada uma re-executa o agente inteiro, com todas as
+# ferramentas de novo. No agente de receitas isso custa ~50s por rodada, e a
+# segunda tentativa quase nunca salva o que a primeira nao salvou.
+LIMITE_DEVOLUCOES = 1
+LIMITE_EVIDENCIA = 1500
+LIMITE_EVIDENCIAS_TOTAL = 4000
 TURNOS_PARA_O_JUIZ = 4
 TURNOS_PARA_O_AGENTE = 10
 
 # As rotas que o grafo sabe atender. Qualquer outra coisa vira fallback.
-ROTAS = ("faq", "receitas", "estoque", "eventos", "fallback")
+ROTAS = ("faq", "receitas", "estoque", "eventos", "saudacao", "fallback")
+
+# "Oi" nao precisa de agente, juiz nem orquestrador: a resposta nao depende de
+# dado nenhum. O roteador identifica e o fluxo devolve este texto direto, sem
+# nenhuma chamada de LLM depois dele.
+RESPOSTA_DE_SAUDACAO = (
+    "Oi! Tudo bem? Posso te ajudar com o seu estoque, sugerir uma receita "
+    "com o que você tem em casa ou organizar um evento. Por onde quer começar?"
+)
+
+# A mesma rota recebe "bom dia" e "obrigado, valeu". Responder cumprimento a
+# quem agradeceu soa como quem nao leu, e distinguir aqui nao custa token.
+RESPOSTA_DE_AGRADECIMENTO = (
+    "Por nada! Se precisar de mais alguma coisa com o estoque, com receitas "
+    "ou com um evento, é só chamar."
+)
+
+# "boa noite" fica de fora de proposito: serve de cumprimento e de despedida,
+# e na duvida cumprimentar erra menos do que despedir.
+_AGRADECIMENTO = re.compile(
+    r"\b(obrigad[oa]|obg|valeu|vlw|agrade[çc]|tmj|falou|t[ôo]\s+indo|"
+    r"at[ée]\s+(mais|logo|amanh[ãa])|tchau)\b",
+    re.IGNORECASE,
+)
+
+# Abertura das respostas montadas sem o orquestrador, usada so quando a pessoa
+# saudou primeiro.
+SAUDACAO_CURTA = "Oi!"
+
+# O aplicativo ja cumprimenta a pessoa, entao o chat nao cumprimenta por conta
+# propria: so retribui. Decidido aqui, em Python, porque e deterministico e o
+# orquestrador nao recebe a mensagem original.
+_SAUDOU = re.compile(
+    r"^\W*\b(oi+|ol[áa]|al[ôo]|opa|e\s*a[íi]|fala|bom\s+dia|boa\s+(tarde|noite)|"
+    r"hey|hi|hello|tudo\s+(bem|bom)|como\s+vai)\b",
+    re.IGNORECASE,
+)
+
+
+def _saudou(mensagem: str) -> bool:
+    return bool(_SAUDOU.match(mensagem or ""))
+
+# Quando o seletor nao decide, cai na skill que so le. Dar ferramenta de
+# escrita a um palpite e pior do que responder de menos.
+SKILL_PADRAO = {
+    "receitas": "receita-do-estoque",
+    "eventos": "evento-gerenciar",
+    "estoque": "estoque-consultar",
+}
 
 
 def _mascarar(valor):
@@ -124,7 +180,7 @@ def roteador(state: State) -> State:
             f"Mensagem: \"{state['mensagem']}\""
         )
 
-        resposta = fast_llm.invoke([
+        resposta = roteador_llm.invoke([
             SystemMessage(content=ROTEADOR_PROMPT_COMPLETO),
             HumanMessage(content=mensagem_usuario),
         ])
@@ -285,6 +341,14 @@ def agente_faq(state: State) -> State:
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
+        # FAQ nao tem juiz nem dado de dominio para compor: o envelope ja traz
+        # a frase pronta. Montando aqui, a rota economiza a chamada inteira do
+        # orquestrador. Se o envelope nao servir, fica vazio e ele assume.
+        state["resposta_final"] = _montar_sem_modelo(
+            resposta_agente,
+            _saudou(state["mensagem"]),
+        )
+
         logger.debug(
             "agente_faq respondeu",
             extra={
@@ -297,6 +361,38 @@ def agente_faq(state: State) -> State:
 
     return state
 
+
+
+def _preferencias_prontas(account_id: int, pergunta: str) -> str:
+    """
+    Le as preferencias aqui, antes de chamar o agente, e nao por ferramenta.
+
+    A leitura nao depende de nada e e sempre necessaria para sugerir receita.
+    Deixada como ferramenta, ela custava uma ida inteira ao modelo: o prompt do
+    agente (~1.800 tokens) era reenviado so para ele decidir chamar, e com teto
+    de 8.000 tokens por minuto essa ida sozinha empurrava o fim da fila para o
+    429. A ferramenta continua disponivel para o agente refinar a busca.
+    """
+
+    try:
+        preferencias = PreferencesRepository.buscar_preferencias(
+            account_id=account_id,
+            busca=pergunta,
+            limite=5,
+        )
+    except Exception:
+        logger.warning(
+            "nao foi possivel pre-carregar preferencias, o agente pode "
+            "consultar pela ferramenta",
+            exc_info=True,
+        )
+
+        return ""
+
+    if not preferencias:
+        return "nenhuma preferência registrada"
+
+    return "; ".join(str(item) for item in preferencias)
 
 
 @traceable(name="agente_receitas", **_TRACE_NO)
@@ -317,6 +413,8 @@ def agente_receitas(state: State) -> State:
             0,
         )
 
+        preferencias = _preferencias_prontas(account_id, state["mensagem"])
+
         mensagem = (
             f"ROUTE=receitas\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
@@ -324,14 +422,25 @@ def agente_receitas(state: State) -> State:
             f"ACCOUNT_ID={account_id}"
         )
 
+        if preferencias:
+            mensagem += f"\nPREFERENCIAS={preferencias}"
+
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            recipe_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("receitas", state)],
             mensagem,
             historico,
             state["trace_id"],
             state.get("veredito_juiz", ""),
         )
         state["resposta_agente"] = resposta_agente
+
+        # O juiz precisa ver as preferencias como lastro: vindas pela entrada,
+        # elas nao passam pelo callback que registra retorno de ferramenta.
+        if preferencias:
+            evidencias = [
+                {"ferramenta": "consultar_preferencias", "conteudo": preferencias}
+            ] + evidencias
+
         state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
@@ -371,7 +480,7 @@ def agente_estoque(state: State) -> State:
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            stock_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("estoque", state)],
             mensagem,
             historico,
             state["trace_id"],
@@ -424,7 +533,7 @@ def agente_eventos(state: State) -> State:
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
-            events_app,
+            AGENTES_DAS_SKILLS[_escolher_skill("eventos", state)],
             mensagem,
             historico,
             state["trace_id"],
@@ -450,11 +559,66 @@ def agente_eventos(state: State) -> State:
 
 
 
+def _compactar(conteudo: str) -> tuple[str, str]:
+    """
+    Reduz o retorno da ferramenta ao que o juiz precisa para conferir lastro.
+
+    Lista de registros vira uma linha por item, sem os campos de id: eles sao
+    um terco do payload e nao dizem nada sobre lastro. Corta em item inteiro,
+    nunca no meio de um, e devolve o aviso do que ficou de fora.
+    """
+
+    try:
+        dados = json.loads(conteudo)
+    except (ValueError, TypeError):
+        dados = None
+
+    if not isinstance(dados, list) or not dados:
+        if len(conteudo) > LIMITE_EVIDENCIA:
+            return conteudo[:LIMITE_EVIDENCIA], " (cortado por tamanho)"
+
+        return conteudo, ""
+
+    if not all(isinstance(registro, dict) for registro in dados):
+        if len(conteudo) > LIMITE_EVIDENCIA:
+            return conteudo[:LIMITE_EVIDENCIA], " (cortado por tamanho)"
+
+        return conteudo, ""
+
+    itens = [
+        " ".join(
+            f"{chave}={valor}"
+            for chave, valor in registro.items()
+            if not chave.endswith("_id") and valor not in ("", None)
+        )
+        for registro in dados
+    ]
+
+    mantidos = []
+    total = 0
+
+    for item in itens:
+        if total + len(item) > LIMITE_EVIDENCIA:
+            break
+
+        total += len(item) + 2
+        mantidos.append(item)
+
+    omitidos = len(itens) - len(mantidos)
+    aviso = f" (+{omitidos} de {len(itens)} itens omitidos por tamanho)" if omitidos else ""
+
+    return "; ".join(mantidos), aviso
+
+
 def _formatar_evidencias(evidencias: list[dict]) -> str:
     """
-    Monta o bloco de evidencias do juiz com o que as ferramentas devolveram,
-    com teto de tamanho: o juiz roda a cada resposta e nao pode virar o
-    gargalo de latencia da requisicao.
+    Monta o bloco de evidencias do juiz com o que as ferramentas devolveram.
+
+    O teto existe para o juiz nao virar gargalo de latencia, mas corte
+    silencioso custa muito mais caro do que economiza: o juiz nao distingue
+    "nao existe" de "nao me mostraram", reprova lastro legitimo e paga uma
+    rodada inteira do agente. Por isso compacta antes de cortar, corta em item
+    inteiro e sempre declara o que ficou de fora.
     """
 
     if not evidencias:
@@ -465,15 +629,15 @@ def _formatar_evidencias(evidencias: list[dict]) -> str:
 
     for evidencia in evidencias:
         ferramenta = evidencia.get("ferramenta", "ferramenta")
-        conteudo = str(evidencia.get("conteudo", ""))[:LIMITE_EVIDENCIA]
+        conteudo, aviso = _compactar(str(evidencia.get("conteudo", "")))
 
-        linha = f"- {ferramenta}: {conteudo}"
-        total += len(linha)
+        linha = f"- {ferramenta}: {conteudo}{aviso}"
 
-        if total > LIMITE_EVIDENCIAS_TOTAL:
+        if total + len(linha) > LIMITE_EVIDENCIAS_TOTAL:
             linhas.append("- (demais retornos omitidos por tamanho)")
             break
 
+        total += len(linha)
         linhas.append(linha)
 
     return "\n".join(linhas)
@@ -527,6 +691,48 @@ def _ler_veredito(texto: str) -> tuple[str, str]:
     return veredito, motivo
 
 
+# Campos que sao escolha de oficio do agente e NAO tem como ser conferidos
+# contra o estoque, que conta unidades e nao pesos. Deixados a vista, o juiz
+# reprova toda receita por "200 ml sem lastro" e cada reprovacao re-executa o
+# agente inteiro. Os nomes dos ingredientes continuam a vista: esses sim se
+# conferem contra a evidencia, e e ali que mora a alucinacao que importa.
+SEM_COMO_CONFERIR = (
+    "quantidade_total",
+    "tem_suficiente",
+    "porcoes",
+    "tempo_estimado",
+    "dificuldade",
+)
+
+
+def _podar(valor):
+    if isinstance(valor, dict):
+        return {
+            chave: _podar(sub)
+            for chave, sub in valor.items()
+            if chave not in SEM_COMO_CONFERIR
+        }
+
+    if isinstance(valor, list):
+        return [_podar(item) for item in valor]
+
+    return valor
+
+
+def _para_o_juiz(resposta_agente: str) -> str:
+    """Tira do envelope o que o juiz nao tem evidencia para julgar."""
+
+    try:
+        dados = json.loads(resposta_agente)
+    except (ValueError, TypeError):
+        return resposta_agente
+
+    if not isinstance(dados, dict):
+        return resposta_agente
+
+    return json.dumps(_podar(dados), ensure_ascii=False)
+
+
 @traceable(name="juiz", **_TRACE_NO)
 def juiz(state: State) -> State:
     with span(state["trace_id"], "juiz"):
@@ -540,15 +746,46 @@ def juiz(state: State) -> State:
             f"Evidências:\n"
             f"{evidencias}\n"
             f"Resposta do agente:\n"
-            f"{state.get('resposta_agente', '')}"
+            f"{_para_o_juiz(state.get('resposta_agente', ''))}"
         )
 
-        resposta = fast_llm.invoke([
+        resposta = juiz_llm.invoke([
             SystemMessage(content=JUIZ_PROMPT_COMPLETO),
             HumanMessage(content=mensagem_usuario),
         ])
 
         veredito, motivo = _ler_veredito(resposta.content)
+
+        input_tokens, output_tokens = extrair_tokens(resposta)
+
+        # Devolver custa a re-execucao completa do agente: 43,0s em estoque e
+        # 41,7s em receitas, medidos. Uma leitura do juiz custa ~0,5s. Como o
+        # veredito varia entre execucoes — duas das tres devolucoes observadas
+        # estavam erradas —, vale ler de novo antes de pagar a rodada.
+        #
+        # Semente diferente e obrigatorio: com a mesma semente e temperatura
+        # zero, repetir a chamada devolve o MESMO veredito e nao ha segunda
+        # opiniao nenhuma.
+        segunda = None
+
+        if veredito == "DEVOLVER":
+            segunda = revisao_segunda_llm.invoke([
+                SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+                HumanMessage(content=mensagem_usuario),
+            ])
+
+            veredito_2, motivo_2 = _ler_veredito(segunda.content)
+
+            entrada_2, saida_2 = extrair_tokens(segunda)
+            input_tokens += entrada_2
+            output_tokens += saida_2
+
+            # Divergencia absolve: a reprovacao era ruido do sorteio.
+            if veredito_2 == "APROVADO":
+                veredito, motivo = "APROVADO", ""
+            else:
+                motivo = motivo_2 or motivo
+
         devolucoes = state.get("devolucoes", 0)
 
         if veredito == "DEVOLVER" and devolucoes < LIMITE_DEVOLUCOES:
@@ -559,7 +796,6 @@ def juiz(state: State) -> State:
             state["veredito_juiz"] = ""
             state["limite_devolucoes"] = veredito == "DEVOLVER"
 
-        input_tokens, output_tokens = extrair_tokens(resposta)
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
         state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
 
@@ -571,6 +807,7 @@ def juiz(state: State) -> State:
                 "rota": state.get("rota", ""),
                 "veredito": veredito,
                 "motivo": motivo,
+                "segunda_leitura": segunda is not None,
                 "devolucoes": state.get("devolucoes", 0),
                 "limite_devolucoes": state.get("limite_devolucoes", False),
             },
@@ -578,6 +815,142 @@ def juiz(state: State) -> State:
 
     return state
 
+
+
+PROMPT_SELETOR = """\
+Escolha qual capacidade atende o pedido abaixo.
+
+Capacidades:
+{catalogo}
+
+Conversa até agora:
+{conversa}
+
+Pedido: {pedido}
+
+Responda APENAS com o nome da capacidade, nada mais.
+"""
+
+
+def _escolher_skill(agente: str, state: State) -> str:
+    """
+    O proprio agente escolhe a sua skill, entre as 3 a 5 do dominio dele.
+
+    Fica aqui, e nao no roteador, por dois motivos: o roteador escolheria entre
+    13 opcoes em vez de 5, e a escolha costuma depender do que o dominio sabe.
+    O catalogo custa ~160 tokens e poupa ~1800 no prompt do agente.
+
+    Nome irreconhecivel cai na skill padrao, que e a de leitura.
+    """
+
+    skills = do_agente(agente)
+    padrao = SKILL_PADRAO.get(agente, skills[0].nome if skills else "")
+
+    if len(skills) < 2:
+        return padrao
+
+    pedido = PROMPT_SELETOR.format(
+        catalogo=catalogo(agente),
+        conversa=_formatar_conversa(state.get("historico", [])),
+        pedido=state["mensagem"],
+    )
+
+    try:
+        resposta = seletor_llm.invoke([HumanMessage(content=pedido)])
+    except Exception:
+        logger.exception(
+            "seletor de skill falhou; usando a padrao",
+            extra={"trace_id": state.get("trace_id", ""), "stage": "seletor"},
+        )
+        return padrao
+
+    bruto = (resposta.content or "").strip().lower()
+    nomes = [x.nome for x in skills]
+
+    escolhida = next((n for n in nomes if n == bruto), None)
+    if escolhida is None:
+        escolhida = next((n for n in nomes if n in bruto), padrao)
+
+    input_tokens, output_tokens = extrair_tokens(resposta)
+    state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
+    state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
+
+    logger.info(
+        "skill escolhida",
+        extra={
+            "trace_id": state.get("trace_id", ""),
+            "stage": "seletor",
+            "agente": agente,
+            "skill": escolhida,
+            "bruto": bruto[:60],
+        },
+    )
+
+    return escolhida
+
+
+@traceable(name="saudacao", **_TRACE_NO)
+def saudacao(state: State) -> State:
+    """Responde "Oi" sem nenhuma chamada de LLM: nada aqui depende de dado."""
+
+    with span(state["trace_id"], "saudacao"):
+        if _AGRADECIMENTO.search(state.get("mensagem", "")):
+            state["resposta_final"] = RESPOSTA_DE_AGRADECIMENTO
+        else:
+            state["resposta_final"] = RESPOSTA_DE_SAUDACAO
+
+        logger.debug(
+            "saudacao respondida sem modelo",
+            extra={
+                "trace_id": state["trace_id"],
+                "stage": "qa_debug",
+                "resposta_final": state["resposta_final"],
+            },
+        )
+
+    return state
+
+
+def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
+    """
+    Monta o texto final a partir do envelope, sem chamar o orquestrador.
+
+    Serve para a rota de FAQ, que nao tem juiz nem dado de dominio para
+    compor: o envelope ja traz a frase pronta e o orquestrador so a repetia,
+    cobrando uma chamada inteira por isso. Devolve string vazia quando o
+    envelope nao da para aproveitar — ai o orquestrador assume, como antes.
+    """
+
+    try:
+        dados = json.loads(resposta_agente)
+    except (ValueError, TypeError):
+        return ""
+
+    if not isinstance(dados, dict):
+        return ""
+
+    abertura = f"{SAUDACAO_CURTA} " if saudou else ""
+
+    esclarecer = str(dados.get("esclarecer") or "").strip()
+
+    # Pergunta de clarificacao encerra a mensagem e anda sozinha.
+    if esclarecer:
+        return f"{abertura}{esclarecer}"
+
+    partes = [str(dados.get("resposta") or "").strip()]
+
+    if not partes[0]:
+        return ""
+
+    for campo in ("recomendacao", "acompanhamento"):
+        texto = str(dados.get(campo) or "").strip()
+
+        # Sem modelo nao da para reescrever, so da para nao repetir: entra o
+        # que ainda nao foi dito.
+        if texto and texto.lower() not in " ".join(partes).lower():
+            partes.append(texto)
+
+    return abertura + " ".join(partes)
 
 
 @traceable(name="orquestrador", **_TRACE_NO)
@@ -601,7 +974,10 @@ def orquestrador(state: State) -> State:
         if state.get("limite_devolucoes"):
             mensagem_usuario += "\nRevisão: não confirmada"
 
-        resposta = fast_llm.invoke([
+        if _saudou(state.get("mensagem", "")):
+            mensagem_usuario += "\nSaudou: sim"
+
+        resposta = orquestrador_llm.invoke([
             SystemMessage(content=ORQUESTRADOR_PROMPT_COMPLETO),
             HumanMessage(content=mensagem_usuario),
         ])
@@ -639,16 +1015,24 @@ def guardrail_saida(state: State) -> State:
             mapa,
         )
 
-        state["resposta_final"] = resultado["conteudo"]
+        # Bloqueio entrega a mensagem segura e encerra. Nao volta ao
+        # orquestrador: ele so tem o envelope que gerou o risco e produziria o
+        # mesmo texto, gastando uma chamada para repetir o problema.
+        if resultado.get("bloqueado"):
+            state["resposta_final"] = resultado["mensagem"]
 
-        bloqueado = resultado.get("bloqueado", False)
-        devolucoes = state.get("devolucoes", 0)
-
-        if bloqueado and devolucoes < LIMITE_DEVOLUCOES:
-            state["devolucoes"] = devolucoes + 1
-            state["saida_aprovada"] = False
+            logger.warning(
+                "guardrail de saida bloqueou a resposta",
+                extra={
+                    "trace_id": state["trace_id"],
+                    "stage": "output",
+                    "motivo": resultado.get("motivo", ""),
+                },
+            )
         else:
-            state["saida_aprovada"] = True
+            state["resposta_final"] = resultado["conteudo"]
+
+        state["saida_aprovada"] = True
 
     return state
 
@@ -663,6 +1047,15 @@ def decidir_pos_guardrail_entrada(state: State) -> str:
 
 def decidir_rota(state: State) -> str:
     return state["rota"]
+
+
+def decidir_pos_faq(state: State) -> str:
+    """Montou o texto sem modelo, vai direto para a revisao de saida."""
+
+    if state.get("resposta_final"):
+        return "guardrail_saida"
+
+    return "orquestrador"
 
 
 def decidir_pos_juiz(state: State) -> str:
@@ -683,6 +1076,32 @@ def decidir_pos_guardrail_saida(state: State) -> str:
 
     return END
 
+
+
+def _registrar_metrica(
+    trace_id: str,
+    route: str,
+    started_at,
+    finished_at,
+    duration_ms: float,
+    erro: bool,
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
+    """Conta as tools e grava a metrica da requisicao, fora do caminho critico."""
+
+    MetricsRepository.save_request_metric(
+        trace_id=trace_id,
+        route=route,
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        tool_calls=ToolMetricsRepository.count_by_trace_id(trace_id),
+        error=erro,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=estimate_cost_usd(input_tokens, output_tokens),
+    )
 
 
 def executar_chat(
@@ -708,7 +1127,7 @@ def executar_chat(
 
         historico = []
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     resultado = None
     erro = False
 
@@ -752,28 +1171,29 @@ def executar_chat(
 
         raise
     finally:
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         duration_ms = (finished_at - started_at).total_seconds() * 1000
 
         if resultado is not None and not resultado.get("entrada_aprovada", True):
             erro = True
 
-        tool_calls = ToolMetricsRepository.count_by_trace_id(trace_id)
-
         input_tokens = resultado.get("input_tokens", 0) if resultado is not None else 0
         output_tokens = resultado.get("output_tokens", 0) if resultado is not None else 0
 
-        MetricsRepository.save_request_metric(
+        # A contagem de tools vai junto da gravacao, na mesma tarefa: ela le o
+        # que o callback das tools escreveu, e a fila de uma thread garante que
+        # aquelas escritas ja passaram. Separadas, a contagem poderia correr
+        # antes e registrar zero.
+        em_segundo_plano(
+            _registrar_metrica,
             trace_id=trace_id,
             route=resultado.get("rota", "fallback") if resultado is not None else "fallback",
             started_at=started_at,
             finished_at=finished_at,
             duration_ms=duration_ms,
-            tool_calls=tool_calls,
-            error=erro,
+            erro=erro,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cost_usd=estimate_cost_usd(input_tokens, output_tokens),
         )
 
     resposta = resultado["resposta_final"]
@@ -828,6 +1248,11 @@ graph.add_node(
 )
 
 graph.add_node(
+    "saudacao",
+    saudacao,
+)
+
+graph.add_node(
     "orquestrador",
     orquestrador,
 )
@@ -865,15 +1290,27 @@ graph.add_conditional_edges(
         "receitas": "receitas",
         "estoque": "estoque",
         "eventos": "eventos",
+        "saudacao": "saudacao",
         "fallback": "orquestrador",
     },
 )
 
 
 
-graph.add_edge(
+graph.add_conditional_edges(
     "faq",
-    "orquestrador",
+    decidir_pos_faq,
+    {
+        "guardrail_saida": "guardrail_saida",
+        "orquestrador": "orquestrador",
+    },
+)
+
+# Saudacao nao passa por orquestrador nem por guardrail: o texto e constante,
+# nosso, e nao carrega dado de ninguem para revisar ou mascarar.
+graph.add_edge(
+    "saudacao",
+    END,
 )
 
 graph.add_edge(
