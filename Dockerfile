@@ -32,6 +32,7 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 COPY --chown=ceris:ceris app ./app
+COPY --chown=ceris:ceris skills ./skills
 
 USER ceris
 

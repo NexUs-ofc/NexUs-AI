@@ -22,10 +22,9 @@ __pycache__/
 .claude/
 
 *.md
-!app/bases/*.md
+!skills/**/SKILL.md
 LICENSE
 
 relatorio*.html
 relatorio*.md
-tests.py
 scripts/
