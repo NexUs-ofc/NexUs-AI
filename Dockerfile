@@ -13,7 +13,9 @@ COPY requirements.txt .
 
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install -r requirements.txt
+    && /opt/venv/bin/pip install -r requirements.txt \
+    && /opt/venv/bin/pip uninstall -y opencv-python \
+    && /opt/venv/bin/pip install --force-reinstall --no-deps opencv-python-headless
 
 
 FROM python:3.13-slim AS base
@@ -39,7 +41,7 @@ COPY --chown=ceris:ceris skills ./skills
 
 FROM base AS tests
 
-COPY requirements.txt requirements-dev.txt ./
+COPY requirements-dev.txt .
 
 RUN pip install -r requirements-dev.txt
 
@@ -47,7 +49,7 @@ COPY --chown=ceris:ceris tests ./tests
 
 USER ceris
 
-CMD ["python", "-m", "pytest", "-q", "tests"]
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
 
 
 FROM base AS runtime
