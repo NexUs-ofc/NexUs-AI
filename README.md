@@ -116,7 +116,7 @@ skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 | --- | --- | --- | --- |
 | `POST` | `/chat/` | `X-API-Key` + `Authorization: Bearer` | roda o grafo e devolve `resposta` e `session_id` |
 | `DELETE` | `/chat/{session_id}` | `X-API-Key` + `Authorization: Bearer` | encerra a sessão e resume a memória |
-| `POST` | `/receipt/scan` | nenhuma | lê a imagem da nota e devolve os itens |
+| `POST` | `/receipt/scan` | `X-API-Key` + `Authorization: Bearer` | lê a imagem da nota e devolve os itens |
 | `GET` | `/health/` | nenhuma | liveness, sem tocar em dependência externa |
 | `GET` | `/health/dependencies` | `X-API-Key` | estado de cada dependência externa |
 | `GET` | `/health/metrics` | `X-API-Key` | p50, p95, taxa de erro e custo, por rota e por nó |
@@ -128,7 +128,12 @@ precisa da chave do aplicativo.
 
 O Bearer é o mesmo JWT que o NexUs-Auth emite, validado aqui pela assinatura
 — sem consulta a sessão, a Redis ou ao serviço de autenticação. O `sub` do
-token é o perfil, e o `account_id` que vier no corpo do pedido é ignorado.
+token é o perfil, e o que o cliente mandar no corpo para escolher outro é
+ignorado: vale para o `account_id` do `/chat` e para a leitura de nota.
+
+As duas rotas que gastam modelo — `/chat/` e `/receipt/scan` — exigem as duas
+credenciais, e a recusa vem antes de ler a imagem ou chamar o grafo. Sem isso,
+quem tivesse a URL gastava OCR e três idas ao Groq por requisição.
 
 Falha do provedor não vira 500 opaco: cota estourada sai como `429`, rede
 caindo como `503`, recusa do Groq como `502`, cada um com a mensagem do
@@ -245,7 +250,9 @@ a apresentação é do painel.
   dia. Uma requisição de chat com orquestrador fica na casa dos 9.000, ou
   seja, estoura o minuto sozinha. Quando isso acontece o cliente espera o
   `retry-after` e a demora aparece como latência, sem erro no log.
-- `POST /receipt/scan` não exige autenticação hoje e consome modelo.
+- `ALLOWED_TYPES` do leitor de nota aceita `application/octet-stream`, porque
+  é o que alguns clientes mandam para imagem. Na prática, qualquer binário
+  passa pela primeira peneira e só morre adiante, ao tentar abrir.
 - `/health/report` lê do LangSmith e `/health/metrics` do Mongo. Medem a mesma
   coisa por caminhos diferentes, cada um com o seu cálculo de percentil, e
   podem divergir no painel.

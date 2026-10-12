@@ -1,10 +1,13 @@
 import asyncio
 import os
+from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.core.receipt_agent import scan_receipt
 from app.schemas.receipt import ReceiptScanResponse
+
+from ..auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/receipt", tags=["receipt"])
 
@@ -22,7 +25,10 @@ def get_catalog_lookup():
 
 
 @router.post("/scan", response_model=ReceiptScanResponse)
-async def scan(image: UploadFile = File(...), profile_id: int | None = Form(None)) -> ReceiptScanResponse:  # noqa: B008
+async def scan(
+    user: Annotated[dict, Depends(get_current_user)],
+    image: UploadFile = File(...),  # noqa: B008
+) -> ReceiptScanResponse:
     if image.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Envie uma imagem JPEG, PNG ou WEBP.")
     data = await image.read()
