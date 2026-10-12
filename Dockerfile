@@ -13,13 +13,17 @@ COPY requirements.txt .
 
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install -r requirements.txt
+    && /opt/venv/bin/pip install -r requirements.txt \
+    && /opt/venv/bin/pip uninstall -y opencv-python \
+    && /opt/venv/bin/pip install --force-reinstall --no-deps opencv-python-headless
 
 
-FROM python:3.13-slim AS runtime
+FROM python:3.13-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update \
@@ -32,6 +36,23 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 COPY --chown=ceris:ceris app ./app
+COPY --chown=ceris:ceris skills ./skills
+
+
+FROM base AS tests
+
+COPY requirements-dev.txt .
+
+RUN pip install -r requirements-dev.txt
+
+COPY --chown=ceris:ceris tests ./tests
+
+USER ceris
+
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
+
+
+FROM base AS runtime
 
 USER ceris
 

@@ -1,7 +1,7 @@
 import unittest
 
-from app.core.shelf_life import DEFAULT_CATEGORIES, is_storable_food
 from app.core.receipt_agent import _build_response
+from app.core.shelf_life import DEFAULT_CATEGORIES, is_storable_food
 
 COMIDA = ["Hortifruti", "Carnes e Peixes", "Frios e Laticínios", "Padaria",
           "Congelados", "Mercearia", "Bebidas", "Doces e Snacks", "Outros"]
