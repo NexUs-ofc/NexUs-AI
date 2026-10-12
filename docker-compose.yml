@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
     image: ceris/ms-ia:latest
     container_name: ceris-ms-ia
     restart: unless-stopped
@@ -10,6 +11,22 @@ services:
       - .env
     ports:
       - "${MS_IA_PORT:-8000}:8000"
+    networks:
+      - ceris
+
+  tests:
+    profiles:
+      - tests
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tests
+    image: ceris/ms-ia:tests
+    container_name: ceris-ms-ia-tests
+    env_file:
+      - .env
+    environment:
+      LANGCHAIN_TRACING_V2: "false"
     networks:
       - ceris
 

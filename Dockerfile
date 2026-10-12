@@ -16,10 +16,12 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install -r requirements.txt
 
 
-FROM python:3.13-slim AS runtime
+FROM python:3.13-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update \
@@ -33,6 +35,22 @@ WORKDIR /app
 
 COPY --chown=ceris:ceris app ./app
 COPY --chown=ceris:ceris skills ./skills
+
+
+FROM base AS tests
+
+COPY requirements.txt requirements-dev.txt ./
+
+RUN pip install -r requirements-dev.txt
+
+COPY --chown=ceris:ceris tests ./tests
+
+USER ceris
+
+CMD ["python", "-m", "pytest", "-q", "tests"]
+
+
+FROM base AS runtime
 
 USER ceris
 
