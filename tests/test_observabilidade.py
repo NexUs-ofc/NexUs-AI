@@ -13,6 +13,10 @@ from unittest.mock import patch
 
 from app.observability import background as bg
 
+# Teto para esperar um Event: alto porque é rede de segurança contra travar a
+# suíte, não medida de desempenho.
+SEGUNDOS_DE_PACIENCIA = 5
+
 
 class TestFilaDeObservabilidade(unittest.TestCase):
     def setUp(self):
@@ -29,14 +33,29 @@ class TestFilaDeObservabilidade(unittest.TestCase):
         self.executor.shutdown(wait=True)
 
     def test_nao_bloqueia_quem_chamou(self):
-        def lenta():
-            time.sleep(0.4)
+        """
+        Sem cronômetro de propósito. A versão anterior exigia o retorno em
+        menos de 0,1s e falhava dentro do container, onde subir a thread
+        demora mais — media a máquina, não o código. Aqui a tarefa fica presa
+        até ser solta: se a chamada esperasse por ela, `terminou` já estaria
+        marcado quando a linha seguinte rodasse.
+        """
 
-        inicio = time.perf_counter()
-        bg.em_segundo_plano(lenta)
-        decorrido = time.perf_counter() - inicio
+        liberar = threading.Event()
+        terminou = threading.Event()
 
-        self.assertLess(decorrido, 0.1, "a escrita bloqueou a requisição")
+        def presa():
+            liberar.wait(SEGUNDOS_DE_PACIENCIA)
+            terminou.set()
+
+        bg.em_segundo_plano(presa)
+
+        self.assertFalse(terminou.is_set(), "a escrita bloqueou a requisição")
+
+        liberar.set()
+        terminou.wait(SEGUNDOS_DE_PACIENCIA)
+
+        self.assertTrue(terminou.is_set(), "a escrita nunca aconteceu")
 
     def test_a_escrita_realmente_acontece(self):
         feito = []
