@@ -7,14 +7,17 @@ como fato — com 11 itens no banco. Nem juiz nem guardrail pegam, porque a
 evidência em si está errada.
 """
 
+import logging
 import unittest
 from typing import ClassVar
 from unittest.mock import patch
 
+from qdrant_client.http.exceptions import ResponseHandlingException
 from sqlalchemy.exc import OperationalError
 
 from app.repository.pgsql.stock import ConsultaIndisponivel, StockRepository
-from app.tools import pg_tools
+from app.repository.qdrant.config import TEMPO_LIMITE_BUSCA_S
+from app.tools import faq_tools, pg_tools
 
 
 class TestRepositorioLevantaEmVezDeMentir(unittest.TestCase):
@@ -111,6 +114,80 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
 
         with self._falhando("get_stock"):
             pg_tools.get_stock.invoke({"profile_id": 3})
+
+
+class TestBuscaNoQdrant(unittest.TestCase):
+    """
+    Mesma regra, outra fonte: o Qdrant estourava o tempo de leitura e a
+    excecao subia da tool para o no, derrubando a pergunta inteira. Medido:
+    a busca leva de 0,2s a 0,4s, mas um pico passava dos 5s do padrao do
+    cliente.
+    """
+
+    TEMPO_ESGOTADO: ClassVar[Exception] = ResponseHandlingException(
+        "The read operation timed out"
+    )
+
+    def _faq(self, **kwargs):
+        return patch.object(faq_tools.faq_repo, "buscar_respostas_faq", **kwargs)
+
+    def _doc(self, **kwargs):
+        return patch.object(faq_tools.doc_repo, "buscar_trechos_documentacao", **kwargs)
+
+    def setUp(self):
+        logging.disable(logging.CRITICAL)
+
+        self.addCleanup(logging.disable, logging.NOTSET)
+
+    def test_as_duas_buscas_falhando_viram_aviso(self):
+        with self._faq(side_effect=self.TEMPO_ESGOTADO), self._doc(side_effect=self.TEMPO_ESGOTADO):
+            saida = faq_tools.faq_retriever.invoke({"question": "o que e o Ceris?"})
+
+        self.assertTrue(saida.startswith("FALHA"))
+        self.assertIn("NAO significa que a resposta nao existe", saida)
+
+    def test_a_tool_nao_propaga_a_excecao(self):
+        with self._faq(side_effect=self.TEMPO_ESGOTADO), self._doc(side_effect=self.TEMPO_ESGOTADO):
+            faq_tools.faq_retriever.invoke({"question": "o que e o Ceris?"})
+
+    def test_o_que_uma_busca_trouxe_vale_mais_que_o_alarme(self):
+        """Com metade da evidencia em maos, avisar de falha seria pior."""
+
+        with self._faq(side_effect=self.TEMPO_ESGOTADO), self._doc(return_value=["trecho do manual"]):
+            saida = faq_tools.faq_retriever.invoke({"question": "o que e o Ceris?"})
+
+        self.assertEqual(saida, "- trecho do manual")
+
+    def test_nao_achar_nada_nao_e_falha(self):
+        """Vazio por corte de similaridade continua vazio, como antes."""
+
+        with self._faq(return_value=[]), self._doc(return_value=[]):
+            saida = faq_tools.faq_retriever.invoke({"question": "xyz"})
+
+        self.assertEqual(saida, "")
+
+    def test_caminho_feliz_intacto(self):
+        with self._faq(return_value=["resposta A", "resposta B"]), self._doc(return_value=["sobra"]):
+            saida = faq_tools.faq_retriever.invoke({"question": "o que e o Ceris?"})
+
+        self.assertEqual(saida, "- resposta A\n- resposta B")
+
+    def test_a_documentacao_so_preenche_as_vagas_que_sobraram(self):
+        with self._faq(return_value=["unica"]), self._doc(return_value=["do manual"]) as doc:
+            saida = faq_tools.faq_retriever.invoke({"question": "o que e o Ceris?"})
+
+        doc.assert_called_once()
+        self.assertEqual(doc.call_args.kwargs["k"], 1)
+        self.assertEqual(saida, "- unica\n- do manual")
+
+    def test_as_buscas_tem_tempo_limite_maior_que_o_padrao(self):
+        """O padrao do cliente e 5s; o pico que derrubava passava disso."""
+
+        self.assertGreater(TEMPO_LIMITE_BUSCA_S, 5)
+
+        for nome, repositorio in (("faq", faq_tools.faq_repo), ("doc", faq_tools.doc_repo)):
+            with self.subTest(repositorio=nome):
+                self.assertEqual(repositorio.client._client._timeout, TEMPO_LIMITE_BUSCA_S)
 
 
 if __name__ == "__main__":
