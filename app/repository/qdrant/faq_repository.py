@@ -3,6 +3,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 
 from ...config import GEMINI_API_KEY, QDRANT_API_KEY, QDRANT_DATABASE_URL
+from .config import TEMPO_LIMITE_BUSCA_S
 
 
 class FAQRepository:
@@ -23,6 +24,7 @@ class FAQRepository:
             url=self.url,
             api_key=self.api_key,
             port=None,
+            timeout=TEMPO_LIMITE_BUSCA_S,
         )
 
         self.db = QdrantVectorStore(
