@@ -8,6 +8,14 @@ PROFILE_PREFERENCES_COLLECTION = "profile_preferencies"
 
 EMBEDDING_DIM = 768
 
+# O padrao do QdrantClient e 5s. A busca medida leva de 0,2s a 0,4s, mas um
+# pico ocasional passa disso e volta como ResponseHandlingException("The read
+# operation timed out") no meio da pergunta. Vale para as buscas de FAQ e
+# documentacao, onde o resultado e a resposta; memoria e preferencias ficam no
+# padrao de proposito, porque ali a falha so degrada e esperar mais atrasaria
+# a pessoa a toa.
+TEMPO_LIMITE_BUSCA_S = 15
+
 # port=None faz o cliente respeitar a porta implicita do https (443). Sem isso
 # ele assume 6333, que varias redes bloqueiam — e como esta conexao acontece no
 # import, a aplicacao inteira deixa de subir, nao so a busca vetorial.
