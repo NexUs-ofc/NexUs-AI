@@ -9,20 +9,29 @@ que o Dockerfile já usa (`uvicorn app.app:app`), na porta/host que a
 Discloud exige para `TYPE=site` (proxy -> 0.0.0.0:8080).
 
 O `rapidocr-onnxruntime` arrasta o `opencv-python` (variante com GUI),
-que precisa de libGL — e a imagem da Discloud não tem. O Dockerfile
-contorna isso trocando pelo `headless`; como nem o `APT` nem o `BUILD`
-da Discloud surtiram efeito no container, a mesma troca é replicada
-aqui, em Python puro: se o `import cv2` falhar, o pip desinstala o GUI
-e reinstala o headless ANTES de o uvicorn importar a aplicação. Se o
-cv2 importar de primeira (BUILD funcionou, por exemplo), não gasta
-nada: volta direto.
+que precisa de libGL — e a imagem da Discloud não tem. No runtime o app
+roda como usuário sem permissão de escrita no site-packages global, e o
+"user site" que o pip cria como fallback não entra no sys.path (ele é
+montado no boot, antes de a pasta existir). Por isso a troca para o
+`headless` é feita num diretório próprio dentro do HOME, inserido na
+frente do sys.path: primeiro tenta importar o cv2 (se já resolve, não
+gasta nada); se falhar, instala o headless nesse diretório e importa
+de novo, antes de o uvicorn carregar a aplicação.
 """
 
+import importlib
+import shutil
 import subprocess
 import sys
+from pathlib import Path
+
+_PYPILIBS = Path(__file__).resolve().parent / ".pylibs"
 
 
-def _trocar_opencv_se_necessario() -> None:
+def _garantir_cv2_headless() -> None:
+    if str(_PYPILIBS) not in sys.path:
+        sys.path.insert(0, str(_PYPILIBS))
+
     try:
         import cv2  # noqa: F401
 
@@ -30,10 +39,9 @@ def _trocar_opencv_se_necessario() -> None:
     except ImportError:
         pass
 
-    subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "opencv-python"],
-        check=False,
-    )
+    if _PYPILIBS.exists():
+        shutil.rmtree(_PYPILIBS)
+
     subprocess.run(
         [
             sys.executable,
@@ -41,16 +49,17 @@ def _trocar_opencv_se_necessario() -> None:
             "pip",
             "install",
             "--no-cache-dir",
-            "--force-reinstall",
-            "--no-deps",
+            "--target",
+            str(_PYPILIBS),
             "opencv-python-headless",
         ],
         check=False,
     )
+    importlib.invalidate_caches()
 
 
 if __name__ == "__main__":
-    _trocar_opencv_se_necessario()
+    _garantir_cv2_headless()
     import uvicorn
 
     uvicorn.run("app.app:app", host="0.0.0.0", port=8080)
