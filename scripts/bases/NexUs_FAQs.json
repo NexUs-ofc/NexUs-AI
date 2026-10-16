@@ -234,5 +234,325 @@
   {
     "pergunta": "A IA respondeu algo diferente do esperado.",
     "resposta": "Reformule sua pergunta com mais detalhes ou forneça informações adicionais para que o assistente compreenda melhor sua solicitação."
+  },
+  {
+    "pergunta": "Qual é o objetivo do Ceris?",
+    "resposta": "O Ceris é um aplicativo para organizar a casa no dia a dia: controla o estoque de alimentos e produtos, cria listas de compras, sugere receitas com o que você já tem e ajuda a planejar eventos."
+  },
+  {
+    "pergunta": "Qual é o objetivo do aplicativo?",
+    "resposta": "O objetivo do Ceris é ajudar você a organizar a casa, evitar desperdícios e não esquecer nada nas compras."
+  },
+  {
+    "pergunta": "Para que serve o Ceris?",
+    "resposta": "O Ceris serve para controlar o que há em casa, montar listas de compras, aproveitar melhor os alimentos com receitas e planejar eventos."
+  },
+  {
+    "pergunta": "O que é o Ceris?",
+    "resposta": "O Ceris é um aplicativo de organização da casa. Ele reúne estoque, listas de compras, receitas e eventos em um só lugar."
+  },
+  {
+    "pergunta": "O que o Ceris faz?",
+    "resposta": "O Ceris acompanha o estoque da casa, avisa sobre produtos próximos do vencimento, cria listas de compras, sugere receitas e ajuda a organizar eventos."
+  },
+  {
+    "pergunta": "Qual é a função do aplicativo?",
+    "resposta": "A função principal é ajudar a manter a casa organizada: saber o que tem, o que falta e o que precisa ser usado antes de vencer."
+  },
+  {
+    "pergunta": "Quais são as principais funções do Ceris?",
+    "resposta": "As principais funções são o estoque, as listas de compras, as receitas sugeridas, os eventos e a conversa com a Cerita, a assistente de inteligência artificial."
+  },
+  {
+    "pergunta": "O que é a Cerita?",
+    "resposta": "A Cerita é a assistente de inteligência artificial do Ceris. Ela conversa com você, responde dúvidas sobre o aplicativo e ajuda a usar as funções."
+  },
+  {
+    "pergunta": "Ceris e Cerita são a mesma coisa?",
+    "resposta": "Não. O Ceris é o aplicativo inteiro. A Cerita é a assistente de inteligência artificial que fica dentro dele."
+  },
+  {
+    "pergunta": "Quem é a Cerita?",
+    "resposta": "A Cerita é a assistente virtual do Ceris, criada para conversar com você e ajudar a usar o aplicativo."
+  },
+  {
+    "pergunta": "Para quem o Ceris foi feito?",
+    "resposta": "O Ceris foi feito para pessoas e famílias que querem organizar a casa, controlar a compra de alimentos e reduzir o desperdício."
+  },
+  {
+    "pergunta": "O Ceris serve para controlar a comida de casa?",
+    "resposta": "Sim. Você pode cadastrar os produtos da casa, acompanhar as quantidades e as datas de validade."
+  },
+  {
+    "pergunta": "O Ceris ajuda a economizar?",
+    "resposta": "Sim, indiretamente: ao saber o que já tem em casa, você compra só o necessário e usa os produtos antes que estraguem."
+  },
+  {
+    "pergunta": "O Ceris ajuda a não desperdiçar comida?",
+    "resposta": "Sim. O aplicativo avisa sobre produtos próximos do vencimento e sugere receitas que aproveitam o que já está guardado."
+  },
+  {
+    "pergunta": "Qual a diferença entre o Ceris e uma lista de compras comum?",
+    "resposta": "A lista do Ceris conversa com o estoque: ela ajuda a lembrar o que falta e pode sugerir itens com quantidade baixa."
+  },
+  {
+    "pergunta": "Preciso de conta para usar o Ceris?",
+    "resposta": "Sim. É preciso criar uma conta e fazer login para salvar o estoque, as listas e as receitas."
+  },
+  {
+    "pergunta": "Posso usar o Ceris sem criar conta?",
+    "resposta": "Não. Para salvar suas informações e usar as funções é necessário ter uma conta."
+  },
+  {
+    "pergunta": "Posso entrar com minha conta do Google?",
+    "resposta": "Sim. Na tela de login existe a opção de entrar com o Google."
+  },
+  {
+    "pergunta": "Preciso confirmar meu e-mail?",
+    "resposta": "Sim. Durante o cadastro é enviado um código para o seu e-mail, que deve ser digitado para confirmar a conta."
+  },
+  {
+    "pergunta": "Não recebi o código de confirmação. O que faço?",
+    "resposta": "Confira a caixa de spam do seu e-mail e aguarde alguns minutos. Se ainda não chegar, tente o cadastro novamente."
+  },
+  {
+    "pergunta": "Posso mudar meu e-mail?",
+    "resposta": "Por enquanto, o e-mail é o identificador da conta. Caso precise alterá-lo, entre em contato com o suporte."
+  },
+  {
+    "pergunta": "Como saio da minha conta?",
+    "resposta": "Acesse a aba Perfil e toque em \"Sair da conta\". Os dados guardados no aparelho são apagados e você volta para a tela de login."
+  },
+  {
+    "pergunta": "Posso trocar de conta no mesmo celular?",
+    "resposta": "Sim. Saia da conta atual pelo Perfil e entre com a outra conta."
+  },
+  {
+    "pergunta": "Meu login não funciona depois de um tempo. Por quê?",
+    "resposta": "Por segurança, a sessão pode expirar. Se isso acontecer, entre novamente com seu e-mail e senha."
+  },
+  {
+    "pergunta": "Por que preciso fazer login de novo?",
+    "resposta": "Por segurança, o aplicativo pede um novo login quando a sessão expira ou quando você sai da conta."
+  },
+  {
+    "pergunta": "Posso usar o Ceris em mais de um celular?",
+    "resposta": "Sim. Basta entrar com a mesma conta em outro aparelho."
+  },
+  {
+    "pergunta": "Como altero meu nome?",
+    "resposta": "Acesse seu perfil e edite os dados desejados."
+  },
+  {
+    "pergunta": "Como altero o endereço da minha casa?",
+    "resposta": "Acesse seu perfil e atualize o endereço informado."
+  },
+  {
+    "pergunta": "O que é o estoque no Ceris?",
+    "resposta": "O estoque é a lista de tudo o que existe em casa, com quantidade e data de validade de cada produto."
+  },
+  {
+    "pergunta": "Como cadastro um produto?",
+    "resposta": "Na área de estoque, adicione um novo produto e informe nome, quantidade e data de validade. Também é possível usar o leitor de código de barras."
+  },
+  {
+    "pergunta": "Como cadastro vários produtos de uma vez?",
+    "resposta": "Você pode cadastrar pela nota fiscal, que preenche vários produtos de uma só vez, ou adicionar um por um."
+  },
+  {
+    "pergunta": "O que acontece quando o produto acaba?",
+    "resposta": "Quando a quantidade chega a zero, você pode removê-lo ou manter o cadastro para repor depois."
+  },
+  {
+    "pergunta": "Posso ver quanto tenho de cada produto?",
+    "resposta": "Sim. Cada produto mostra a quantidade disponível no estoque."
+  },
+  {
+    "pergunta": "Posso mudar a quantidade de um produto sem apagar?",
+    "resposta": "Sim. Basta editar a quantidade do produto quando consumir ou comprar mais."
+  },
+  {
+    "pergunta": "Como sei quais produtos estão vencendo?",
+    "resposta": "Use o filtro de produtos próximos do vencimento na área de estoque."
+  },
+  {
+    "pergunta": "Posso organizar o estoque por categoria?",
+    "resposta": "Sim. Os produtos podem ser organizados por categorias para facilitar a busca."
+  },
+  {
+    "pergunta": "O Ceris mostra o preço dos produtos?",
+    "resposta": "O Ceris não compara preços de mercado. Você pode registrar o valor pago em cada item, se quiser acompanhar gastos."
+  },
+  {
+    "pergunta": "Posso marcar um produto como aberto?",
+    "resposta": "Sim. Ao consumir parte do produto, reduza a quantidade para manter o estoque certo."
+  },
+  {
+    "pergunta": "Posso criar uma lista de compras para uma ocasião específica?",
+    "resposta": "Sim. Crie uma lista nova para qualquer ocasião, como uma festa ou a compra do mês."
+  },
+  {
+    "pergunta": "Como vejo o que já comprei da lista?",
+    "resposta": "Os itens marcados como concluídos ficam destacados na lista, e o progresso aparece no topo."
+  },
+  {
+    "pergunta": "Posso desmarcar um item que marquei sem querer?",
+    "resposta": "Sim. Basta tocar no item novamente para desmarcá-lo."
+  },
+  {
+    "pergunta": "Posso dar um nome diferente para a lista?",
+    "resposta": "Sim. Você pode renomear a lista a qualquer momento."
+  },
+  {
+    "pergunta": "Posso apagar uma lista?",
+    "resposta": "Sim. Abra a lista e escolha a opção de remover. A lista e seus itens serão apagados."
+  },
+  {
+    "pergunta": "Posso adicionar a mesma coisa duas vezes na lista?",
+    "resposta": "Sim, mas o ideal é ajustar a quantidade do item existente para manter a lista organizada."
+  },
+  {
+    "pergunta": "A lista mostra a quantidade de cada item?",
+    "resposta": "Sim. Cada item tem a quantidade e a unidade de medida informadas."
+  },
+  {
+    "pergunta": "Posso compartilhar uma lista com outra pessoa da casa?",
+    "resposta": "Sim. A lista pode ser compartilhada exportando-a como texto para quem você quiser."
+  },
+  {
+    "pergunta": "Como funcionam as receitas?",
+    "resposta": "A área de receitas mostra sugestões de preparo com base no que está cadastrado no seu estoque."
+  },
+  {
+    "pergunta": "Posso pedir uma receita específica?",
+    "resposta": "Sim. Você pode pedir uma receita na conversa com a Cerita, descrevendo o que quer preparar."
+  },
+  {
+    "pergunta": "A receita sugerida pode usar produtos que eu não tenho?",
+    "resposta": "Pode. Quando faltar algum ingrediente, a receita indica o que comprar para completar o preparo."
+  },
+  {
+    "pergunta": "Posso salvar uma receita?",
+    "resposta": "Sim. Receitas que você gostar podem ser salvas para consultar depois."
+  },
+  {
+    "pergunta": "Como crio um evento?",
+    "resposta": "Na área de eventos, informe o nome, a data e os convidados. O Ceris ajuda a calcular o que precisa comprar."
+  },
+  {
+    "pergunta": "O evento usa o meu estoque?",
+    "resposta": "Sim. O planejamento do evento considera o que já existe no estoque e sugere o que falta comprar."
+  },
+  {
+    "pergunta": "Posso criar uma lista de compras para um evento?",
+    "resposta": "Sim. Ao planejar um evento, a lista de compras pode ser criada a partir do que ele precisa."
+  },
+  {
+    "pergunta": "O que é a área de Locais?",
+    "resposta": "Locais reúne os estabelecimentos onde você compra, como mercados e lojas, para consultar informações sobre eles."
+  },
+  {
+    "pergunta": "Posso receber alerta quando um produto estiver acabando?",
+    "resposta": "Sim. Produtos marcados como importantes podem gerar uma notificação quando a quantidade fica baixa."
+  },
+  {
+    "pergunta": "Como desativo as notificações?",
+    "resposta": "Nas configurações da conta ou do aparelho, você pode desativar as notificações do Ceris."
+  },
+  {
+    "pergunta": "Posso escolher quando ser avisado sobre a validade?",
+    "resposta": "Sim. Os lembretes de validade são enviados antes do vencimento, nas preferências da conta."
+  },
+  {
+    "pergunta": "Por que não vejo a aba de estoque?",
+    "resposta": "Verifique se você está logado e com conexão com a internet. Se o problema continuar, feche e abra o aplicativo."
+  },
+  {
+    "pergunta": "O app pode ser usado sem internet?",
+    "resposta": "Algumas partes precisam de conexão com a internet para sincronizar com a conta, como o estoque e as listas."
+  },
+  {
+    "pergunta": "O Ceris funciona no tablet?",
+    "resposta": "Sim. O aplicativo se adapta a telas maiores, como a de tablets."
+  },
+  {
+    "pergunta": "Posso conversar com a Cerita sobre qualquer assunto?",
+    "resposta": "A Cerita foi feita para ajudar com o Ceris e com a organização da casa. Para outros assuntos, ela pode não ter informações."
+  },
+  {
+    "pergunta": "A Cerita tem limite de mensagem?",
+    "resposta": "Sim. Cada mensagem pode ter até 2.000 caracteres. Mensagens maiores precisam ser divididas."
+  },
+  {
+    "pergunta": "A conversa com a Cerita fica salva?",
+    "resposta": "A conversa é encerrada ao sair da tela, e a Cerita guarda um resumo do que foi útil para ajudar você nas próximas vezes."
+  },
+  {
+    "pergunta": "Como começo uma nova conversa com a Cerita?",
+    "resposta": "Toque no ícone de atualizar no topo da tela da Cerita para encerrar a conversa atual e começar outra."
+  },
+  {
+    "pergunta": "A Cerita altera meu estoque sozinha?",
+    "resposta": "Não. Alterações acontecem somente quando você pede ou autoriza."
+  },
+  {
+    "pergunta": "A Cerita pode errar?",
+    "resposta": "Sim. Confira as informações importantes antes de tomar decisões, principalmente quando envolver dados de saúde ou alimentação."
+  },
+  {
+    "pergunta": "Posso perguntar à Cerita como usar uma função?",
+    "resposta": "Sim. Pergunte com suas palavras, por exemplo: como crio uma lista de compras?"
+  },
+  {
+    "pergunta": "O aplicativo fechou sozinho. O que faço?",
+    "resposta": "Feche o aplicativo por completo, abra de novo e verifique a conexão com a internet. Se continuar, atualize o aplicativo."
+  },
+  {
+    "pergunta": "As sugestões de receita não aparecem. Por quê?",
+    "resposta": "Elas dependem de produtos cadastrados no estoque. Cadastre alguns produtos e tente novamente."
+  },
+  {
+    "pergunta": "Não consigo criar uma lista. O que pode ser?",
+    "resposta": "Verifique sua conexão com a internet e se você está logado. Se o problema continuar, entre em contato com o suporte."
+  },
+  {
+    "pergunta": "A quantidade do produto mudou sozinha. Por quê?",
+    "resposta": "A quantidade muda apenas quando você altera ou quando confirma uma ação, como uma leitura de nota fiscal. Revise o produto e ajuste se necessário."
+  },
+  {
+    "pergunta": "Esqueci a senha e o e-mail não chega. O que faço?",
+    "resposta": "Confira a caixa de spam e aguarde alguns minutos. Se ainda assim não chegar, entre em contato com o suporte."
+  },
+  {
+    "pergunta": "Como entro em contato com o suporte?",
+    "resposta": "Você pode falar com a equipe pelo e-mail ou pelo telefone de suporte informados neste atendimento."
+  },
+  {
+    "pergunta": "Quais são os horários de atendimento do suporte?",
+    "resposta": "O atendimento é feito pelos canais de suporte do NexUs, e o horário pode variar. Consulte o e-mail ou o telefone de suporte para confirmar."
+  },
+  {
+    "pergunta": "Quem vê as minhas listas?",
+    "resposta": "Somente você e as pessoas da sua casa que tiverem acesso à mesma conta."
+  },
+  {
+    "pergunta": "Meus dados são vendidos?",
+    "resposta": "Não. Os dados são usados apenas para o funcionamento do Ceris."
+  },
+  {
+    "pergunta": "Posso apagar meus dados?",
+    "resposta": "Sim, conforme a LGPD. Para solicitar a exclusão dos seus dados, entre em contato com o suporte."
+  },
+  {
+    "pergunta": "O Ceris guarda a foto da nota fiscal?",
+    "resposta": "Apenas as informações necessárias para cadastrar os produtos são usadas. A foto não fica armazenada para outros fins."
+  },
+  {
+    "pergunta": "O Ceris lê minhas mensagens de outros aplicativos?",
+    "resposta": "Não. O Ceris não acessa mensagens nem conversas de outros aplicativos."
+  },
+  {
+    "pergunta": "Minha senha fica salva no aparelho?",
+    "resposta": "Não. A senha não fica salva em texto no aparelho; apenas a sessão de acesso é mantida para você não precisar entrar toda vez."
   }
 ]
