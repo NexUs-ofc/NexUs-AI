@@ -1,12 +1,15 @@
 from langchain.tools import tool
 
+from ..auth import identidade
 from ..model.mongodb.recipe import Recipe
 from ..repository.mongodb.recipes import RecipesRepository
 
 
 @tool("buscar_receitas_usuario")
-def buscar_receitas_usuario(account_id: int) -> str:
+def buscar_receitas_usuario() -> str:
     """Busca receitas já salvas para o usuário."""
+    account_id = identidade.conta()
+
     receitas = RecipesRepository.get_user_recipes(account_id)
 
     if not receitas:
@@ -26,7 +29,6 @@ def salvar_receita(
     serving_size: int,
     ingredientes: list[dict],
     instrucoes: str,
-    account_id: int,
 ) -> str:
     """
     Salva uma receita gerada no banco.
@@ -36,8 +38,9 @@ def salvar_receita(
         - serving_size: Quantidade de pessoas que a receita foi pensada para servir.
         - ingredientes: Lista no formato [{"food_id": int, "required_quantity": str, "mandatory": bool, "possible_substitutes": list[int]}].
         - instrucoes: Modo de preparo.
-        - account_id: Identificador da conta do usuário.
     """
+    account_id = identidade.conta()
+
     receita = Recipe(
         title=titulo,
         serving_size=serving_size,

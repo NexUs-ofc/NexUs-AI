@@ -4,6 +4,7 @@ from datetime import datetime
 
 from langchain.tools import tool
 
+from ..auth import identidade
 from ..model.mongodb.event import Event
 from ..model.mongodb.shopping_list import ShoppingList
 from ..repository.mongodb.events import EventsRepository
@@ -79,7 +80,6 @@ def _scale_quantity(quantity: str, ratio: float) -> str:
 
 @tool("create_event")
 def create_event(
-    household_id: int,
     titulo: str,
     descricao: str,
     data: str,
@@ -89,7 +89,6 @@ def create_event(
 ) -> Event:
     """
     Insere um evento no banco de dados, campos obrigatórios:
-        - household_id: Identificador da conta/casa dona do evento;
         - titulo: Texto intuitivo sobre o evento;
         - descricao: Texto explicitando informações do evento, deve conter tipo do evento obrigatóriamente;
         - data: Data e hora do evento, no formato "AAAA-MM-DDTHH:MM";
@@ -97,6 +96,8 @@ def create_event(
         - local: Localização do evento;
         - qtd_pessoas: Total de participantes do evento;
     """
+    household_id = identidade.perfil()
+
 
     evento = Event(
         household_id=household_id,
@@ -113,7 +114,6 @@ def create_event(
 
 @tool("get_events")
 def get_events(
-    household_id: int,
     inicio: str | None = None,
     fim: str | None = None,
     tipo: str | None = None,
@@ -122,13 +122,14 @@ def get_events(
 ) -> str:
     """
     Busca eventos no banco de dados com base ou não nos seguintes filtros opcionais fornecidos:
-        - household_id: Identificador da conta/casa dona dos eventos (obrigatório);
         - inicio: Data mínima do intervalo, no formato "AAAA-MM-DD";
         - fim: Data máxima do intervalo, no formato "AAAA-MM-DD";
         - tipo: Tipo de evento que será validado na descrição (ex: Churrasco, festa, jantar, etc...);
         - qtd_min: Quantidade mínima de pessoas que evento deve ter;
         - titulo_receitas: Receitas que o evento deve ter;
     """
+    household_id = identidade.perfil()
+
 
     eventos = events_repository.get_events(
         household_id=household_id,
@@ -299,7 +300,6 @@ def remove_recipe(
 @tool("create_list")
 def create_list(
     event_id: str,
-    household_id: int,
     title: str,
     items: list[dict],
 ) -> ShoppingList | None:
@@ -308,10 +308,11 @@ def create_list(
 
     Parâmetros:
         - event_id: Identificador do evento relacionado (pode ser vazio).
-        - household_id: Identificador da conta/casa dona da lista.
         - title: Título da lista de compras.
         - items: Lista de itens no formato [{"food_id": int, "ingredient": str, "quantity": str, "purchased": bool}].
     """
+    household_id = identidade.perfil()
+
 
     shopping_list = ShoppingList(
         household_id=household_id,

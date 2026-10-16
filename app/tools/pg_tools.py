@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from langchain.tools import tool
 
+from ..auth import identidade
 from ..model.pgsql.food import Food
 from ..model.pgsql.pantry_item import Pantry_Item
 from ..repository.pgsql.config import SessionLocal
@@ -134,7 +135,6 @@ def resolver_alimento(
 
 @tool("add_product")
 def add_product(
-    profile_id: int,
     food_id: int,
     quantity: int,
     expiry_date: str,
@@ -143,7 +143,6 @@ def add_product(
     Adiciona um produto ao estoque do usuário.
 
     Parâmetros:
-        - profile_id: Id do perfil do usuário.
         - food_id: Id do alimento.
         - quantity: Quantidade disponível.
         - expiry_date: Data de vencimento, no formato "AAAA-MM-DD".
@@ -151,6 +150,8 @@ def add_product(
     Se o usuário já tiver esse mesmo alimento com essa mesma validade no
     estoque, a quantidade é somada à linha existente.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -205,22 +206,23 @@ def remove_product(
 
         pantry_item = repository.find_by_id(pantry_item_id)
 
-        if pantry_item is None:
+        # O id do item vem do modelo: sem conferir o dono, um id errado
+        # apagava produto do estoque de outra casa.
+        if pantry_item is None or pantry_item.profile_id != identidade.perfil():
             return False
 
         return repository.remove_product(pantry_item)
 
 
 @tool("get_stock")
-def get_stock(
-    profile_id: int,
-) -> str:
+def get_stock() -> str:
     """
     Lista todo o estoque do usuário.
 
     Parâmetros:
-        - profile_id: Identificador do perfil do usuário.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -244,15 +246,14 @@ def get_stock(
 
 
 @tool("get_expired_products")
-def get_expired_products(
-    profile_id: int,
-) -> str:
+def get_expired_products() -> str:
     """
     Lista produtos vencidos ou próximos do vencimento.
 
     Parâmetros:
-        - profile_id: Identificador do perfil do usuário.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -276,15 +277,14 @@ def get_expired_products(
 
 
 @tool("get_missing_products")
-def get_missing_products(
-    profile_id: int,
-) -> str:
+def get_missing_products() -> str:
     """
     Lista produtos cuja quantidade está abaixo do mínimo configurado.
 
     Parâmetros:
-        - profile_id: Identificador do perfil do usuário.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -322,15 +322,14 @@ def get_missing_products(
 
 
 @tool("get_category_info")
-def get_category_info(
-    profile_id: int,
-) -> str:
+def get_category_info() -> str:
     """
     Retorna um relatório de produtos agrupados por categoria.
 
     Parâmetros:
-        - profile_id: Identificador do perfil do usuário.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)
@@ -352,15 +351,14 @@ def get_category_info(
 
 
 @tool("get_brand_info")
-def get_brand_info(
-    profile_id: int,
-) -> str:
+def get_brand_info() -> str:
     """
     Retorna um relatório de produtos agrupados por marca.
 
     Parâmetros:
-        - profile_id: Identificador do perfil do usuário.
     """
+    profile_id = identidade.perfil()
+
 
     with SessionLocal() as session:
         repository = StockRepository(session)

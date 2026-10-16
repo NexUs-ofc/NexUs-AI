@@ -15,6 +15,7 @@ from unittest.mock import patch
 from qdrant_client.http.exceptions import ResponseHandlingException
 from sqlalchemy.exc import OperationalError
 
+from app.auth import identidade
 from app.repository.pgsql.stock import ConsultaIndisponivel, StockRepository
 from app.repository.qdrant.config import TEMPO_LIMITE_BUSCA_S
 from app.tools import faq_tools, pg_tools
@@ -68,6 +69,12 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
         "não há produtos",
     )
 
+    def setUp(self):
+        # A casa vem da requisicao, nao do argumento da tool.
+        contexto = identidade.da_requisicao(3, 3)
+        contexto.__enter__()
+        self.addCleanup(contexto.__exit__, None, None, None)
+
     def _falhando(self, metodo):
         return patch.object(
             pg_tools.StockRepository, metodo,
@@ -76,7 +83,7 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
 
     def test_get_stock_avisa_que_falhou(self):
         with self._falhando("get_stock"):
-            saida = pg_tools.get_stock.invoke({"profile_id": 3})
+            saida = pg_tools.get_stock.invoke({})
 
         self.assertTrue(saida.startswith("FALHA"))
 
@@ -84,13 +91,13 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
         """Sem isto o modelo le "falhou" e responde "voce nao tem nada"."""
 
         with self._falhando("get_stock"):
-            saida = pg_tools.get_stock.invoke({"profile_id": 3})
+            saida = pg_tools.get_stock.invoke({})
 
         self.assertIn("NAO significa que esta vazio", saida)
 
     def test_falha_nao_se_parece_com_estoque_vazio(self):
         with self._falhando("get_stock"):
-            saida = pg_tools.get_stock.invoke({"profile_id": 3}).lower()
+            saida = pg_tools.get_stock.invoke({}).lower()
 
         for frase in self.MENSAGENS_DE_VAZIO:
             with self.subTest(frase=frase):
@@ -105,7 +112,7 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
         for metodo, tool in casos:
             with self.subTest(tool=metodo):
                 with self._falhando(metodo):
-                    saida = tool.invoke({"profile_id": 3})
+                    saida = tool.invoke({})
 
                 self.assertTrue(saida.startswith("FALHA"), saida[:60])
 
@@ -113,7 +120,7 @@ class TestToolTraduzFalhaParaOModelo(unittest.TestCase):
         """O agente precisa de texto para relatar, nao de um 500."""
 
         with self._falhando("get_stock"):
-            pg_tools.get_stock.invoke({"profile_id": 3})
+            pg_tools.get_stock.invoke({})
 
 
 class TestBuscaNoQdrant(unittest.TestCase):

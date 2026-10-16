@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langsmith import trace, traceable
 
+from app.auth import identidade
 from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
 from app.core.llms import (
@@ -403,11 +404,6 @@ def agente_receitas(state: State) -> State:
             TURNOS_PARA_O_AGENTE,
         )
 
-        household_id = state.get(
-            "household_account_id",
-            0,
-        )
-
         account_id = state.get(
             "account_id",
             0,
@@ -418,8 +414,6 @@ def agente_receitas(state: State) -> State:
         mensagem = (
             f"ROUTE=receitas\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-            f"PROFILE_ID={household_id}\n"
-            f"ACCOUNT_ID={account_id}"
         )
 
         if preferencias:
@@ -468,15 +462,9 @@ def agente_estoque(state: State) -> State:
             TURNOS_PARA_O_AGENTE,
         )
 
-        household_id = state.get(
-            "household_account_id",
-            0,
-        )
-
         mensagem = (
             f"ROUTE=stock\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-            f"PROFILE_ID={household_id}"
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
@@ -514,22 +502,9 @@ def agente_eventos(state: State) -> State:
             TURNOS_PARA_O_AGENTE,
         )
 
-        household_id = state.get(
-            "household_account_id",
-            0,
-        )
-
-        account_id = state.get(
-            "account_id",
-            0,
-        )
-
         mensagem = (
             f"ROUTE=events\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
-            f"HOUSEHOLD_ID={household_id}\n"
-            f"PROFILE_ID={household_id}\n"
-            f"ACCOUNT_ID={account_id}"
         )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_agente(
@@ -1132,7 +1107,9 @@ def executar_chat(
     erro = False
 
     try:
-        with trace(
+        # Tudo que o grafo chama roda dentro desta identidade: as tools leem
+        # a casa e a conta daqui, e nao do que o modelo resolver repassar.
+        with identidade.da_requisicao(household_account_id, account_id), trace(
             name="ceris_chat_request",
             run_type="chain",
             metadata={
