@@ -68,8 +68,6 @@ receita: {
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Posso trocar o leite dessa receita? Sou intolerante a lactose.
-PROFILE_ID=7
-ACCOUNT_ID=7
 
 (consultar_preferencias -> {"restricoes": ["lactose"]})
 (get_stock -> [{"food_name": "Bebida de aveia", "quantity": 1}])

@@ -63,10 +63,9 @@ evento: {
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Quais eventos eu tenho essa semana?
-HOUSEHOLD_ID=1
 
 (resolver_data(referencia="hoje") -> {"data": "2026-10-05", "dia_semana": "segunda-feira"})
-(get_events(household_id=1, inicio="2026-10-05", fim="2026-10-11") -> [])
+(get_events(inicio="2026-10-05", fim="2026-10-11") -> [])
 
 Resposta:
 {
@@ -81,7 +80,6 @@ Resposta:
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Adia o churrasco pro domingo.
-HOUSEHOLD_ID=1
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10"}])
 (resolver_data(referencia="domingo") -> {"data": "2026-10-11", "dia_semana": "domingo"})

@@ -60,10 +60,9 @@ Se ela quer refazer o estoque inteiro, use `estoque-atualizacao-guiada`.
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Adiciona 2 pés de alface no meu estoque, validade 20/10/2026.
-PROFILE_ID=1
 
 (resolver_alimento(nome="alface") -> {"food_id": 145, "food_name": "alface", "criado": true})
-(add_product(profile_id=1, food_id=145, quantity=2, expiry_date="20/10/2026") -> ok)
+(add_product(food_id=145, quantity=2, expiry_date="20/10/2026") -> ok)
 
 Resposta:
 {

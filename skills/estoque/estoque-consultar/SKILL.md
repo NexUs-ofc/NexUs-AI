@@ -48,7 +48,6 @@ comprar, use `estoque-compras`.
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Tenho arroz em casa?
-PROFILE_ID=1
 
 (get_stock -> [{"food_name": "Arroz", "quantity": 3, "expiry_date": "2027-02-01"}])
 
@@ -65,7 +64,6 @@ Resposta:
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=O que eu tenho no estoque?
-PROFILE_ID=1
 
 (get_stock -> "O usuário não possui nenhum produto cadastrado no estoque.")
 

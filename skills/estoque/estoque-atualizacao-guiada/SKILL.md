@@ -65,7 +65,6 @@ roteiro. `recomendacao` e `acompanhamento` não podem dizer a mesma coisa.
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Quero atualizar meu estoque.
-PROFILE_ID=7
 
 (get_stock -> [...])
 (get_expired_products -> [{"food_name": "Iogurte", "quantity": 2, "expiry_date": "2026-10-06"}])
@@ -85,7 +84,6 @@ Resposta:
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Consumi os dois.
-PROFILE_ID=7
 
 (get_stock -> [...])
 (remove_product -> ok)

@@ -68,8 +68,6 @@ evento: {
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Adiciona pão de alho no churrasco.
-HOUSEHOLD_ID=1
-ACCOUNT_ID=1
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
 (recomend_recipe -> {"titulo": "Pão de alho", "ingredientes": [

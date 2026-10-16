@@ -63,8 +63,6 @@ lista: {
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Já comprei a picanha, marca lá.
-HOUSEHOLD_ID=1
-ACCOUNT_ID=1
 
 (get_list -> {"id": "l1", "titulo": "Churrasco", "itens": [
     {"nome": "Picanha", "comprado": false}, {"nome": "Linguiça", "comprado": false}]})
@@ -85,8 +83,6 @@ Resposta:
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Como está a lista do churrasco?
-HOUSEHOLD_ID=1
-ACCOUNT_ID=1
 
 (get_list -> {"id": "l1", "titulo": "Churrasco", "itens": [
     {"nome": "Picanha", "comprado": true}, {"nome": "Linguiça", "comprado": true}]})
