@@ -13,5 +13,4 @@ class Profile(Base):
     # constraint existe no banco.
     address_id: Mapped[int] = mapped_column(Integer())
     email: Mapped[str] = mapped_column(String(255))
-    phone: Mapped[str] = mapped_column(String(150))
     name: Mapped[str] = mapped_column(String(150))
