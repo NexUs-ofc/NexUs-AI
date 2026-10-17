@@ -88,8 +88,6 @@ receita: {
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Me sugere algo com o que está vencendo.
-PROFILE_ID=7
-ACCOUNT_ID=7
 
 (consultar_preferencias -> {"restricoes": []})
 (get_stock -> [{"food_name": "Tomate", "quantity": 4, "expiry_date": "2026-10-10"},

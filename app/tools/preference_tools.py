@@ -1,10 +1,11 @@
 from langchain.tools import tool
 
+from app.auth import identidade
 from app.repository.qdrant.preferences_repository import PreferencesRepository
 
 
 @tool("consultar_preferencias")
-def consultar_preferencias(account_id: int, pergunta_atual: str) -> str:
+def consultar_preferencias(pergunta_atual: str) -> str:
     """Consulta as preferências que o usuário registrou: gostos, restrições
     alimentares, tamanho das porções e qualquer outra instrução permanente.
 
@@ -14,10 +15,11 @@ def consultar_preferencias(account_id: int, pergunta_atual: str) -> str:
     tools específicas.
 
     Args:
-        account_id: identificador da conta do usuário.
         pergunta_atual: pedido do usuário, usado para recuperar as preferências
             semanticamente mais próximas.
     """
+    account_id = identidade.conta()
+
 
     preferencias = PreferencesRepository.buscar_preferencias(
         account_id=account_id,

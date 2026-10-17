@@ -152,7 +152,6 @@ ENTRADA_PADRAO = """
     Você recebe o protocolo do Roteador:
     ROUTE=[rota]
     PERGUNTA_ORIGINAL=[o que a pessoa pediu]
-    PROFILE_ID / HOUSEHOLD_ID / ACCOUNT_ID=[identificadores já preenchidos]
     CHAMADO_POR=[agente que acionou, quando não foi uma pessoa]
 
     PREFERENCIAS=[gostos e restrições, já consultados, quando a rota os traz]

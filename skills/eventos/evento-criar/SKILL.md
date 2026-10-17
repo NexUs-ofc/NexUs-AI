@@ -65,9 +65,6 @@ evento: {
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Vou fazer um churrasco sábado às 12h no quintal pra 10 pessoas, 4 horas.
-HOUSEHOLD_ID=1
-PROFILE_ID=1
-ACCOUNT_ID=1
 
 (resolver_data(referencia="sabado", hora="12h")
     -> {"data": "2026-10-10", "dia_semana": "sábado", "inicio": "2026-10-10T12:00:00"})

@@ -48,7 +48,6 @@ Esta skill também é o caminho quando ela pede ajuda para não desperdiçar.
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Quais produtos estão perto de vencer?
-PROFILE_ID=1
 
 (get_expired_products -> [{"food_name": "Ovo", "quantity": 3, "expiry_date": "2026-10-06"},
                           {"food_name": "Leite", "quantity": 1, "expiry_date": "2026-10-08"}])
@@ -67,7 +66,6 @@ Resposta:
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Tem algo vencendo?
-PROFILE_ID=1
 
 (get_expired_products -> "Não há produtos vencidos ou próximos do vencimento.")
 

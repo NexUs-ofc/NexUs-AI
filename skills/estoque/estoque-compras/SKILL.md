@@ -50,7 +50,6 @@ quê**; aquela monta a lista.
 Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=O que eu preciso comprar?
-PROFILE_ID=1
 
 (get_missing_products -> [{"food_name": "Arroz", "quantity": 0, "minimum_quantity": 2},
                           {"food_name": "Leite", "quantity": 1, "minimum_quantity": 3}])

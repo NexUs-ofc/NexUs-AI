@@ -62,9 +62,6 @@ lista: {
 Entrada:
 ROUTE=events
 PERGUNTA_ORIGINAL=Monta a lista de compras do churrasco de sábado.
-HOUSEHOLD_ID=1
-PROFILE_ID=1
-ACCOUNT_ID=1
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
 (recomend_recipe -> {"ingredientes_faltantes": ["Picanha", "Linguiça"]})

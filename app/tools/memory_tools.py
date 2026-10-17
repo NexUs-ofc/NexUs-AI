@@ -1,10 +1,11 @@
 from langchain.tools import tool
 
+from app.auth import identidade
 from app.repository.qdrant.memory_repository import MemoryRepository
 
 
 @tool("buscar_historico")
-def buscar_historico(account_id: int, busca: str) -> str:
+def buscar_historico(busca: str) -> str:
     """Consulta conversas ANTERIORES do usuário, já encerradas.
 
     Use somente quando a resposta depender de algo dito numa conversa passada:
@@ -13,9 +14,10 @@ def buscar_historico(account_id: int, busca: str) -> str:
     salvas, eventos) — para isso existem as tools específicas.
 
     Args:
-        account_id: identificador da conta do usuário.
         busca: assunto a procurar nos resumos das conversas anteriores.
     """
+    account_id = identidade.conta()
+
 
     resumos = MemoryRepository.buscar_resumos(
         account_id=account_id,

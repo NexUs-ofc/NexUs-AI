@@ -67,8 +67,6 @@ receita: {
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Churrasco para 10 pessoas, preciso de sugestões.
-PROFILE_ID=7
-ACCOUNT_ID=7
 CHAMADO_POR=events
 
 (get_stock -> [{"food_name": "Carvão", "quantity": 2}])
