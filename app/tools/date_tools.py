@@ -6,6 +6,7 @@ errou em um dia. Contar calendário é como somar lista longa — ele faz, e faz
 com confiança. Aqui a conta sai do Python.
 """
 
+import calendar
 import json
 import re
 from datetime import date, datetime, timedelta
@@ -35,6 +36,19 @@ RELATIVOS = {
 }
 
 
+NUMEROS = {
+    "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "três": 3,
+    "quatro": 4, "cinco": 5, "seis": 6, "sete": 7, "oito": 8, "nove": 9,
+    "dez": 10, "doze": 12, "quinze": 15,
+}
+
+# "daqui a 3 meses", "em 2 semanas": quantidade seguida de unidade.
+QUANTIDADE_RELATIVA = re.compile(
+    r"\b(\d{1,3}|" + "|".join(NUMEROS) + r")\s+"
+    r"(dias?|semanas?|mes|meses|anos?)\b"
+)
+
+
 def _hoje() -> date:
     return datetime.now().astimezone().date()
 
@@ -51,6 +65,35 @@ def _data_explicita(texto: str) -> date | None:
             continue
 
     return None
+
+
+def _somar_meses(hoje: date, meses: int) -> date:
+    """Mes calendario, nao 30 dias: 18/10 + 3 meses = 18/01. Dia 31 cai no ultimo dia do mes de destino."""
+
+    total = hoje.month - 1 + meses
+    ano = hoje.year + total // 12
+    mes = total % 12 + 1
+    ultimo = calendar.monthrange(ano, mes)[1]
+
+    return date(ano, mes, min(hoje.day, ultimo))
+
+
+def _quantidade_relativa(texto: str, hoje: date) -> date | None:
+    achado = QUANTIDADE_RELATIVA.search(texto)
+    if achado is None:
+        return None
+
+    bruto = achado.group(1)
+    quantidade = int(bruto) if bruto.isdigit() else NUMEROS[bruto]
+    unidade = achado.group(2)
+
+    if unidade.startswith("dia"):
+        return hoje + timedelta(days=quantidade)
+    if unidade.startswith("semana"):
+        return hoje + timedelta(weeks=quantidade)
+    if unidade.startswith("mes"):
+        return _somar_meses(hoje, quantidade)
+    return _somar_meses(hoje, 12 * quantidade)
 
 
 def _proximo_dia_da_semana(alvo: int, hoje: date, semana_seguinte: bool) -> date:
@@ -73,6 +116,10 @@ def _resolver(referencia: str, hoje: date) -> date | None:
     for chave, deslocamento in RELATIVOS.items():
         if texto == chave:
             return hoje + timedelta(days=deslocamento)
+
+    relativa = _quantidade_relativa(texto, hoje)
+    if relativa is not None:
+        return relativa
 
     semana_seguinte = bool(
         re.search(r"\b(que vem|seguinte|pr[óo]xim[ao])\b", texto)
