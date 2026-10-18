@@ -30,6 +30,11 @@ evento, use `evento-receitas`.
 
 ## Regras
 
+- **Consulta nunca pede intervalo de datas.** Período vago tem padrão:
+  - "próximos dias", "em breve", "logo": de hoje até `resolver_data("daqui a 7 dias")`;
+  - "próximas semanas": de hoje até `resolver_data("daqui a 30 dias")`;
+  - sem período nenhum ("tenho algum evento?"): `inicio` = hoje e sem `fim`.
+  Diga na resposta o período que você olhou.
 - Nunca peça `event_id`. Resolva por `get_events` e case pelo que ela
   descreveu.
 - Se mais de um evento casar com a descrição, pergunte qual antes de alterar.
@@ -72,6 +77,24 @@ Resposta:
     "dominio": "events",
     "intencao": "Consultar eventos",
     "resposta": "Você não tem nenhum evento marcado para esta semana.",
+    "recomendacao": ""
+}
+```
+
+```
+Entrada:
+ROUTE=events
+PERGUNTA_ORIGINAL=Eu tenho algum evento para os próximos dias?
+
+(resolver_data(referencia="hoje") -> {"data": "2026-10-18", "dia_semana": "domingo"})
+(resolver_data(referencia="daqui a 7 dias") -> {"data": "2026-10-25", "dia_semana": "domingo"})
+(get_events(inicio="2026-10-18", fim="2026-10-25") -> [{"titulo": "Jantar", "data": "2026-10-21"}])
+
+Resposta:
+{
+    "dominio": "events",
+    "intencao": "Consultar eventos",
+    "resposta": "Nos próximos 7 dias você tem o Jantar, na quarta, 21/10/2026.",
     "recomendacao": ""
 }
 ```
