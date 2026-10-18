@@ -42,7 +42,8 @@ from ..tools.pg_tools import (
     resolver_alimento,
 )
 from ..tools.preference_tools import consultar_preferencias
-from .llms import fast_llm, specialist_llm
+from ..tools.validade_tools import estimar_validade
+from .llms import estoque_llm, fast_llm, specialist_llm
 from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
 from .prompts.prompt_events import EVENTS_PREAMBULO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
@@ -55,13 +56,34 @@ TAVILY_HABILITADAS = {"tavily_search"}
 
 
 async def _carregar_tavily():
-   
+
     all_tools = await load_tavily_tools()
-    return [t for t in all_tools if t.name in TAVILY_HABILITADAS]
+    return [_com_versao_sincrona(t) for t in all_tools if t.name in TAVILY_HABILITADAS]
+
+
+def _com_versao_sincrona(tool):
+    """
+    A tool da Tavily vem so assincrona (MCP). O fluxo chama os agentes com
+    invoke, que e sincrono, e sem versao sincrona a busca falha em toda chamada
+    com "does not support sync invocation". A ponte roda a coroutine num loop
+    proprio, numa thread a parte, como o carregamento faz.
+    """
+
+    if tool.func is not None or tool.coroutine is None:
+        return tool
+
+    assincrona = tool.coroutine
+
+    def sincrona(**kwargs):
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(asyncio.run, assincrona(**kwargs)).result()
+
+    tool.func = sincrona
+    return tool
 
 
 def carregar_tavily_tools():
-    
+
     try:
         asyncio.get_running_loop()
     except RuntimeError:
@@ -113,6 +135,7 @@ CATALOGO_FERRAMENTAS = {
     f.name: f
     for f in (
         resolver_data,
+        estimar_validade,
         resolver_alimento,
         add_product,
         remove_product,
@@ -171,7 +194,7 @@ def _montar_agentes_das_skills():
         preambulo = PREAMBULO_DO_AGENTE.get(skill.agente, "")
 
         agentes[nome] = create_agent(
-            model=specialist_llm,
+            model=estoque_llm if skill.agente == "estoque" else specialist_llm,
             tools=_ferramentas_da_skill(skill),
             system_prompt=skill.prompt(preambulo),
         )
