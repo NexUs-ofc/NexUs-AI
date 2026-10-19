@@ -52,6 +52,8 @@ def _cliente(
     raciocinio: str | None = None,
     teto: int | None = None,
     semente: int | None = SEMENTE,
+    timeout: int = TIMEOUT_S,
+    tentativas: int = TENTATIVAS,
 ):
     extras = {}
 
@@ -70,8 +72,8 @@ def _cliente(
         model=MODELO,
         temperature=temperatura,
         api_key=GROQ_API_KEY,
-        max_retries=TENTATIVAS,
-        request_timeout=TIMEOUT_S,
+        max_retries=tentativas,
+        request_timeout=timeout,
         **extras,
     )
 
@@ -79,8 +81,17 @@ def _cliente(
 # Devolve uma palavra: nome de rota ou de skill.
 escolha_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESCOLHA)
 
-# Devolve veredito curto e estruturado: juiz e guardrails.
-revisao_llm = _cliente(0, RACIOCINIO_CURTO, TETO_VEREDITO)
+# Devolve veredito curto e estruturado: juiz e guardrails. Teto curto e uma
+# tentativa: o veredito leva ~0,5s medido, e um juiz travado de 90s x 2
+# tentativas deixava a pessoa esperando mais de meio minuto. Quando ele falha,
+# o fluxo ja aprova por padrao, entao perder a chamada custa pouco.
+JUIZ_TIMEOUT_S = 20
+JUIZ_TENTATIVAS = 1
+
+revisao_llm = _cliente(
+    0, RACIOCINIO_CURTO, TETO_VEREDITO,
+    timeout=JUIZ_TIMEOUT_S, tentativas=JUIZ_TENTATIVAS,
+)
 
 # Escreve texto para a pessoa ler, de tamanho variável: sem teto.
 texto_llm = _cliente(0, RACIOCINIO_CURTO)
@@ -89,11 +100,23 @@ texto_llm = _cliente(0, RACIOCINIO_CURTO)
 # sugestão ganham com variedade.
 specialist_llm = _cliente(0.7)
 
+# Estoque e registro e consulta, nao criacao: nao ganha com variedade nem com
+# raciocinio longo. Medido: com o raciocinio padrao o agente gastou 2048 tokens
+# pensando e devolveu resposta vazia, e cada mensagem passava de 10 mil tokens,
+# acima dos 8 mil por minuto do plano do Groq, o que gera 429 e 12 a 26s de
+# espera. Raciocinio curto e teto cortam isso na origem.
+TETO_ESTOQUE = 1200
+
+estoque_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
+
 # Segunda opinião do juiz. Semente diferente de proposito: com a mesma semente
 # e temperatura zero, repetir a chamada devolve o MESMO veredito, e segunda
 # opinião nenhuma. O sorteio precisa ser independente para a divergencia
 # aparecer — e e a divergencia que diz que a primeira reprovacao foi ruido.
-revisao_segunda_llm = _cliente(0, RACIOCINIO_CURTO, TETO_VEREDITO, semente=20261010)
+revisao_segunda_llm = _cliente(
+    0, RACIOCINIO_CURTO, TETO_VEREDITO, semente=20261010,
+    timeout=JUIZ_TIMEOUT_S, tentativas=JUIZ_TENTATIVAS,
+)
 
 # Apelidos por papel. Apontam para a mesma instância enquanto a configuração
 # for a mesma; separar um deles depois é trocar uma linha.

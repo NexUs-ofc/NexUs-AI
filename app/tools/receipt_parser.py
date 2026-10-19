@@ -49,8 +49,14 @@ def ean_candidates(code: str | None) -> list[str]:
     return out
 
 
+# O OCR troca a letra O por zero dentro de palavra ("ARR0Z", "T0RRAD0"), e o
+# nome deixa de casar com o catalogo. So troca zero colado em letra: "500G"
+# continua 500G.
+ZERO_EM_PALAVRA_RE = re.compile(r"(?<=[A-Za-z])0|(?<![0-9])0(?=[A-Za-z])")
+
+
 def clean_desc(text: str) -> str:
-    return TRAILING_RE.sub("", text).strip(" .,:-*")
+    return ZERO_EM_PALAVRA_RE.sub("O", TRAILING_RE.sub("", text)).strip(" .,:-*")
 
 
 def looks_like_desc(ln: str) -> bool:
@@ -102,10 +108,18 @@ def parse_total(lines: list[str]) -> float | None:
 
 
 def parse_items(lines: list[str]) -> list[dict]:
+    # Cabecalho so vale antes do total: "QTD. TOTAL DE ITENS" vem depois dos
+    # produtos em toda NFC-e e, contado como cabecalho, jogava o inicio para
+    # depois deles — a nota voltava sem item nenhum.
+    # O proprio cabecalho costuma ter "VL TOTAL", entao ele e testado antes.
     start = 0
     for i, ln in enumerate(lines):
-        if any(k in ln.upper() for k in ("DESCRICAO", "CODIGO", "QTD")):
+        up = ln.upper()
+        if any(k in up for k in ("DESCRICAO", "CODIGO")) or ("QTD" in up and "TOTAL" not in up):
             start = i + 1
+            continue
+        if re.search(r"(?<!SUB)TOTAL", up):
+            break
     items: list[dict] = []
     pending: dict | None = None
     orphan_desc: str | None = None
@@ -201,7 +215,8 @@ def needs_deep_pass(parsed: dict) -> bool:
         return True
     if any(not i["raw_text"] for i in items):
         return True
-    if any(not i["ean"] for i in items if i.get("raw_ean")):
-        return True
+    # Codigo de barras ilegivel nao dispara a passada funda: ela roda o OCR mais
+    # duas vezes (~45s medidos, o corte do DisCloud e 30s) e o app casa os itens
+    # pelo nome, nao pelo EAN.
     t = parsed.get("total")
     return t is not None and abs(items_sum(items) - t) > 0.1

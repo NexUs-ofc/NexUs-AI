@@ -137,7 +137,7 @@ def resolver_alimento(
 def add_product(
     food_id: int,
     quantity: int,
-    expiry_date: str,
+    expiry_date: str | None = None,
 ) -> str:
     """
     Adiciona um produto ao estoque do usuário.
@@ -145,7 +145,9 @@ def add_product(
     Parâmetros:
         - food_id: Id do alimento.
         - quantity: Quantidade disponível.
-        - expiry_date: Data de vencimento, no formato "AAAA-MM-DD".
+        - expiry_date: Data de vencimento, no formato "AAAA-MM-DD". Deixe
+          vazio quando o produto não tem data exata (tomate, verdura, legume,
+          granel): o item entra sem validade.
 
     Se o usuário já tiver esse mesmo alimento com essa mesma validade no
     estoque, a quantidade é somada à linha existente.

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -29,3 +30,13 @@ class ReceiptScanResponse(BaseModel):
     ocr_confidence: float = 0
     discarded: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+class ReceiptScanStatus(BaseModel):
+    """Andamento de uma leitura por pedido (POST /receipt/scan/async)."""
+
+    pedido_id: str
+    status: Literal["processando", "pronto", "erro"]
+    resultado: ReceiptScanResponse | None = None
+    codigo: int | None = None
+    detalhe: str | None = None

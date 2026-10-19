@@ -1,3 +1,5 @@
+import ctypes
+import gc
 import os
 import threading
 
@@ -10,7 +12,23 @@ _lock = threading.Lock()
 MAX_INPUT_SIDE = 1600
 UPSCALE_TARGET = 2000
 OCR_PARAMS = {"box_thresh": 0.3, "unclip_ratio": 1.8, "text_score": 0.3}
-DET_MAX_SIDE = int(os.getenv("RECEIPT_DET_MAX_SIDE", "1280"))
+# Lado maximo da imagem que entra na deteccao, e e ela quem faz o pico de RAM.
+# Medido numa foto de 2000px com 30 itens, app inteiro carregado (2026-10-19):
+#   1280 -> +236 MB, 16,7s | 960 -> +173 MB, 12,7s, mesma leitura | 736 -> perde itens.
+# O servidor do Render tem pouca RAM, entao 960.
+DET_MAX_SIDE = int(os.getenv("RECEIPT_DET_MAX_SIDE", "960"))
+
+# Lote do reconhecimento. Lote maior agrupa as linhas e gasta mais RAM (24 deu
+# +33 MB sobre o 6, para o mesmo texto). Lote menor perdeu itens. Fica o padrao.
+REC_BATCH = int(os.getenv("RECEIPT_REC_BATCH", "6"))
+
+# Leitura em faixas (ver _run_em_faixas). Medido no container (2026-10-19):
+# imagem inteira 572 MB de pico; faixas de 400px 462 MB e leram melhor (30/30
+# itens com preco, soma batendo com o total). Alturas em pixels da imagem ja
+# preprocessada (lado maior ~2000). 0 desliga e le a imagem inteira.
+FAIXA_ALTURA = int(os.getenv("RECEIPT_FAIXA_ALTURA", "400"))
+FAIXA_SOBREPOSICAO = int(os.getenv("RECEIPT_FAIXA_SOBREPOSICAO", "160"))
+BORDA_FAIXA = 6
 
 
 def _get_engine():
@@ -25,6 +43,8 @@ def _get_engine():
                     resize = engine.text_detector.preprocess_op[0]
                     resize.limit_side_len = DET_MAX_SIDE
                     resize.limit_type = "max"
+                if REC_BATCH > 0:
+                    engine.text_recognizer.rec_batch_num = REC_BATCH
                 _engine = engine
     return _engine
 
@@ -115,11 +135,77 @@ def _rows(dets: list[dict]) -> list[str]:
     return [" ".join(x["text"] for x in sorted(r, key=lambda x: x["x0"])) for r in rows]
 
 
+def _run_em_faixas(gray: np.ndarray) -> list[dict]:
+    """
+    Le a nota em faixas horizontais, uma de cada vez.
+
+    A deteccao na imagem inteira e o pico de RAM da leitura, e o servidor tem
+    512 MB: no container com esse limite o processo era morto (OOMKilled) no
+    meio da nota. Por faixa, so um pedaço passa pela deteccao por vez.
+
+    Cada faixa usa a mesma escala que a imagem inteira usaria, entao o texto
+    chega do mesmo tamanho ao modelo. As faixas se sobrepoem mais que uma
+    linha: linha que encosta na borda de uma faixa e descartada ali, porque
+    aparece inteira na vizinha; as repetidas na sobreposicao viram uma so.
+    """
+
+    altura, largura = gray.shape[:2]
+    if FAIXA_ALTURA <= 0 or altura <= FAIXA_ALTURA:
+        return _run(gray)
+
+    escala = min(1.0, DET_MAX_SIDE / max(altura, largura)) if DET_MAX_SIDE > 0 else 1.0
+    resize = _get_engine().text_detector.preprocess_op[0]
+    limite_original = resize.limit_side_len
+
+    dets: list[dict] = []
+    passo = FAIXA_ALTURA - FAIXA_SOBREPOSICAO
+    inicio = 0
+    try:
+        while True:
+            fim = min(inicio + FAIXA_ALTURA, altura)
+            faixa = gray[inicio:fim]
+            resize.limit_side_len = max(32, round(max(faixa.shape[:2]) * escala))
+
+            primeira, ultima = inicio == 0, fim == altura
+            for d in _run(faixa):
+                if not primeira and d["y0"] <= BORDA_FAIXA:
+                    continue
+                if not ultima and d["y1"] >= (fim - inicio) - BORDA_FAIXA:
+                    continue
+                d["y0"] += inicio
+                d["y1"] += inicio
+                dets.append(d)
+
+            if ultima:
+                break
+            inicio += passo
+    finally:
+        resize.limit_side_len = limite_original
+
+    return _merge(dets)
+
+
+def liberar_memoria() -> None:
+    """
+    Devolve ao sistema a memoria que a leitura soltou. Sem isto o glibc guarda
+    os blocos livres para reuso, e o processo segue ocupando o pico da ultima
+    nota, somado a qualquer requisicao que chegue depois.
+    """
+
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass  # fora do Linux (Windows, testes locais) nao ha malloc_trim
+
+
 def read_receipt(gray: np.ndarray, deep: bool = False) -> dict:
-    dets = _run(gray)
+    dets = _run_em_faixas(gray)
     if deep:
-        dets += _run(cv2.GaussianBlur(gray, (0, 0), 2.5))
-        dets += _run(cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 12))
+        dets += _run_em_faixas(cv2.GaussianBlur(gray, (0, 0), 2.5))
+        dets += _run_em_faixas(
+            cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 12)
+        )
         dets = _merge(dets)
     conf = sum(d["conf"] for d in dets) / len(dets) if dets else 0.0
     return {"lines": _rows(dets), "mean_conf": round(conf, 3)}
