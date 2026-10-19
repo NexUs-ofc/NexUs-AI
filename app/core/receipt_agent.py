@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
@@ -25,6 +26,10 @@ logger = logging.getLogger("receipt")
 
 RECENT_PURCHASE_DAYS = 30
 UNKNOWN_NAME = "Item não identificado"
+
+
+# Primeira leitura acima disto nao tenta a passada funda (2 leituras a mais).
+DEEP_PASS_BUDGET_S = float(os.getenv("RECEIPT_DEEP_PASS_BUDGET_S", "6"))
 
 
 def _key() -> str | None:
@@ -270,9 +275,14 @@ def scan_receipt(
 ) -> ReceiptScanResponse:
     categories = categories or DEFAULT_CATEGORIES
     gray = preprocess(decode_image(image_bytes))
+    inicio = time.monotonic()
     ocr = read_receipt(gray)
     parsed = deterministic_parse(ocr["lines"])
-    if needs_deep_pass(parsed):
+    # A passada funda custa duas leituras a mais. Se a primeira ja demorou,
+    # ela estoura o corte de 30s do DisCloud e a pessoa recebe erro em vez da
+    # leitura que ja tinha: melhor devolver o que foi lido.
+    primeira_s = time.monotonic() - inicio
+    if needs_deep_pass(parsed) and primeira_s <= DEEP_PASS_BUDGET_S:
         deep = read_receipt(gray, deep=True)
         deep_parsed = deterministic_parse(deep["lines"])
         if _score(deep_parsed) >= _score(parsed):
