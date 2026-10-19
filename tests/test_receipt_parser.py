@@ -1,10 +1,12 @@
 import unittest
 
 from app.tools.receipt_parser import (
+    clean_desc,
     deterministic_parse,
     ean_candidates,
     ean_valid,
     items_sum,
+    needs_deep_pass,
     split_index_ean,
 )
 
@@ -65,6 +67,46 @@ class ParseTests(unittest.TestCase):
 
     def test_sum_matches_total(self):
         self.assertAlmostEqual(items_sum(self.parsed["items"]), self.parsed["total"], places=2)
+
+    def test_qtd_total_de_itens_depois_dos_produtos_nao_some_com_eles(self):
+        # Toda NFC-e tem "QTD. TOTAL DE ITENS" depois dos produtos; contada como
+        # cabecalho, a nota voltava sem item nenhum.
+        linhas = [
+            "SUPERMERCADO BOM PRECO LTDA",
+            "# CODIGO DESCRICAO QTD UN VL UNIT VL TOTAL",
+            "001 7891150039001 AMAC.COMFORT 500ML",
+            "1 UN X 6,15 6,15",
+            "QTD. TOTAL DE ITENS 1",
+            "VALOR TOTAL R$ 6,15",
+        ]
+        itens = deterministic_parse(linhas)["items"]
+        self.assertEqual(len(itens), 1)
+        self.assertEqual(itens[0]["ean"], "7891150039001")
+
+
+class LimpezaTests(unittest.TestCase):
+    def test_zero_colado_em_letra_vira_o(self):
+        self.assertEqual(clean_desc("ARR0Z BRANC0 5KG"), "ARROZ BRANCO 5KG")
+        self.assertEqual(clean_desc("CAFE T0RRAD0 500G"), "CAFE TORRADO 500G")
+
+    def test_numero_com_zero_fica_como_esta(self):
+        self.assertEqual(clean_desc("LEITE 1L 500ML 1000G"), "LEITE 1L 500ML 1000G")
+
+
+class PassadaFundaTests(unittest.TestCase):
+    def test_ean_ilegivel_nao_dispara(self):
+        parsed = {
+            "items": [{"raw_text": "ARROZ", "ean": None, "raw_ean": "7896004000207", "quantity": 1, "unit_price": 27.9}],
+            "total": 27.9,
+        }
+        self.assertFalse(needs_deep_pass(parsed))
+
+    def test_soma_que_nao_fecha_dispara(self):
+        parsed = {
+            "items": [{"raw_text": "ARROZ", "ean": None, "raw_ean": None, "quantity": 1, "unit_price": 27.9}],
+            "total": 50.0,
+        }
+        self.assertTrue(needs_deep_pass(parsed))
 
 
 if __name__ == "__main__":
