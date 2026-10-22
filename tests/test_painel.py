@@ -252,5 +252,18 @@ class TestJuizRegistraDecisao(unittest.TestCase):
         self.assertEqual(estado["decisoes_juiz"], ["devolvido"])
 
 
+
+class TestEstadoDoGrafo(unittest.TestCase):
+    """
+    O LangGraph descarta entre os nós a chave que não está no schema do
+    estado: sem declarar, a decisão do juiz sumia antes de chegar à métrica.
+    """
+
+    def test_campos_do_painel_estao_no_schema(self):
+        from app.schemas.state import State
+
+        self.assertIn("decisoes_juiz", State.__annotations__)
+        self.assertIn("saida_bloqueada", State.__annotations__)
+
 if __name__ == "__main__":
     unittest.main()
