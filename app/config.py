@@ -17,6 +17,10 @@ DOC_FILE_PATH = os.getenv("DOC_FILE_PATH")
 FAQ_FILE_PATH = os.getenv("FAQ_FILE_PATH")
 TRACING_API_KEY = os.getenv("TRACING_API_KEY")
 
+# Chave única do painel do administrador, a mesma em todos os serviços do
+# NexUs. TRACING_API_KEY continua aceita para não quebrar quem já configurou.
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or TRACING_API_KEY
+
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 if not JWT_SECRET_KEY:

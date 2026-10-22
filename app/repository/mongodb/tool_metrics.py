@@ -59,3 +59,19 @@ class ToolMetricsRepository:
         except PyMongoError:
             logger.exception(f"Erro ao contar chamadas de tool da requisição {trace_id}")
             return 0
+
+    @staticmethod
+    def listar(desde: datetime, ate: datetime) -> list[dict]:
+        """Chamadas de tool da janela, para o painel."""
+
+        try:
+            return list(
+                ToolMetricsRepository.tool_metrics_collection.find(
+                    {"started_at": {"$gte": desde, "$lt": ate}},
+                    {"_id": 0, "tool_name": 1, "duration_ms": 1, "success": 1},
+                )
+            )
+
+        except PyMongoError:
+            logger.exception("Erro ao listar chamadas de tool da janela")
+            return []
