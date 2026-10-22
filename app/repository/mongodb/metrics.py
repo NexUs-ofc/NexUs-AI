@@ -45,6 +45,11 @@ class MetricsRepository:
         input_tokens: int = 0,
         output_tokens: int = 0,
         cost_usd: float = 0.0,
+        model: str | None = None,
+        error_type: str | None = None,
+        judge_decisions: list[str] | None = None,
+        input_blocked: bool = False,
+        output_blocked: bool = False,
     ) -> bool:
         try:
             logger.info(f"Salvando métrica de requisição {trace_id}")
@@ -60,6 +65,11 @@ class MetricsRepository:
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cost_usd": cost_usd,
+                "model": model,
+                "error_type": error_type,
+                "judge_decisions": judge_decisions or [],
+                "input_blocked": input_blocked,
+                "output_blocked": output_blocked,
             })
 
             logger.info(f"Métrica de requisição {trace_id} salva com sucesso")
@@ -69,6 +79,26 @@ class MetricsRepository:
         except PyMongoError:
             logger.exception(f"Erro ao salvar métrica de requisição {trace_id}")
             return False
+
+    @staticmethod
+    def listar(desde: datetime, ate: datetime) -> list[dict]:
+        """
+        Métricas de requisição da janela, para o painel agregar em Python.
+
+        Volta lista vazia se o Mongo falhar: o painel mostra zero em vez de cair.
+        """
+
+        try:
+            return list(
+                MetricsRepository.metrics_collection.find(
+                    {"started_at": {"$gte": desde, "$lt": ate}},
+                    {"_id": 0},
+                )
+            )
+
+        except PyMongoError:
+            logger.exception("Erro ao listar métricas da janela")
+            return []
 
     @staticmethod
     def resumo(horas: int = 24) -> dict:

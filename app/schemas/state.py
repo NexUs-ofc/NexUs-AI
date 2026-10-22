@@ -19,3 +19,5 @@ class State(TypedDict):
     trace_id: str
     input_tokens: int
     output_tokens: int
+    decisoes_juiz: list[str]
+    saida_bloqueada: bool
