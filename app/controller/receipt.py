@@ -1,14 +1,17 @@
 import asyncio
 import logging
 import os
+import sys
 import threading
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.core.receipt_agent import scan_receipt
+from app.observability.background import em_segundo_plano
 from app.schemas.receipt import ReceiptScanResponse, ReceiptScanStatus
 from app.tools.ocr_tools import liberar_memoria
 
@@ -56,12 +59,49 @@ async def _ler_upload(image: UploadFile) -> bytes:
     return data
 
 
+def _registrar_leitura(inicio: datetime, fim: datetime, tipo_erro: str | None) -> None:
+    """
+    Grava a leitura na mesma coleção das métricas do chat, com a rota
+    nota_fiscal, para o painel do admin contar leituras, tempo e sucesso.
+
+    Fora do caminho da resposta, como o resto da telemetria. Sob pytest não
+    grava: a suíte não toca rede, e a leitura é dublada nos testes.
+    """
+
+    if "pytest" in sys.modules:
+        return
+
+    from app.observability.tracing import generate_trace_id
+    from app.repository.mongodb.metrics import MetricsRepository
+
+    em_segundo_plano(
+        MetricsRepository.save_request_metric,
+        trace_id=generate_trace_id(),
+        route="nota_fiscal",
+        started_at=inicio,
+        finished_at=fim,
+        duration_ms=(fim - inicio).total_seconds() * 1000,
+        tool_calls=0,
+        error=tipo_erro is not None,
+        error_type=tipo_erro,
+    )
+
+
 def _ler_com_trava(data: bytes) -> ReceiptScanResponse:
     with _trava_leitura:
+        inicio = datetime.now(UTC)
+        tipo_erro = None
         try:
             return scan_receipt(data, get_categories(), get_catalog_lookup())
+        except ValueError as exc:
+            tipo_erro = str(exc) if str(exc) in ERROS_CONHECIDOS else type(exc).__name__
+            raise
+        except Exception as exc:
+            tipo_erro = type(exc).__name__
+            raise
         finally:
             liberar_memoria()
+            _registrar_leitura(inicio, datetime.now(UTC), tipo_erro)
 
 
 @router.post("/scan", response_model=ReceiptScanResponse)
