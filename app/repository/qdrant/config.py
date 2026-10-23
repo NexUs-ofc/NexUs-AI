@@ -23,6 +23,9 @@ client = QdrantClient(
     url=QDRANT_DATABASE_URL,
     api_key=QDRANT_API_KEY,
     port=None,
+    # Sem checagem de versao: e uma chamada de rede no import e, com o Qdrant
+    # fora de alcance, segura a subida da API ate o timeout.
+    check_compatibility=False,
 )
 
 embeddings = GoogleGenerativeAIEmbeddings(

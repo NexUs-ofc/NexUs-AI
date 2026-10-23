@@ -169,8 +169,16 @@ def test_segunda_opiniao_usa_semente_diferente():
 
     from app.core.llms import juiz_llm, revisao_segunda_llm
 
-    primeira = juiz_llm.model_kwargs.get("seed")
-    segunda = revisao_segunda_llm.model_kwargs.get("seed")
+    def semente(llm):
+        # Com reserva, o cliente principal fica em .runnable. Groq leva a
+        # semente em model_kwargs; Gemini, no campo seed.
+        llm = getattr(llm, "runnable", llm)
+        return getattr(llm, "seed", None) or (
+            getattr(llm, "model_kwargs", None) or {}
+        ).get("seed")
+
+    primeira = semente(juiz_llm)
+    segunda = semente(revisao_segunda_llm)
 
     assert primeira is not None
     assert segunda is not None

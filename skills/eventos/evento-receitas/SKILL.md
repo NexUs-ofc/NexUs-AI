@@ -25,7 +25,12 @@ use `evento-criar`.
    título ou pela data.
 2. `recomend_recipe` para as sugestões. Passe o tipo do evento e a
    quantidade de pessoas — é isso que faz as quantidades saírem escaladas.
-3. `add_recipe` ou `remove_recipe` conforme o pedido, depois de confirmado.
+3. Para incluir: `add_recipe` com o `event_id`, e com `titulo`, `porcoes` e
+   `ingredientes` (nome e quantidade) da receita que `recomend_recipe`
+   devolveu. O id da receita é gerado na hora; não invente um. Se a pessoa
+   quiser uma receita que ela já salvou, passe só o `recipe_id` dela.
+4. Para tirar: `get_events` mostra o `recipe_id` de cada receita do evento;
+   `remove_recipe` com ele.
 
 ## Regras
 
@@ -72,7 +77,8 @@ PERGUNTA_ORIGINAL=Adiciona pão de alho no churrasco.
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
 (recomend_recipe -> {"titulo": "Pão de alho", "ingredientes": [
     {"ingrediente": "Pão de alho", "quantidade_total": "20 unidades", "tem_suficiente": false}]})
-(add_recipe -> ok)
+(add_recipe(event_id="e1", titulo="Pão de alho", porcoes=10,
+            ingredientes=[{"nome": "Pão de alho", "quantidade": "20 unidades"}]) -> ok)
 
 Resposta:
 {

@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage
 
 from app.controller.config import logging
-from app.core.llms import memoria_llm
+from app.core.llms import memoria_llm, texto
 from app.core.prompts.prompt_preferencias import PREFERENCIAS_PROMPT
 from app.repository.mongodb.activity import ActivityRepository
 from app.repository.qdrant.preferences_repository import PreferencesRepository
@@ -14,19 +14,6 @@ MAX_MENSAGENS_POR_CONVERSA = 12
 
 def _montar_atividade(account_id: int, household_id: int) -> str:
     blocos = []
-
-    fatos = ActivityRepository.get_knowledge(household_id)
-
-    if fatos:
-        linhas = []
-
-        for fato in fatos:
-            texto = fato.get("fact", "")
-            guia = fato.get("ai_guideline") or {}
-            acao = guia.get("recommended_action", "")
-            linhas.append(f"- {texto}" + (f" (orientação: {acao})" if acao else ""))
-
-        blocos.append("FATOS JÁ CONHECIDOS:\n" + "\n".join(linhas))
 
     conversas = ActivityRepository.get_conversas_recentes(account_id)
 
@@ -47,8 +34,7 @@ def _montar_atividade(account_id: int, household_id: int) -> str:
     if receitas:
         linhas = [
             f"- {r.get('title', '')} "
-            f"(curtida: {'sim' if r.get('is_liked') else 'não'}, "
-            f"porções: {r.get('serving_size', '?')})"
+            f"(porções: {r.get('serving_size', '?')})"
             for r in receitas
         ]
         blocos.append("RECEITAS SALVAS:\n" + "\n".join(linhas))
@@ -119,7 +105,7 @@ def derivar_preferencias(account_id: int, household_id: int) -> list[str]:
         logger.exception(f"Erro ao derivar preferências da conta {account_id}")
         raise
 
-    preferencias = _extrair_linhas(resposta.content)
+    preferencias = _extrair_linhas(texto(resposta))
 
     if not preferencias:
         logger.info(f"Nenhuma preferência extraída para a conta {account_id}")

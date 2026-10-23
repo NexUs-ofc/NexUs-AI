@@ -10,7 +10,7 @@ class Recipe:
         serving_size: int,
         ingredients: list[dict],
         instructions: str,
-        is_liked: bool = False,
+        account_id: int | None,
         created_by: str = "ai",
         _id: ObjectId | None = None
     ):
@@ -19,7 +19,7 @@ class Recipe:
         self.serving_size = serving_size
         self.ingredients = ingredients
         self.instructions = instructions
-        self.is_liked = is_liked
+        self.account_id = account_id
         self.created_by = created_by
 
     def to_dict(self) -> dict:
@@ -28,7 +28,7 @@ class Recipe:
             "serving_size": self.serving_size,
             "ingredients": self.ingredients,
             "instructions": self.instructions,
-            "is_liked": self.is_liked,
+            "account_id": self.account_id,
             "created_by": self.created_by,
         }
 
@@ -45,7 +45,8 @@ class Recipe:
             serving_size=data["serving_size"],
             ingredients=data["ingredients"],
             instructions=data["instructions"],
-            is_liked=data.get("is_liked", False),
+            # Receita antiga (do tempo do recipe_accounts) nao tem account_id.
+            account_id=data.get("account_id"),
             created_by=data.get("created_by", "ai"),
         )
 
@@ -55,6 +56,6 @@ class Recipe:
             f"id={self.id}, "
             f"title='{self.title}', "
             f"serving_size={self.serving_size}, "
-            f"is_liked={self.is_liked}"
+            f"account_id={self.account_id}"
             f")"
         )

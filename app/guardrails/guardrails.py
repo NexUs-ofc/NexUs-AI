@@ -3,6 +3,7 @@ import uuid
 
 from app.controller.config import logging
 from app.core.llms import guardrail_llm
+from app.core.llms import texto as texto_da_resposta
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,20 @@ def checar_entrada(mensagem_anonimizada):
         if kw in texto_lower:
             return _bloquear("acesso_dados_internos", "Não tenho como compartilhar informações internas do sistema.")
 
-    resposta = guardrail_llm.invoke(
-        _PROMPT_CLASSIFICADOR.format(mensagem=mensagem_anonimizada)
-    ).content
+    # Mesma regra do guardrail de saida: as checagens deterministicas acima ja
+    # rodaram; se o provedor falhar aqui (timeout, 429, 504), a mensagem segue
+    # em vez de derrubar a requisicao inteira.
+    try:
+        resposta = texto_da_resposta(guardrail_llm.invoke(
+            _PROMPT_CLASSIFICADOR.format(mensagem=mensagem_anonimizada)
+        ))
+    except Exception:
+        logger.warning(
+            "guardrail de entrada indisponivel, seguindo com as checagens "
+            "deterministicas",
+            exc_info=True,
+        )
+        resposta = ""
 
     categoria = "APROVADO"
     for linha in resposta.splitlines():
@@ -170,11 +182,14 @@ MENSAGEM_BLOQUEADA = (
 )
 
 
-def checar_saida(resposta, mapa_pii):
+def checar_saida(resposta, mapa_pii, revisar=True):
     for tipo, padrao in PII:
         resposta = re.sub(padrao, f"[{tipo} OMITIDO]", resposta)
 
     resposta = desanonimizar(resposta, mapa_pii)
+
+    if not revisar:
+        return _saida_ok(resposta)
 
     # A revisao do LLM e a ultima etapa da requisicao, e ela NAO pode destruir
     # uma resposta que o juiz ja aprovou. Quando o provedor falha aqui — 429 de
@@ -182,9 +197,9 @@ def checar_saida(resposta, mapa_pii):
     # ja foi aplicada, entao entrega o texto em vez de derrubar tudo. Caiu uma
     # requisicao inteira por faltar 345ms de orcamento de TPM.
     try:
-        saida = guardrail_llm.invoke(
+        saida = texto_da_resposta(guardrail_llm.invoke(
             _PROMPT_SAIDA.format(resposta=resposta)
-        ).content.strip()
+        )).strip()
     except Exception:
         logger.warning(
             "guardrail de saida indisponivel, entregando resposta sem a "

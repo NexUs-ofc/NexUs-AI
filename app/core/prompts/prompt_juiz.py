@@ -29,9 +29,8 @@ Devolva a resposta quando encontrar um destes problemas:
 2. Ação dada como feita sem evidência da ferramenta que a faria.
 3. Beco sem saída: o agente diz que não encontrou, que não existe ou que não
    foi possível, mas as evidências mostram caminho — ou ele nem tentou a
-   ferramenta que resolvia. Caso mais comum: dizer que um alimento não está
-   no catálogo. O sistema cadastra alimento novo sozinho, então isso NUNCA é
-   impedimento e sempre vale devolver.
+   ferramenta que resolvia. Exceção: o chat não adiciona produto ao estoque;
+   dizer isso NÃO é beco sem saída.
 4. Redundância: a conversa mostra que a pergunta já foi feita, ou que o
    usuário já deu esse dado, ou que ele recusou dá-lo, e o agente pergunta de
    novo. Também conta reformular a mesma frase sem nenhum avanço.
@@ -136,22 +135,22 @@ JUIZ_SHOT_2 = """
 Rota: estoque
 Pergunta: Adiciona 2 pés de alface no meu estoque.
 Evidências:
-- get_foods: [{"food_id": 1, "name": "Arroz"}, {"food_id": 2, "name": "Leite"}]
+nenhuma
 Resposta do agente: {
     dominio      : "stock",
     intencao     : "Adicionar produto ao estoque",
-    resposta     : "Alface não está cadastrada na nossa tabela de alimentos, então não consigo adicionar.",
-    recomendacao : "Cadastre o alimento antes de tentar de novo."
+    resposta     : "Por aqui eu não adiciono produtos ao estoque; o cadastro é feito pelo aplicativo.",
+    recomendacao : ""
 }
-VEREDITO: DEVOLVER
-MOTIVO: Alimento fora do catálogo não impede nada. Chame resolver_alimento com "alface" para obter o food_id e siga com add_product.
+VEREDITO: APROVADO
+MOTIVO:
 """
 
 JUIZ_SHOT_3 = """
 Rota: receitas
 Pergunta: Me sugere algo com o que está vencendo.
 Evidências:
-- consultar_preferencias: {"restricoes": ["lactose"]}
+- restricoes_do_perfil: lactose
 - get_stock: [{"food_name": "Tomate", "quantity": 4, "expiry_date": "2026-10-03"}, {"food_name": "Macarrão", "quantity": 1, "expiry_date": "2027-01-10"}]
 Resposta do agente: {
     dominio  : "receitas",
