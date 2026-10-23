@@ -25,11 +25,37 @@ de raciocínio não aceitam) e se o teto se chama max_tokens ou
 max_completion_tokens.
 """
 
-from langchain_groq import ChatGroq
+from ..config import (
+    GEMINI_API_KEY,
+    GROQ_API_KEY,
+    LLM_FALLBACK_PROVIDER,
+    LLM_MODEL,
+    LLM_PROVIDER,
+)
 
-from ..config import GROQ_API_KEY
+MODELO_PADRAO = {
+    "groq": "openai/gpt-oss-20b",
+    "gemini": "gemini-3.5-flash-lite",
+}
 
-MODELO = "openai/gpt-oss-20b"
+if LLM_PROVIDER not in MODELO_PADRAO:
+    raise RuntimeError(
+        f"LLM_PROVIDER '{LLM_PROVIDER}' invalido. Use: {', '.join(MODELO_PADRAO)}."
+    )
+
+PROVEDOR = LLM_PROVIDER
+MODELO = LLM_MODEL or MODELO_PADRAO[PROVEDOR]
+
+_CHAVE = {"groq": GROQ_API_KEY, "gemini": GEMINI_API_KEY}
+
+# Reserva: outro provedor, com chave configurada. Sem isso, fica sem reserva.
+RESERVA = (
+    LLM_FALLBACK_PROVIDER
+    if LLM_FALLBACK_PROVIDER in MODELO_PADRAO
+    and LLM_FALLBACK_PROVIDER != PROVEDOR
+    and _CHAVE.get(LLM_FALLBACK_PROVIDER)
+    else None
+)
 
 # Teto de 2. Em 429 o cliente espera o retry-after antes de repetir, entao cada
 # tentativa a mais multiplica a espera que o usuario sente.
@@ -54,7 +80,17 @@ def _cliente(
     semente: int | None = SEMENTE,
     timeout: int = TIMEOUT_S,
     tentativas: int = TENTATIVAS,
+    provedor: str = PROVEDOR,
 ):
+    modelo = MODELO if provedor == PROVEDOR else MODELO_PADRAO[provedor]
+
+    if provedor == "gemini":
+        return _cliente_gemini(
+            temperatura, raciocinio, teto, semente, timeout, tentativas, modelo,
+        )
+
+    from langchain_groq import ChatGroq
+
     extras = {}
 
     if raciocinio:
@@ -69,7 +105,7 @@ def _cliente(
         extras["model_kwargs"] = {"seed": semente}
 
     return ChatGroq(
-        model=MODELO,
+        model=modelo,
         temperature=temperatura,
         api_key=GROQ_API_KEY,
         max_retries=tentativas,
@@ -78,8 +114,102 @@ def _cliente(
     )
 
 
+def _cliente_gemini(
+    temperatura: float,
+    raciocinio: str | None,
+    teto: int | None,
+    semente: int | None,
+    timeout: int,
+    tentativas: int,
+    modelo: str,
+):
+    """
+    Mesmo papel do cliente Groq. O Gemini chama o nivel de raciocinio de
+    thinking_level e o teto de max_output_tokens.
+    """
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    extras = {}
+
+    if raciocinio:
+        extras["thinking_level"] = raciocinio
+
+    if teto:
+        extras["max_output_tokens"] = teto
+
+    if semente is not None:
+        extras["seed"] = semente
+
+    return ChatGoogleGenerativeAI(
+        model=modelo,
+        temperature=temperatura,
+        google_api_key=GEMINI_API_KEY,
+        max_retries=tentativas,
+        timeout=timeout,
+        **extras,
+    )
+
+
+def texto(resposta) -> str:
+    """
+    Texto de uma resposta do modelo, qualquer que seja o provedor.
+
+    O Groq devolve `content` como string. O Gemini 3 devolve uma lista de
+    blocos ({"type": "text", "text": ...}, raciocinio, assinaturas), e quem
+    chamava `.content.strip()` ou `.splitlines()` quebrava com AttributeError.
+    """
+
+    conteudo = getattr(resposta, "content", resposta)
+
+    if conteudo is None:
+        return ""
+
+    if isinstance(conteudo, str):
+        return conteudo
+
+    if isinstance(conteudo, list):
+        partes = []
+
+        for bloco in conteudo:
+            if isinstance(bloco, str):
+                partes.append(bloco)
+            elif isinstance(bloco, dict) and bloco.get("type") == "text":
+                partes.append(bloco.get("text", ""))
+
+        return "".join(partes)
+
+    return str(conteudo)
+
+
+def _reserva(*args, **kwargs):
+    """Mesmo cliente no provedor de reserva, ou None quando nao ha reserva."""
+
+    if RESERVA is None:
+        return None
+
+    return _cliente(*args, provedor=RESERVA, **kwargs)
+
+
+def _com_reserva(*args, **kwargs):
+    """
+    Cliente do provedor principal que, se falhar, refaz a chamada na reserva.
+
+    So para chamadas diretas (invoke). Agente com ferramentas precisa do
+    modelo puro: a reserva dele entra pelo middleware, em agents.py.
+    """
+
+    principal = _cliente(*args, **kwargs)
+    reserva = _reserva(*args, **kwargs)
+
+    if reserva is None:
+        return principal
+
+    return principal.with_fallbacks([reserva])
+
+
 # Devolve uma palavra: nome de rota ou de skill.
-escolha_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESCOLHA)
+escolha_llm = _com_reserva(0, RACIOCINIO_CURTO, TETO_ESCOLHA)
 
 # Devolve veredito curto e estruturado: juiz e guardrails. Teto curto e uma
 # tentativa: o veredito leva ~0,5s medido, e um juiz travado de 90s x 2
@@ -88,17 +218,18 @@ escolha_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESCOLHA)
 JUIZ_TIMEOUT_S = 20
 JUIZ_TENTATIVAS = 1
 
-revisao_llm = _cliente(
+revisao_llm = _com_reserva(
     0, RACIOCINIO_CURTO, TETO_VEREDITO,
     timeout=JUIZ_TIMEOUT_S, tentativas=JUIZ_TENTATIVAS,
 )
 
 # Escreve texto para a pessoa ler, de tamanho variável: sem teto.
-texto_llm = _cliente(0, RACIOCINIO_CURTO)
+texto_llm = _com_reserva(0, RACIOCINIO_CURTO)
 
 # Agentes: aqui o raciocínio é o trabalho. Temperatura alta porque receita e
 # sugestão ganham com variedade.
 specialist_llm = _cliente(0.7)
+specialist_reserva = _reserva(0.7)
 
 # Estoque e registro e consulta, nao criacao: nao ganha com variedade nem com
 # raciocinio longo. Medido: com o raciocinio padrao o agente gastou 2048 tokens
@@ -108,12 +239,13 @@ specialist_llm = _cliente(0.7)
 TETO_ESTOQUE = 1200
 
 estoque_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
+estoque_reserva = _reserva(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
 
 # Segunda opinião do juiz. Semente diferente de proposito: com a mesma semente
 # e temperatura zero, repetir a chamada devolve o MESMO veredito, e segunda
 # opinião nenhuma. O sorteio precisa ser independente para a divergencia
 # aparecer — e e a divergencia que diz que a primeira reprovacao foi ruido.
-revisao_segunda_llm = _cliente(
+revisao_segunda_llm = _com_reserva(
     0, RACIOCINIO_CURTO, TETO_VEREDITO, semente=20261010,
     timeout=JUIZ_TIMEOUT_S, tentativas=JUIZ_TENTATIVAS,
 )
@@ -130,4 +262,8 @@ orquestrador_llm = texto_llm
 memoria_llm = texto_llm
 
 groq_llm = specialist_llm
-fast_llm = texto_llm
+
+# Agente de FAQ: modelo puro, porque create_agent precisa ligar as ferramentas
+# nele. A reserva entra pelo middleware.
+fast_llm = _cliente(0, RACIOCINIO_CURTO)
+fast_reserva = _reserva(0, RACIOCINIO_CURTO)
