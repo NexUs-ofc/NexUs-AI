@@ -16,16 +16,22 @@ def recomendar_receita(
     """
 
 
-    from ..core.agents import recipe_app
+    # Import aqui dentro: agents importa esta tool, e no topo seria circular.
+    from ..auth import identidade
+    from ..core.agents import AGENTES_DAS_SKILLS
+    from ..schemas.flow import _restricoes_prontas
 
     request = f"""
         ROUTE=receitas
         CHAMADO_POR=events
+        RESTRICOES={_restricoes_prontas(identidade.perfil())}
         PERGUNTA_ORIGINAL=Recomende uma receita para esse evento seguindo explicitamente a sua descrição, utilizando como principal peso para essa recomendação a quantidade de pessoas, clima, preferências alimentares e o tipo do evento:\n\n{description}
     """
 
-    response = recipe_app.invoke({
-        "messages": [{"role": "ai", "content": request}]
+    response = AGENTES_DAS_SKILLS["receita-para-evento"].invoke({
+        "messages": [{"role": "user", "content": request}]
     })
 
-    return response["messages"][-1].content
+    from ..core.llms import texto
+
+    return texto(response["messages"][-1])
