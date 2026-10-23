@@ -69,8 +69,11 @@ RACIOCINIO_CURTO = "low"
 # isso, comparar antes e depois de uma mudança vira leitura de ruído.
 SEMENTE = 42
 
-TETO_ESCOLHA = 300
-TETO_VEREDITO = 600
+# Medidos no Groq. O Gemini raciocina mais antes de responder e, com 300, as
+# vezes gastava o teto todo pensando: o roteador voltava vazio e um pedido de
+# receita caia no fallback. Teto e freio, nao economia (ver acima).
+TETO_ESCOLHA = 2048
+TETO_VEREDITO = 2048
 
 
 def _cliente(
