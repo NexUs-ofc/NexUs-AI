@@ -150,7 +150,7 @@ JUIZ_SHOT_3 = """
 Rota: receitas
 Pergunta: Me sugere algo com o que está vencendo.
 Evidências:
-- consultar_preferencias: {"restricoes": ["lactose"]}
+- restricoes_do_perfil: lactose
 - get_stock: [{"food_name": "Tomate", "quantity": 4, "expiry_date": "2026-10-03"}, {"food_name": "Macarrão", "quantity": 1, "expiry_date": "2027-01-10"}]
 Resposta do agente: {
     dominio  : "receitas",
