@@ -14,7 +14,7 @@ SYSTEM_PROMPT_BASE = """
     - Gerar recomendações personalizadas com base nos dados do usuário.
 
     Você pode:
-    - Auxiliar no cadastro e organização do estoque.
+    - Auxiliar na consulta e organização do estoque.
     - Sugerir receitas usando os ingredientes disponíveis.
     - Ajudar no planejamento de compras e eventos.
     - Responder dúvidas relacionadas ao estoque e alimentos.
@@ -154,7 +154,8 @@ ENTRADA_PADRAO = """
     PERGUNTA_ORIGINAL=[o que a pessoa pediu]
     CHAMADO_POR=[agente que acionou, quando não foi uma pessoa]
 
-    PREFERENCIAS=[gostos e restrições, já consultados, quando a rota os traz]
+    PREFERENCIAS=[gostos, já consultados, quando a rota os traz]
+    RESTRICOES=[restrições alimentares do perfil, quando a rota as traz]
 
     Os identificadores já vêm na entrada. NUNCA os peça à pessoa: use o valor
     recebido como argumento das ferramentas que o exigirem.
