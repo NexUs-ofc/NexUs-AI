@@ -94,6 +94,38 @@ _SAUDOU = re.compile(
 def _saudou(mensagem: str) -> bool:
     return bool(_SAUDOU.match(mensagem or ""))
 
+
+# O chat nao adiciona produto ao estoque. Deixado para o modelo, o aviso as
+# vezes nao saia; aqui e fixo e sem chamada nenhuma.
+RESPOSTA_DE_CADASTRO = (
+    "Por aqui eu não adiciono produtos ao estoque: o cadastro é feito pelo "
+    "aplicativo. Se quiser, posso ver o que você já tem ou tirar algo que acabou."
+)
+
+_CADASTRO = re.compile(
+    r"\b(cadastr\w*|adicion\w*|acrescent\w*|coloc[ae]\w*|bot[ae]\w*|comprei)\b",
+    re.IGNORECASE,
+)
+
+# "comprei arroz e acabou o leite" tem saida: vai para o agente.
+_SAIDA_DO_ESTOQUE = re.compile(
+    r"\b(acab\w*|consum\w*|comi|usei|gastei|joguei|jogar|descart\w*|tir[ae]\w*|"
+    r"remov\w*|venc\w*|estragou)\b",
+    re.IGNORECASE,
+)
+
+
+def _pede_cadastro(mensagem: str) -> bool:
+    """Pedido de adicionar ao estoque, sem pergunta nem saida misturada."""
+
+    mensagem = mensagem or ""
+
+    return (
+        "?" not in mensagem
+        and bool(_CADASTRO.search(mensagem))
+        and not _SAIDA_DO_ESTOQUE.search(mensagem)
+    )
+
 # Quando o seletor nao decide, cai na skill que so le. Dar ferramenta de
 # escrita a um palpite e pior do que responder de menos.
 SKILL_PADRAO = {
@@ -497,6 +529,12 @@ def agente_receitas(state: State) -> State:
 @traceable(name="agente_estoque", **_TRACE_NO)
 def agente_estoque(state: State) -> State:
     with span(state["trace_id"], "estoque"):
+        if _pede_cadastro(state["mensagem"]):
+            abertura = f"{SAUDACAO_CURTA} " if _saudou(state["mensagem"]) else ""
+            state["resposta_final"] = abertura + RESPOSTA_DE_CADASTRO
+
+            return state
+
         historico = _ultimos_turnos(
             state.get("historico", []),
             TURNOS_PARA_O_AGENTE,
@@ -950,7 +988,17 @@ def _ler_envelope(resposta_agente: str) -> dict | None:
     try:
         dados = json.loads(bruto)
     except (ValueError, TypeError):
-        return None
+        # Texto antes ou depois do JSON ("Aqui esta a receita: {...}"): tenta
+        # o objeto de dentro antes de desistir e cair no orquestrador.
+        inicio, fim = bruto.find("{"), bruto.rfind("}")
+
+        if inicio < 0 or fim <= inicio:
+            return None
+
+        try:
+            dados = json.loads(bruto[inicio:fim + 1])
+        except (ValueError, TypeError):
+            return None
 
     return dados if isinstance(dados, dict) else None
 
@@ -1217,7 +1265,12 @@ def executar_chat(
 
     trace_id = generate_trace_id()
 
-    if session_id and ConversationsRepository.sessao_ativa(session_id):
+    # Sem session_id valido, continua a ultima sessao aberta da pessoa em vez
+    # de comecar do zero e esquecer a conversa.
+    if not (session_id and ConversationsRepository.sessao_ativa(session_id)):
+        session_id = ConversationsRepository.sessao_recente(account_id)
+
+    if session_id:
         historico = ConversationsRepository.get_historico(
             session_id
         )
@@ -1427,9 +1480,15 @@ graph.add_conditional_edges(
     },
 )
 
-graph.add_edge(
+# Pedido de cadastro ja sai respondido (texto fixo, nosso): nao ha o que
+# julgar nem reescrever.
+graph.add_conditional_edges(
     "estoque",
-    "juiz",
+    lambda state: END if state.get("resposta_final") else "juiz",
+    {
+        END: END,
+        "juiz": "juiz",
+    },
 )
 
 graph.add_edge(
