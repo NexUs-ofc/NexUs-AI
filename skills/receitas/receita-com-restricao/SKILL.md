@@ -1,6 +1,6 @@
 ---
 name: Receita com restrição
-description: Adapta a receita à restrição alimentar da pessoa ou troca um ingrediente que ela pediu para substituir. Use quando houver alergia, dieta, intolerância, ou pedido explícito de troca de ingrediente.
+description: Adapta a receita à restrição alimentar da pessoa ou troca um ingrediente que ela pediu para substituir. Use quando houver alergia, dieta, intolerância, quando a pessoa disser que não gosta de um ingrediente, ou pedir explicitamente para trocar um ingrediente.
 metadata:
   dominio: receitas
   rota: receitas
@@ -13,16 +13,16 @@ metadata:
 
 ## Quando assumir esta skill
 
-A pessoa tem restrição alimentar, alergia ou dieta, ou pede para trocar um
-ingrediente específico da receita.
+A pessoa tem restrição alimentar, alergia ou dieta, diz que não gosta de um
+ingrediente, ou pede para trocar um ingrediente específico da receita.
 
-A restrição registrada em `consultar_preferencias` vale mesmo que a pessoa não
-a repita no pedido — se existir restrição no perfil, esta skill se aplica.
+A restrição do perfil vem na linha RESTRICOES da entrada e vale mesmo que a
+pessoa não a repita no pedido.
 
 ## Fluxo
 
-1. `consultar_preferencias`. A restrição registrada vale mesmo que a pessoa não
-   a repita no pedido.
+1. Leia RESTRICOES (restrições do perfil) e PREFERENCIAS (gostos) da entrada.
+   Ingrediente restrito ou que a pessoa diz não gostar sai da receita.
 2. `get_stock`, para saber com o que ela conta.
 3. `buscar_historico` SOMENTE se ela se referir a algo dito em conversa
    anterior.
@@ -68,8 +68,8 @@ receita: {
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Posso trocar o leite dessa receita? Sou intolerante a lactose.
+RESTRICOES=lactose
 
-(consultar_preferencias -> {"restricoes": ["lactose"]})
 (get_stock -> [{"food_name": "Bebida de aveia", "quantity": 1}])
 (tavily_search -> "bebida vegetal substitui leite em proporção 1:1 em massas")
 
