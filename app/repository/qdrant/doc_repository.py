@@ -27,13 +27,25 @@ class DocRepository:
             api_key=self.api_key,
             port=None,
             timeout=TEMPO_LIMITE_BUSCA_S,
+            # Sem checagem de versao: e uma chamada de rede no import.
+            check_compatibility=False,
         )
 
-        self.db = QdrantVectorStore(
-            client=self.client,
-            collection_name=DOCS_COLLECTION,
-            embedding=self.embeddings,
-        )
+        self._db = None
+
+    @property
+    def db(self) -> QdrantVectorStore:
+        # O QdrantVectorStore valida a collection no servidor ao ser criado.
+        # Feito no import, um Qdrant fora de alcance impedia a API de subir;
+        # aqui so acontece na primeira busca, que ja trata a falha.
+        if self._db is None:
+            self._db = QdrantVectorStore(
+                client=self.client,
+                collection_name=DOCS_COLLECTION,
+                embedding=self.embeddings,
+            )
+
+        return self._db
 
     def buscar_trechos_documentacao(self, question: str, k: int = 2) -> list[str]:
         """
