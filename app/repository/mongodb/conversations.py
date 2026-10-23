@@ -34,6 +34,9 @@ class ConversationsRepository:
 
     @staticmethod
     def get_historico(session_id: str) -> list[dict]:
+        if not ObjectId.is_valid(session_id):
+            return []
+
         try:
             logger.info(f"Buscando histórico da sessão {session_id}")
 
@@ -57,6 +60,12 @@ class ConversationsRepository:
 
     @staticmethod
     def sessao_ativa(session_id: str) -> bool:
+        # Id que nao e ObjectId (ex.: o "string" de exemplo do Swagger) nao e
+        # sessao nenhuma: o chat abre uma nova em vez de devolver 500.
+        if not ObjectId.is_valid(session_id):
+            logger.info(f"session_id invalido ({session_id!r}), abrindo sessao nova")
+            return False
+
         try:
             logger.info(f"Verificando se a sessão {session_id} está ativa")
 
@@ -76,6 +85,9 @@ class ConversationsRepository:
 
     @staticmethod
     def end_session(session_id: str) -> bool:
+        if not ObjectId.is_valid(session_id):
+            return False
+
         try:
             logger.info(f"Finalizando sessão {session_id}")
 
