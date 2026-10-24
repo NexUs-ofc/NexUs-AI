@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from langchain_core.messages import HumanMessage
 
 from app.controller.config import logging
-from app.core.llms import memoria_llm
+from app.core.llms import memoria_llm, texto
 from app.core.prompts.prompt_resumo import RESUMO_PROMPT
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.repository.qdrant.memory_repository import MemoryRepository
@@ -30,7 +30,7 @@ def _gerar_resumo(historico: list[dict]) -> str:
         )
     ])
 
-    return resposta.content.strip()
+    return texto(resposta).strip()
 
 
 def resumir_sessao(session_id: str, account_id: int) -> str:

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from bson import ObjectId
 from pymongo import MongoClient
@@ -8,6 +8,10 @@ from ...config import MONGODB_URI
 from ...controller.config import logging
 
 logger = logging.getLogger(__name__)
+
+# Quanto tempo depois da ultima mensagem uma sessao sem session_id ainda e
+# continuada (ver sessao_recente).
+JANELA_SESSAO = timedelta(hours=2)
 
 class ConversationsRepository:
     client = MongoClient(MONGODB_URI)
@@ -33,7 +37,41 @@ class ConversationsRepository:
             return None
 
     @staticmethod
+    def sessao_recente(account_id: int) -> str | None:
+        """
+        Ultima sessao aberta da conta, com mensagem dentro da JANELA_SESSAO.
+
+        O app (e o Swagger, que manda "string") nem sempre devolve o
+        session_id. Sem isto cada mensagem abria uma sessao nova e o chat
+        esquecia a anterior: "salva essa receita" nao achava receita nenhuma.
+        """
+
+        try:
+            doc = ConversationsRepository.conversations_collection.find_one(
+                {
+                    "account_id": account_id,
+                    "ended_at": None,
+                    "updated_at": {"$gte": datetime.now(UTC) - JANELA_SESSAO},
+                },
+                {"_id": 1},
+                sort=[("updated_at", -1)],
+            )
+        except PyMongoError:
+            logger.exception(f"Erro ao buscar sessao recente da conta {account_id}")
+            return None
+
+        if doc is None:
+            return None
+
+        logger.info(f"Continuando a sessao {doc['_id']} da conta {account_id}")
+
+        return str(doc["_id"])
+
+    @staticmethod
     def get_historico(session_id: str) -> list[dict]:
+        if not ObjectId.is_valid(session_id):
+            return []
+
         try:
             logger.info(f"Buscando histórico da sessão {session_id}")
 
@@ -57,6 +95,12 @@ class ConversationsRepository:
 
     @staticmethod
     def sessao_ativa(session_id: str) -> bool:
+        # Id que nao e ObjectId (ex.: o "string" de exemplo do Swagger) nao e
+        # sessao nenhuma: o chat abre uma nova em vez de devolver 500.
+        if not ObjectId.is_valid(session_id):
+            logger.info(f"session_id invalido ({session_id!r}), abrindo sessao nova")
+            return False
+
         try:
             logger.info(f"Verificando se a sessão {session_id} está ativa")
 
@@ -76,6 +120,9 @@ class ConversationsRepository:
 
     @staticmethod
     def end_session(session_id: str) -> bool:
+        if not ObjectId.is_valid(session_id):
+            return False
+
         try:
             logger.info(f"Finalizando sessão {session_id}")
 

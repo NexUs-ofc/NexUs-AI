@@ -5,7 +5,7 @@ metadata:
   dominio: stock
   rota: estoque
   intencao: Atualizar estoque completo
-  ferramentas: [get_stock, get_expired_products, get_missing_products, resolver_alimento, resolver_data, add_product, remove_product]
+  ferramentas: [get_stock, get_expired_products, get_missing_products, remove_product]
   version: 1.0.0
 ---
 
@@ -14,7 +14,7 @@ metadata:
 ## Quando assumir esta skill
 
 A pessoa quer refazer o estoque inteiro: "quero atualizar meu estoque", "vamos
-revisar o que eu tenho", "cheguei do mercado".
+revisar o que eu tenho".
 
 Para um item só, use `estoque-registrar`. Esta skill é o fluxo longo, de vários
 turnos.
@@ -31,8 +31,9 @@ Na primeira mensagem, levante o panorama antes de perguntar qualquer coisa:
 
 A cada resposta dela:
 
-5. Registre o que mudou com `resolver_alimento` + `add_product`, ou com
-   `remove_product`.
+5. O que ela consumiu, descartou ou acabou: `remove_product`. O que ela
+   comprou ou quer adicionar NÃO é gravado pela conversa: diga uma vez que o
+   cadastro é feito pelo aplicativo e siga.
 6. **Pergunte automaticamente se há mais alguma coisa**, e siga para o próximo
    grupo.
 7. Repita até ela dizer que acabou.
@@ -45,9 +46,10 @@ A cada resposta dela:
   depois o resto.
 - **Registre conforme ela fala**, não acumule tudo para o fim. Se a conversa
   cair, o que já foi dito está salvo.
-- Nunca pergunte unidade de medida, marca ou categoria. Nome, quantidade e
-  validade bastam.
-- Se ela não souber a validade de um item, registre sem ela em vez de travar.
+- Nunca adicione produto ao estoque, mesmo que ela cite um alimento ou diga
+  que comprou.
+- `remove_product` apaga o item inteiro: use só quando acabou ou foi
+  descartado tudo. Consumo parcial não se registra pela conversa.
 - Se ela quiser parar no meio, pare. Diga o que foi registrado até ali e não
   insista.
 - Nunca repita uma pergunta que ela já respondeu nesta conversa.
@@ -94,6 +96,6 @@ Resposta:
     "intencao": "Atualizar estoque completo",
     "resposta": "Baixei os 2 iogurtes do seu estoque.",
     "recomendacao": "",
-    "acompanhamento": "O arroz estava em falta. Você comprou?"
+    "acompanhamento": "Mais alguma coisa que você consumiu ou jogou fora?"
 }
 ```

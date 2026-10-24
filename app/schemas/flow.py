@@ -15,6 +15,7 @@ from app.core.llms import (
     revisao_segunda_llm,
     roteador_llm,
     seletor_llm,
+    texto,
 )
 from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
@@ -33,6 +34,8 @@ from app.observability.tracing import generate_trace_id, span
 from app.repository.mongodb.conversations import ConversationsRepository
 from app.repository.mongodb.metrics import MetricsRepository
 from app.repository.mongodb.tool_metrics import ToolMetricsRepository
+from app.repository.pgsql.config import SessionLocal
+from app.repository.pgsql.profile import ProfileRepository
 from app.repository.qdrant.preferences_repository import PreferencesRepository
 
 from .state import State
@@ -90,6 +93,38 @@ _SAUDOU = re.compile(
 
 def _saudou(mensagem: str) -> bool:
     return bool(_SAUDOU.match(mensagem or ""))
+
+
+# O chat nao adiciona produto ao estoque. Deixado para o modelo, o aviso as
+# vezes nao saia; aqui e fixo e sem chamada nenhuma.
+RESPOSTA_DE_CADASTRO = (
+    "Por aqui eu não adiciono produtos ao estoque: o cadastro é feito pelo "
+    "aplicativo. Se quiser, posso ver o que você já tem ou tirar algo que acabou."
+)
+
+_CADASTRO = re.compile(
+    r"\b(cadastr\w*|adicion\w*|acrescent\w*|coloc[ae]\w*|bot[ae]\w*|comprei)\b",
+    re.IGNORECASE,
+)
+
+# "comprei arroz e acabou o leite" tem saida: vai para o agente.
+_SAIDA_DO_ESTOQUE = re.compile(
+    r"\b(acab\w*|consum\w*|comi|usei|gastei|joguei|jogar|descart\w*|tir[ae]\w*|"
+    r"remov\w*|venc\w*|estragou)\b",
+    re.IGNORECASE,
+)
+
+
+def _pede_cadastro(mensagem: str) -> bool:
+    """Pedido de adicionar ao estoque, sem pergunta nem saida misturada."""
+
+    mensagem = mensagem or ""
+
+    return (
+        "?" not in mensagem
+        and bool(_CADASTRO.search(mensagem))
+        and not _SAIDA_DO_ESTOQUE.search(mensagem)
+    )
 
 # Quando o seletor nao decide, cai na skill que so le. Dar ferramenta de
 # escrita a um palpite e pior do que responder de menos.
@@ -186,7 +221,7 @@ def roteador(state: State) -> State:
             HumanMessage(content=mensagem_usuario),
         ])
 
-        state["rota"] = _normalizar_rota(resposta.content)
+        state["rota"] = _normalizar_rota(texto(resposta))
 
         input_tokens, output_tokens = extrair_tokens(resposta)
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -307,7 +342,7 @@ def _invocar_agente(
 
     if mensagens_saida:
         return (
-            mensagens_saida[-1].content,
+            texto(mensagens_saida[-1]),
             input_tokens,
             output_tokens,
             evidencias,
@@ -396,6 +431,27 @@ def _preferencias_prontas(account_id: int, pergunta: str) -> str:
     return "; ".join(str(item) for item in preferencias)
 
 
+def _restricoes_prontas(profile_id: int) -> str:
+    """
+    Restricoes alimentares do perfil (coluna dietary_restrictions, Postgres).
+
+    Preferencias (gostos) ficam no Qdrant; restricoes, so aqui. Campo nulo,
+    vazio ou leitura que falhou: a pessoa e tratada como sem restricao.
+    """
+
+    try:
+        with SessionLocal() as session:
+            restricoes = ProfileRepository(session).get_restrictions(profile_id)
+    except Exception:
+        logger.warning("nao foi possivel ler as restricoes do perfil", exc_info=True)
+        restricoes = []
+
+    if not restricoes:
+        return "nenhuma restrição registrada"
+
+    return "; ".join(restricoes)
+
+
 @traceable(name="agente_receitas", **_TRACE_NO)
 def agente_receitas(state: State) -> State:
     with span(state["trace_id"], "receitas"):
@@ -410,10 +466,12 @@ def agente_receitas(state: State) -> State:
         )
 
         preferencias = _preferencias_prontas(account_id, state["mensagem"])
+        restricoes = _restricoes_prontas(state.get("household_account_id", 0))
 
         mensagem = (
             f"ROUTE=receitas\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
+            f"RESTRICOES={restricoes}\n"
         )
 
         if preferencias:
@@ -428,12 +486,26 @@ def agente_receitas(state: State) -> State:
         )
         state["resposta_agente"] = resposta_agente
 
+        # Receita sai daqui ja formatada (ingredientes e modo de preparo), sem
+        # juiz nem orquestrador: o juiz reprovava ingrediente que nao estava no
+        # estoque e empurrava o agente a enfiar o que havia em casa no prato, e
+        # o orquestrador resumia a receita em texto corrido. Envelope que nao
+        # da para aproveitar fica vazio e o orquestrador assume.
+        state["resposta_final"] = _montar_sem_modelo(
+            resposta_agente,
+            _saudou(state["mensagem"]),
+        )
+
         # O juiz precisa ver as preferencias como lastro: vindas pela entrada,
         # elas nao passam pelo callback que registra retorno de ferramenta.
         if preferencias:
             evidencias = [
                 {"ferramenta": "consultar_preferencias", "conteudo": preferencias}
             ] + evidencias
+
+        evidencias = [
+            {"ferramenta": "restricoes_do_perfil", "conteudo": restricoes}
+        ] + evidencias
 
         state["evidencias"] = state.get("evidencias", []) + evidencias
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -457,6 +529,12 @@ def agente_receitas(state: State) -> State:
 @traceable(name="agente_estoque", **_TRACE_NO)
 def agente_estoque(state: State) -> State:
     with span(state["trace_id"], "estoque"):
+        if _pede_cadastro(state["mensagem"]):
+            abertura = f"{SAUDACAO_CURTA} " if _saudou(state["mensagem"]) else ""
+            state["resposta_final"] = abertura + RESPOSTA_DE_CADASTRO
+
+            return state
+
         historico = _ultimos_turnos(
             state.get("historico", []),
             TURNOS_PARA_O_AGENTE,
@@ -724,14 +802,23 @@ def juiz(state: State) -> State:
             f"{_para_o_juiz(state.get('resposta_agente', ''))}"
         )
 
-        resposta = juiz_llm.invoke([
-            SystemMessage(content=JUIZ_PROMPT_COMPLETO),
-            HumanMessage(content=mensagem_usuario),
-        ])
+        # Juiz indisponivel (timeout, 429, 504) aprova: perder a revisao custa
+        # menos do que derrubar a resposta que o agente ja montou.
+        try:
+            resposta = juiz_llm.invoke([
+                SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+                HumanMessage(content=mensagem_usuario),
+            ])
+        except Exception:
+            logger.warning("juiz indisponivel, aprovando", exc_info=True)
+            resposta = None
 
-        veredito, motivo = _ler_veredito(resposta.content)
-
-        input_tokens, output_tokens = extrair_tokens(resposta)
+        if resposta is None:
+            veredito, motivo = "APROVADO", ""
+            input_tokens, output_tokens = 0, 0
+        else:
+            veredito, motivo = _ler_veredito(texto(resposta))
+            input_tokens, output_tokens = extrair_tokens(resposta)
 
         # Devolver custa a re-execucao completa do agente: 43,0s em estoque e
         # 41,7s em receitas, medidos. Uma leitura do juiz custa ~0,5s. Como o
@@ -744,12 +831,16 @@ def juiz(state: State) -> State:
         segunda = None
 
         if veredito == "DEVOLVER":
-            segunda = revisao_segunda_llm.invoke([
-                SystemMessage(content=JUIZ_PROMPT_COMPLETO),
-                HumanMessage(content=mensagem_usuario),
-            ])
-
-            veredito_2, motivo_2 = _ler_veredito(segunda.content)
+            try:
+                segunda = revisao_segunda_llm.invoke([
+                    SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+                    HumanMessage(content=mensagem_usuario),
+                ])
+                veredito_2, motivo_2 = _ler_veredito(texto(segunda))
+            except Exception:
+                logger.warning("segunda leitura do juiz indisponivel", exc_info=True)
+                segunda = None
+                veredito_2, motivo_2 = "APROVADO", ""
 
             entrada_2, saida_2 = extrair_tokens(segunda)
             input_tokens += entrada_2
@@ -839,7 +930,7 @@ def _escolher_skill(agente: str, state: State) -> str:
         )
         return padrao
 
-    bruto = (resposta.content or "").strip().lower()
+    bruto = texto(resposta).strip().lower()
     nomes = [x.nome for x in skills]
 
     escolhida = next((n for n in nomes if n == bruto), None)
@@ -886,6 +977,83 @@ def saudacao(state: State) -> State:
     return state
 
 
+def _ler_envelope(resposta_agente: str) -> dict | None:
+    """JSON do agente, tolerando a cerca de markdown (```json) que o Gemini poe."""
+
+    bruto = (resposta_agente or "").strip()
+
+    if bruto.startswith("```"):
+        bruto = re.sub(r"\A```[a-zA-Z]*\s*|\s*```\Z", "", bruto)
+
+    try:
+        dados = json.loads(bruto)
+    except (ValueError, TypeError):
+        # Texto antes ou depois do JSON ("Aqui esta a receita: {...}"): tenta
+        # o objeto de dentro antes de desistir e cair no orquestrador.
+        inicio, fim = bruto.find("{"), bruto.rfind("}")
+
+        if inicio < 0 or fim <= inicio:
+            return None
+
+        try:
+            dados = json.loads(bruto[inicio:fim + 1])
+        except (ValueError, TypeError):
+            return None
+
+    return dados if isinstance(dados, dict) else None
+
+
+def _formatar_receita(receita) -> str:
+    """Receita em formato de receita: ingredientes e modo de preparo, um por linha."""
+
+    if not isinstance(receita, dict) or not receita.get("titulo"):
+        return ""
+
+    detalhes = " · ".join(
+        str(d) for d in (
+            f"{receita['porcoes']} porções" if receita.get("porcoes") else "",
+            receita.get("tempo_estimado") or "",
+            receita.get("dificuldade") or "",
+        ) if d
+    )
+
+    linhas = [str(receita["titulo"]).strip() + (f" ({detalhes})" if detalhes else "")]
+
+    ingredientes = receita.get("ingredientes") or []
+
+    if ingredientes:
+        linhas += ["", "Ingredientes:"]
+
+        for item in ingredientes:
+            if isinstance(item, dict):
+                nome = str(item.get("ingrediente") or "").strip()
+                quantidade = str(item.get("quantidade_total") or "").strip()
+                linha = f"- {nome}: {quantidade}" if quantidade else f"- {nome}"
+
+                if item.get("tem_suficiente") is False:
+                    linha += " (falta)"
+            else:
+                linha = f"- {item}"
+
+            linhas.append(linha)
+
+    instrucoes = receita.get("instrucoes") or []
+
+    if isinstance(instrucoes, str):
+        instrucoes = [instrucoes]
+
+    if instrucoes:
+        linhas += ["", "Modo de preparo:"]
+        linhas += [f"{i}. {passo}" for i, passo in enumerate(instrucoes, 1)]
+
+    faltantes = [str(x) for x in receita.get("ingredientes_faltantes") or [] if x]
+
+    if faltantes:
+        linhas += ["", f"Para comprar: {', '.join(faltantes)}."]
+
+    return "\n".join(linhas)
+
+
 def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
     """
     Monta o texto final a partir do envelope, sem chamar o orquestrador.
@@ -896,12 +1064,9 @@ def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
     envelope nao da para aproveitar — ai o orquestrador assume, como antes.
     """
 
-    try:
-        dados = json.loads(resposta_agente)
-    except (ValueError, TypeError):
-        return ""
+    dados = _ler_envelope(resposta_agente)
 
-    if not isinstance(dados, dict):
+    if dados is None:
         return ""
 
     abertura = f"{SAUDACAO_CURTA} " if saudou else ""
@@ -913,8 +1078,9 @@ def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
         return f"{abertura}{esclarecer}"
 
     partes = [str(dados.get("resposta") or "").strip()]
+    receita = _formatar_receita(dados.get("receita"))
 
-    if not partes[0]:
+    if not partes[0] and not receita:
         return ""
 
     for campo in ("recomendacao", "acompanhamento"):
@@ -924,6 +1090,11 @@ def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
         # que ainda nao foi dito.
         if texto and texto.lower() not in " ".join(partes).lower():
             partes.append(texto)
+
+    if receita:
+        blocos = (abertura + partes[0], receita, " ".join(partes[1:]))
+
+        return "\n\n".join(b.strip() for b in blocos if b.strip())
 
     return abertura + " ".join(partes)
 
@@ -957,7 +1128,7 @@ def orquestrador(state: State) -> State:
             HumanMessage(content=mensagem_usuario),
         ])
 
-        state["resposta_final"] = resposta.content.strip()
+        state["resposta_final"] = texto(resposta).strip()
 
         input_tokens, output_tokens = extrair_tokens(resposta)
         state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
@@ -985,9 +1156,12 @@ def guardrail_saida(state: State) -> State:
             {},
         )
 
+        # Receita so passa pela parte deterministica (PII): a revisao por
+        # modelo somava latencia e reescrevia a receita ja formatada.
         resultado = checar_saida(
             state["resposta_final"],
             mapa,
+            revisar=state.get("rota") != "receitas",
         )
 
         # Bloqueio entrega a mensagem segura e encerra. Nao volta ao
@@ -1091,7 +1265,12 @@ def executar_chat(
 
     trace_id = generate_trace_id()
 
-    if session_id and ConversationsRepository.sessao_ativa(session_id):
+    # Sem session_id valido, continua a ultima sessao aberta da pessoa em vez
+    # de comecar do zero e esquecer a conversa.
+    if not (session_id and ConversationsRepository.sessao_ativa(session_id)):
+        session_id = ConversationsRepository.sessao_recente(account_id)
+
+    if session_id:
         historico = ConversationsRepository.get_historico(
             session_id
         )
@@ -1290,14 +1469,26 @@ graph.add_edge(
     END,
 )
 
-graph.add_edge(
+# Receitas nao passa pelo juiz: monta o texto e vai direto para a saida.
+# Mesmo criterio da FAQ: sem texto montado, o orquestrador assume.
+graph.add_conditional_edges(
     "receitas",
-    "juiz",
+    decidir_pos_faq,
+    {
+        "guardrail_saida": "guardrail_saida",
+        "orquestrador": "orquestrador",
+    },
 )
 
-graph.add_edge(
+# Pedido de cadastro ja sai respondido (texto fixo, nosso): nao ha o que
+# julgar nem reescrever.
+graph.add_conditional_edges(
     "estoque",
-    "juiz",
+    lambda state: END if state.get("resposta_final") else "juiz",
+    {
+        END: END,
+        "juiz": "juiz",
+    },
 )
 
 graph.add_edge(

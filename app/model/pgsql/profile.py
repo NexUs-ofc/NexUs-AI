@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .config import Base
@@ -14,3 +14,6 @@ class Profile(Base):
     address_id: Mapped[int] = mapped_column(Integer())
     email: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(150))
+    # Restricoes alimentares do perfil (alergias, intolerancias, dietas).
+    # Lidas na geracao de receitas; nulo quando o perfil nao tem nenhuma.
+    dietary_restrictions: Mapped[str | None] = mapped_column(Text(), nullable=True)

@@ -5,7 +5,7 @@ metadata:
   dominio: receitas
   rota: receitas
   intencao: Recomendar receita para evento
-  ferramentas: [consultar_preferencias, get_stock, escalar_quantidades, somar_valores, salvar_receita]
+  ferramentas: [consultar_preferencias, get_stock, escalar_quantidades, somar_valores]
   version: 1.0.0
 ---
 
@@ -18,7 +18,8 @@ com quantidade de convidados.
 
 ## Fluxo
 
-1. `consultar_preferencias`, para respeitar restrições dos anfitriões.
+1. Restrições do perfil vêm na linha RESTRICOES; `consultar_preferencias`
+   para os gostos dos anfitriões.
 2. `get_stock`, para saber o que já existe e não precisa ser comprado.
 3. Escolha pratos adequados ao tipo do evento: churrasco pede carne e
    acompanhamento, aniversário pede doce e salgado, jantar pede prato único.

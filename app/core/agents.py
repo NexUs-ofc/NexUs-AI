@@ -3,6 +3,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelFallbackMiddleware
 
 from ..tools.calc_tools import (
     calcular_percentual,
@@ -31,7 +32,6 @@ from ..tools.mongodb_tools import (
     update_list,
 )
 from ..tools.pg_tools import (
-    add_product,
     get_brand_info,
     get_category_info,
     get_expired_products,
@@ -39,11 +39,16 @@ from ..tools.pg_tools import (
     get_missing_products,
     get_stock,
     remove_product,
-    resolver_alimento,
 )
 from ..tools.preference_tools import consultar_preferencias
-from ..tools.validade_tools import estimar_validade
-from .llms import estoque_llm, fast_llm, specialist_llm
+from .llms import (
+    estoque_llm,
+    estoque_reserva,
+    fast_llm,
+    fast_reserva,
+    specialist_llm,
+    specialist_reserva,
+)
 from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
 from .prompts.prompt_events import EVENTS_PREAMBULO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
@@ -53,6 +58,15 @@ from .skills import SKILLS
 logger = logging.getLogger(__name__)
 
 TAVILY_HABILITADAS = {"tavily_search"}
+
+
+def _reserva_do_modelo(reserva):
+    """
+    Se o modelo principal do agente falhar (timeout, 504, cota), a chamada e
+    refeita no provedor de reserva. Sem reserva configurada, nada muda.
+    """
+
+    return [ModelFallbackMiddleware(reserva)] if reserva is not None else []
 
 
 async def _carregar_tavily():
@@ -109,6 +123,7 @@ tavily_tools = carregar_tavily_tools()
 
 faq_app = create_agent(
     model=fast_llm,
+    middleware=_reserva_do_modelo(fast_reserva),
     tools=[
         faq_retriever,
     ],
@@ -135,9 +150,6 @@ CATALOGO_FERRAMENTAS = {
     f.name: f
     for f in (
         resolver_data,
-        estimar_validade,
-        resolver_alimento,
-        add_product,
         remove_product,
         get_stock,
         get_missing_products,
@@ -195,6 +207,9 @@ def _montar_agentes_das_skills():
 
         agentes[nome] = create_agent(
             model=estoque_llm if skill.agente == "estoque" else specialist_llm,
+            middleware=_reserva_do_modelo(
+                estoque_reserva if skill.agente == "estoque" else specialist_reserva
+            ),
             tools=_ferramentas_da_skill(skill),
             system_prompt=skill.prompt(preambulo),
         )
