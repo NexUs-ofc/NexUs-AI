@@ -10,6 +10,7 @@ from app.auth import identidade
 from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
 from app.core.llms import (
+    MODELO,
     juiz_llm,
     orquestrador_llm,
     revisao_segunda_llm,
@@ -852,6 +853,17 @@ def juiz(state: State) -> State:
             else:
                 motivo = motivo_2 or motivo
 
+        # Uma decisao por leitura, para o painel: aprovado de primeira, devolvido,
+        # ou revertido quando a segunda opiniao absolveu a reprovacao.
+        if veredito == "DEVOLVER":
+            decisao = "devolvido"
+        elif segunda is not None:
+            decisao = "revertido"
+        else:
+            decisao = "aprovado"
+
+        state["decisoes_juiz"] = [*state.get("decisoes_juiz", []), decisao]
+
         devolucoes = state.get("devolucoes", 0)
 
         if veredito == "DEVOLVER" and devolucoes < LIMITE_DEVOLUCOES:
@@ -1169,6 +1181,7 @@ def guardrail_saida(state: State) -> State:
         # mesmo texto, gastando uma chamada para repetir o problema.
         if resultado.get("bloqueado"):
             state["resposta_final"] = resultado["mensagem"]
+            state["saida_bloqueada"] = True
 
             logger.warning(
                 "guardrail de saida bloqueou a resposta",
@@ -1236,6 +1249,10 @@ def _registrar_metrica(
     erro: bool,
     input_tokens: int,
     output_tokens: int,
+    tipo_erro: str | None = None,
+    decisoes_juiz: list[str] | None = None,
+    bloqueio_entrada: bool = False,
+    bloqueio_saida: bool = False,
 ) -> None:
     """Conta as tools e grava a metrica da requisicao, fora do caminho critico."""
 
@@ -1250,6 +1267,11 @@ def _registrar_metrica(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=estimate_cost_usd(input_tokens, output_tokens),
+        model=MODELO,
+        error_type=tipo_erro,
+        judge_decisions=decisoes_juiz,
+        input_blocked=bloqueio_entrada,
+        output_blocked=bloqueio_saida,
     )
 
 
@@ -1284,6 +1306,7 @@ def executar_chat(
     started_at = datetime.now(UTC)
     resultado = None
     erro = False
+    tipo_erro = None
 
     try:
         # Tudo que o grafo chama roda dentro desta identidade: as tools leem
@@ -1316,9 +1339,12 @@ def executar_chat(
                 "trace_id": trace_id,
                 "input_tokens": 0,
                 "output_tokens": 0,
+                "decisoes_juiz": [],
+                "saida_bloqueada": False,
             })
-    except Exception:
+    except Exception as exc:
         erro = True
+        tipo_erro = type(exc).__name__
 
         logger.exception(
             "Falha ao executar workflow",
@@ -1330,7 +1356,9 @@ def executar_chat(
         finished_at = datetime.now(UTC)
         duration_ms = (finished_at - started_at).total_seconds() * 1000
 
-        if resultado is not None and not resultado.get("entrada_aprovada", True):
+        bloqueio_entrada = resultado is not None and not resultado.get("entrada_aprovada", True)
+
+        if bloqueio_entrada:
             erro = True
 
         input_tokens = resultado.get("input_tokens", 0) if resultado is not None else 0
@@ -1350,6 +1378,10 @@ def executar_chat(
             erro=erro,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            tipo_erro=tipo_erro,
+            decisoes_juiz=resultado.get("decisoes_juiz", []) if resultado is not None else [],
+            bloqueio_entrada=bloqueio_entrada,
+            bloqueio_saida=bool(resultado.get("saida_bloqueada")) if resultado is not None else False,
         )
 
     resposta = resultado["resposta_final"]

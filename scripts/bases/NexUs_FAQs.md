@@ -21,7 +21,7 @@ Cada perfil representa uma casa em nosso sistema, os dados não são de um usuá
 \##2. Estoque
 
 2.1. Como adiciono um produto ao estoque?
-Você pode cadastrar manualmente, utilizar o leitor de código de barras, pedir para o chat especialista realizar o cadastro para você ou ir na tela e tirar uma foto da nota fiscal de suas compras (se a adição for por que você realizou uma nova compra).
+Use a tela de estoque para cadastrar manualmente, o leitor de código de barras ou a foto da nota fiscal no aplicativo. O chat pode orientar, consultar e remover produtos com sua autorização, mas não adiciona produtos ao estoque.
 
 2.2. Posso editar um produto cadastrado?
 Sim. Basta acessar o produto e selecionar a opção de edição.

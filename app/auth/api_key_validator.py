@@ -3,7 +3,12 @@ from fastapi.security import APIKeyHeader
 
 from ..config import API_KEY_HEADER, VALID_API_KEYS
 
-_api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
+_api_key_header = APIKeyHeader(
+    name=API_KEY_HEADER,
+    scheme_name="AppApiKey",
+    description="Chave do aplicativo para chat e leitura de notas fiscais.",
+    auto_error=False,
+)
 
 
 def validate_api_key(api_key: str = Security(_api_key_header)) -> str:

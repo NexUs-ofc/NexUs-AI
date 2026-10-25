@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from groq import APIConnectionError, APIStatusError, RateLimitError
 
+from .controller.admin import router as admin_router
 from .controller.chat import router as chat_router
 from .controller.health import router as health_router
 from .controller.receipt import router as receipt_router
@@ -170,6 +171,7 @@ def falha_inesperada(request: Request, exc: Exception) -> JSONResponse:
 app.include_router(chat_router)
 app.include_router(receipt_router)
 app.include_router(health_router, tags=["Health"])
+app.include_router(admin_router, tags=["Admin"])
 
 @app.get("/")
 def check() -> dict:

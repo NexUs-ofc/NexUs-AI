@@ -39,7 +39,7 @@ API_KEY = ENV["API_KEY"].split(",")[0].strip()
 VAZAMENTOS = [
     "json", "ferramenta", "tool", "rota ", "agente", "orquestrador", "juiz",
     "food_id", "pantry_item_id", "profile_id", "account_id", "household",
-    "get_stock", "add_product", "resolver_alimento", "tavily", "banco de dados",
+    "get_stock", "tavily", "banco de dados",
     "api", "endpoint", "null", "dominio",
 ]
 
@@ -50,9 +50,9 @@ BLOCOS = {
         ("A2 validade inventada", "Quais produtos estao perto de vencer?", None),
         ("A3 evento inventado", "Quais eventos eu tenho essa semana?", None),
     ],
-    # O beco do alface, e depois a leitura de volta com lastro real.
+    # Inclusao indisponivel: nem o pedido nem a confirmacao devem gravar produtos.
     "B": [
-        ("B1 cadastra alface", "Adiciona 2 pes de alface no meu estoque, validade 20/10/2026", None),
+        ("B1 recusa inclusao de alface", "Adiciona 2 pes de alface no meu estoque, validade 20/10/2026", None),
         ("B2 confirma", "Sim, confirmo", "HERDA"),
         ("B3 le de volta", "O que eu tenho no estoque agora?", None),
     ],

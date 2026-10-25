@@ -28,7 +28,7 @@ TOKEN = ENV["VALID_TOKENS"].split(",")[0].strip()
 API_KEY = ENV["API_KEY"].split(",")[0].strip()
 
 CASOS = [
-    ("1  estoque / cadastra alimento novo", "Adiciona 2 pes de alface no meu estoque, validade 10/10/2026"),
+    ("1  estoque / recusa inclusao de alimento", "Adiciona 2 pes de alface no meu estoque, validade 10/10/2026"),
     ("2  faq / tem no FAQ", "Como funciona a lista de compras?"),
     ("3  faq / nao tem no FAQ", "Posso usar o Ceris offline?"),
     ("4  fallback / fora do dominio", "Qual e o sentido da vida?"),

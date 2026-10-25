@@ -22,9 +22,9 @@ orquestrador que escreve o texto final e um guardrail de saída.
 
 ## Visão geral
 
-Sete rotas em três controllers, e o que cada uma exige para responder. A
-latência e o custo do rodapé são medidos, não estimados: saíram do
-`GET /health/metrics` em 10/10/2026.
+As rotas da API e o que cada uma exige para responder. A latência e o custo do
+rodapé são medidos, não estimados: saíram das métricas do Mongo em 10/10/2026,
+antes de o painel mudar para `/admin`.
 
 ![Endpoints e dependências](docs/endpoints_arquitetura.png)
 
@@ -110,6 +110,11 @@ log e segue sem ela. Já aconteceu de três skills de evento declararem
 skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 `tests/test_skills.py` falha quando isso volta a acontecer.
 
+O chat de estoque consulta produtos, acompanha validade e remove itens com
+autorização. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
+continua pelas telas do aplicativo, por cadastro manual, código de barras ou
+foto da nota fiscal.
+
 ## Endpoints
 
 | método | rota | autenticação | o que faz |
@@ -118,13 +123,18 @@ skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 | `DELETE` | `/chat/{session_id}` | `X-API-Key` + `Authorization: Bearer` | encerra a sessão e resume a memória |
 | `POST` | `/receipt/scan` | `X-API-Key` + `Authorization: Bearer` | lê a imagem da nota e devolve os itens |
 | `GET` | `/health/` | nenhuma | liveness, sem tocar em dependência externa |
-| `GET` | `/health/dependencies` | `X-API-Key` | estado de cada dependência externa |
-| `GET` | `/health/metrics` | `X-API-Key` | p50, p95, taxa de erro e custo, por rota e por nó |
-| `GET` | `/health/report` | `X-API-Key` | relatório a partir do LangSmith, em real |
+| `GET` | `/admin/session` | `X-Admin-Key` | confirma a chave no login do painel |
+| `GET` | `/admin/metrics?dias=7` | `X-Admin-Key` | a página da IA no painel, a partir do Mongo |
+| `GET` | `/admin/report?dias=7` | `X-Admin-Key` | o período contra o período anterior de mesmo tamanho |
+| `GET` | `/admin/langsmith?dias=7` | `X-Admin-Key` | execuções por dia, p50/p99 por chain e agente, feedback e custo em real |
+| `GET` | `/admin/dependencies` | `X-Admin-Key` | estado de cada dependência externa |
 
-O `X-API-Key` do `/chat` é conferido contra `API_KEY`; o do `/health` contra
-`TRACING_API_KEY`. São chaves diferentes de propósito: o painel do admin não
-precisa da chave do aplicativo.
+O `X-API-Key` do `/chat` é conferido contra `API_KEY`. As rotas `/admin` usam
+outra chave, no header `X-Admin-Key`, conferida contra `ADMIN_API_KEY`: é a
+mesma em todos os serviços do NexUs, para o painel do administrador entrar uma
+vez só. São chaves diferentes de propósito: o painel não precisa da chave do
+aplicativo, e a chave do aplicativo não abre o painel. O contrato das rotas
+está em [Painel do administrador](docs/painel-admin.md).
 
 O Bearer é o mesmo JWT que o NexUs-Auth emite, validado aqui pela assinatura
 — sem consulta a sessão, a Redis ou ao serviço de autenticação. O `sub` do
@@ -209,7 +219,7 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 | `JWT_SECRET_KEY` | os mesmos bytes do NexUs-Auth: hex de 64 caracteres ou Base64, nunca menos de 32 bytes |
 | `JWT_ALGORITHM`, `JWT_ISSUER` | padrão `HS256` e `nexus-auth` |
 | `API_KEY` | chave do `X-API-Key` no `/chat`; aceita lista separada por vírgula, para rotação |
-| `TRACING_API_KEY` | chave do `X-API-Key` no `/health` |
+| `ADMIN_API_KEY` | chave do painel (`X-Admin-Key`), a mesma em todos os serviços; `TRACING_API_KEY` continua aceita no lugar |
 | `VALID_TOKENS` | atalho de desenvolvimento: tokens aceitos sem conferir assinatura. Vazio em produção |
 | `TAVILY_API_KEY` | busca na web, via MCP |
 | `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`, `LANGSMITH_WORKSPACE_ID` | tracing |
@@ -231,7 +241,12 @@ python scripts/doc_injection.py             # documentação em PDF
 python scripts/scan_receipt.py nota.png     # leitor de nota pela linha de comando
 ```
 
-As bases que eles consomem ficam em `scripts/bases/`.
+As bases que eles consomem ficam em `scripts/bases/`. A recarga usa IDs
+estáveis, publica todos os lotes e somente depois remove os documentos
+obsoletos da respectiva coleção (`nexus_faqs` ou `nexus_docs`). Reexecutar não
+acumula duplicatas. Uma falha de upload preserva os documentos anteriores.
+As coleções de memória e preferências não são alteradas. O PDF normativo
+possui uma cópia de texto em `scripts/bases/NexUs_doc.txt` para revisão.
 
 ## Observabilidade
 
@@ -240,9 +255,16 @@ caminho crítico: um `ThreadPoolExecutor` de um único worker, FIFO, com flush
 limitado no encerramento. A gravação síncrona chegava a ser dois terços do
 tempo de uma saudação.
 
-`/health/metrics` é o que o painel do admin consome: p50 e p95 por rota e por
-nó do grafo, taxa de erro, custo por requisição e projeção semanal. Só JSON —
-a apresentação é do painel.
+`/admin/metrics` é o que o painel do admin consome: p50 e p95 por rota, tempo
+de cada etapa do grafo, leitura de nota, tokens contra a cota diária, custo por
+modelo, 429 do Groq por hora, decisões do juiz, bloqueios dos guardrails e
+chamadas de cada tool. Só JSON — a apresentação é do painel.
+
+Para isso cada requisição grava, além do tempo e dos tokens, o modelo, o tipo
+do erro, a decisão de cada leitura do juiz (aprovado, devolvido ou revertido
+pela segunda opinião) e se o guardrail de entrada ou de saída bloqueou. A
+leitura de nota grava uma métrica com a rota `nota_fiscal`, que fica fora do
+volume do chat.
 
 ## Limites conhecidos
 
@@ -253,9 +275,11 @@ a apresentação é do painel.
 - `ALLOWED_TYPES` do leitor de nota aceita `application/octet-stream`, porque
   é o que alguns clientes mandam para imagem. Na prática, qualquer binário
   passa pela primeira peneira e só morre adiante, ao tentar abrir.
-- `/health/report` lê do LangSmith e `/health/metrics` do Mongo. Medem a mesma
+- `/admin/langsmith` lê do LangSmith e `/admin/metrics` do Mongo. Medem a mesma
   coisa por caminhos diferentes, cada um com o seu cálculo de percentil, e
   podem divergir no painel.
+- O 429 do Groq contado no painel é o que chegou ao fim da requisição. O que o
+  retry do cliente absorveu vira latência e não aparece como erro.
 - `evento-gerenciar` é a skill padrão de eventos e pode cancelar evento: o
   seletor falhando deixa um palpite com poder de escrita. É a lacuna marcada
   como `expectedFailure` em `tests/test_skills.py`.

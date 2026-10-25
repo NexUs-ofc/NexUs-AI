@@ -14,7 +14,8 @@ SYSTEM_PROMPT_BASE = """
     - Gerar recomendações personalizadas com base nos dados do usuário.
 
     Você pode:
-    - Auxiliar na consulta e organização do estoque.
+    - Consultar e organizar o estoque, com remoções autorizadas.
+    - Orientar a inclusão de produtos pelas telas do aplicativo; nunca pelo chat.
     - Sugerir receitas usando os ingredientes disponíveis.
     - Ajudar no planejamento de compras e eventos.
     - Responder dúvidas relacionadas ao estoque e alimentos.

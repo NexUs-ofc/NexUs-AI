@@ -67,18 +67,6 @@ Resposta do agente: {
 Resposta final: Oi! Atenção: três ovos vencem amanhã e um litro de leite vence em dois dias. Vale usar esses antes dos outros. Quer que eu sugira receitas que aproveitem os dois?
 """
 
-ORQUESTRADOR_SHOT_2 = """
-Rota: estoque
-Resposta do agente: {
-    dominio    : "stock",
-    intencao   : "Adicionar produto ao estoque",
-    resposta   : "Encontrei dois produtos com esse nome no catálogo.",
-    recomendacao : "",
-    esclarecer : "Você quer dizer leite integral ou leite desnatado?"
-}
-Resposta final: Encontrei dois produtos com esse nome. Você quer dizer leite integral ou desnatado?
-"""
-
 ORQUESTRADOR_SHOT_3 = """
 Rota: fallback
 Resposta do agente: ""
@@ -103,14 +91,12 @@ ORQUESTRADOR_SHOTS_CUT = (
 )
 
 # Um exemplo por caso distinto: juntar recomendacao com acompanhamento sem
-# repetir, terminar em "esclarecer", fallback, e degradar quando a revisao nao
-# fecha. Saiu o de identidade ("quem sou eu"), que e sub-caso do fallback e a
-# secao SEM RESPOSTA DE AGENTE ja descreve — cada shot vai em toda requisicao.
+# repetir, fallback e degradar quando a revisao nao fecha. Cada shot vai em
+# toda requisicao.
 ORQUESTRADOR_PROMPT_COMPLETO = (
     ORQUESTRADOR_PROMPT     + "\n\n" +
     ORQUESTRADOR_SHOTS_OPEN + "\n\n" +
     ORQUESTRADOR_SHOT_1     + "\n\n" +
-    ORQUESTRADOR_SHOT_2     + "\n\n" +
     ORQUESTRADOR_SHOT_3     + "\n\n" +
     ORQUESTRADOR_SHOT_5     + "\n\n" +
     ORQUESTRADOR_SHOTS_CUT

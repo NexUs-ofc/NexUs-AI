@@ -1,7 +1,7 @@
 import math
 import statistics
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import requests
 
@@ -32,9 +32,13 @@ NOS_AGENTES = [
 NOS_PIPELINE = [
     "guardrail_entrada",
     "roteador",
+    "juiz",
     "orquestrador",
     "guardrail_saida",
 ]
+
+# Mesmo fuso fixo do painel: o "dia" é o de quem usa o app.
+BRASILIA = timezone(timedelta(hours=-3), "BRT")
 
 TIMEOUT = 60
 PAGINA = 100
@@ -226,10 +230,94 @@ def _resumo_latencia(runs: list[dict], nomes: list[str]) -> list[dict]:
             "chamadas": len(amostras),
             "media_s": round(statistics.mean(amostras), 2),
             "mediana_s": round(statistics.median(amostras), 2),
+            "p50_s": round(_percentil(amostras, 0.50), 2),
             "p95_s": round(_percentil(amostras, 0.95), 2),
+            "p99_s": round(_percentil(amostras, 0.99), 2),
         })
 
     return sorted(resultado, key=lambda item: -item["media_s"])
+
+
+def _por_dia(raizes: list[dict]) -> list[dict]:
+    """Execuções e erros de cada dia, pela hora de início da run raiz."""
+
+    dias: dict[str, dict] = {}
+
+    for run in raizes:
+        if not run.get("start_time"):
+            continue
+
+        inicio = datetime.fromisoformat(run["start_time"])
+        inicio = inicio if inicio.tzinfo else inicio.replace(tzinfo=UTC)
+        dia = inicio.astimezone(BRASILIA).date().isoformat()
+
+        linha = dias.setdefault(dia, {"dia": dia, "execucoes": 0, "erros": 0})
+        linha["execucoes"] += 1
+        linha["erros"] += run.get("status") == "error"
+
+    for linha in dias.values():
+        linha["taxa_erro_pct"] = round(linha["erros"] / linha["execucoes"] * 100, 2)
+
+    return sorted(dias.values(), key=lambda linha: linha["dia"])
+
+
+def _feedback(projeto_id: str, inicio: datetime) -> dict:
+    """
+    Avaliações gravadas no LangSmith para as runs do projeto.
+
+    Sem avaliação, devolve total zero: é o estado real, não uma média vazia.
+    Se a consulta falhar, o resto do relatório segue.
+    """
+
+    try:
+        itens = []
+
+        for pagina in range(MAX_PAGINAS):
+            resposta = _requisitar(
+                "GET",
+                "/feedback",
+                params={"session": projeto_id, "limit": PAGINA, "offset": pagina * PAGINA},
+            )
+            lote = resposta.json()
+            itens.extend(lote)
+
+            if len(lote) < PAGINA:
+                break
+
+    except Exception:
+        # Feedback é opcional: o resto do relatório segue sem ele.
+        logger.exception("Erro ao consultar feedback no LangSmith")
+        return {"disponivel": False, "total": 0, "por_chave": {}}
+
+    por_chave: dict[str, list[float]] = {}
+
+    for item in itens:
+        criado = item.get("created_at")
+
+        if criado:
+            momento = datetime.fromisoformat(criado)
+            momento = momento if momento.tzinfo else momento.replace(tzinfo=UTC)
+
+            if momento < inicio:
+                continue
+
+        score = item.get("score")
+        por_chave.setdefault(item.get("key") or "sem_chave", [])
+
+        if isinstance(score, int | float):
+            por_chave[item.get("key") or "sem_chave"].append(float(score))
+
+    return {
+        "disponivel": True,
+        "total": sum(len(v) for v in por_chave.values()),
+        "por_chave": {
+            chave: {
+                "avaliacoes": len(notas),
+                "media": round(statistics.mean(notas), 3) if notas else None,
+            }
+            for chave, notas in por_chave.items()
+        },
+    }
 
 
 def gerar_relatorio(
@@ -332,8 +420,10 @@ def gerar_relatorio(
             "min_s": round(duracoes[0], 2) if duracoes else 0.0,
             "max_s": round(duracoes[-1], 2) if duracoes else 0.0,
         },
+        "execucoes_por_dia": _por_dia(raizes),
         "agentes": _resumo_latencia(runs, NOS_AGENTES),
         "etapas": _resumo_latencia(runs, NOS_PIPELINE),
+        "feedback": _feedback(projeto_id, inicio),
         "custo": {
             "chamadas_llm": len(llms),
             "tokens_entrada": tokens_entrada,

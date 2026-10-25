@@ -234,7 +234,7 @@ texto_llm = _com_reserva(0, RACIOCINIO_CURTO)
 specialist_llm = _cliente(0.7)
 specialist_reserva = _reserva(0.7)
 
-# Estoque e registro e consulta, nao criacao: nao ganha com variedade nem com
+# Estoque e consulta e remocao, nao criacao: nao ganha com variedade nem com
 # raciocinio longo. Medido: com o raciocinio padrao o agente gastou 2048 tokens
 # pensando e devolveu resposta vazia, e cada mensagem passava de 10 mil tokens,
 # acima dos 8 mil por minuto do plano do Groq, o que gera 429 e 12 a 26s de

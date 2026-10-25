@@ -149,7 +149,7 @@ class TestSkillPadrao(unittest.TestCase):
         self.assertEqual(set(SKILL_PADRAO), set(AGENTES_DE_DOMINIO))
 
     FERRAMENTAS_DE_ESCRITA: ClassVar[set[str]] = {
-        "add_product", "remove_product", "create_event", "cancel_event",
+        "remove_product", "create_event", "cancel_event",
         "create_list", "update_list", "salvar_receita", "add_recipe",
         "remove_recipe", "postpone_event", "update_description",
     }
@@ -166,6 +166,14 @@ class TestSkillPadrao(unittest.TestCase):
         for agente in ("estoque", "receitas"):
             with self.subTest(agente=agente):
                 self.assertEqual(self._escrita_do_padrao(agente), set())
+
+    def test_estoque_nao_oferece_ferramentas_de_inclusao(self):
+        ferramentas = set(CATALOGO_FERRAMENTAS)
+
+        self.assertTrue(
+            {"add_product", "resolver_alimento", "get_foods", "estimar_validade"}.isdisjoint(ferramentas)
+        )
+        self.assertNotIn("estoque-registrar", SKILLS)
 
     @unittest.expectedFailure
     def test_o_padrao_de_eventos_deveria_so_ler(self):

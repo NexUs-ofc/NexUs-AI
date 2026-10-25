@@ -63,6 +63,22 @@ class TracesRepository:
             return []
 
     @staticmethod
+    def listar(desde: datetime, ate: datetime) -> list[dict]:
+        """Spans da janela, só com o que o painel usa."""
+
+        try:
+            return list(
+                TracesRepository.traces_collection.find(
+                    {"started_at": {"$gte": desde, "$lt": ate}},
+                    {"_id": 0, "trace_id": 1, "span_name": 1, "duration_ms": 1},
+                )
+            )
+
+        except PyMongoError:
+            logger.exception("Erro ao listar spans da janela")
+            return []
+
+    @staticmethod
     def latencia_por_no(horas: int = 24) -> list[dict]:
         """
         p50 e p95 de cada nó do grafo na janela.
