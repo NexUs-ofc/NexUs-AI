@@ -3,6 +3,8 @@ import re
 from copy import deepcopy
 from datetime import UTC, datetime
 
+from bson import ObjectId
+from fastapi import HTTPException
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langsmith import trace, traceable
@@ -1564,14 +1566,18 @@ def executar_chat(
 
     trace_id = generate_trace_id()
 
+    if (session_id and ObjectId.is_valid(session_id)
+            and not ConversationsRepository.pertence_conta(session_id, account_id)):
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada.")
+
     # Sem session_id valido, continua a ultima sessao aberta da pessoa em vez
     # de comecar do zero e esquecer a conversa.
-    if not (session_id and ConversationsRepository.sessao_ativa(session_id)):
+    if not (session_id and ConversationsRepository.sessao_ativa(session_id, account_id)):
         session_id = ConversationsRepository.sessao_recente(account_id)
 
     if session_id:
         historico = ConversationsRepository.get_historico(
-            session_id
+            session_id, account_id
         )
     else:
         session_id = ConversationsRepository.create_session(
@@ -1677,6 +1683,7 @@ def executar_chat(
         session_id,
         mensagem,
         resposta,
+        account_id=account_id,
         receita=recipe,
         assunto=(assunto_do_turno(historico, mensagem, envelope, recipe)
                  if resultado.get("entrada_aprovada") and not resultado.get("saida_bloqueada") else None),

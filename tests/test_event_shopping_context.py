@@ -54,8 +54,8 @@ class ShoppingContextTest(unittest.TestCase):
         collection.update_one.side_effect = update
         session = str(ObjectId())
         with patch.object(ConversationsRepository, "conversations_collection", collection):
-            ConversationsRepository.append_messages(session, self.request, "Churrasco criado.", assunto=self.history[-1]["assunto"])
-            history = ConversationsRepository.get_historico(session)
+            ConversationsRepository.append_messages(session, self.request, "Churrasco criado.", account_id=124, assunto=self.history[-1]["assunto"])
+            history = ConversationsRepository.get_historico(session, 124)
         context = flow._contexto_receita({"historico": history, "mensagem": "Monte uma lista de compras"})
         self.assertIn("Churrasco de sábado", context)
         self.assertNotIn("Ovos mexidos", context)

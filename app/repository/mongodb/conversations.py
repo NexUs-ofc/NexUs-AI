@@ -68,7 +68,21 @@ class ConversationsRepository:
         return str(doc["_id"])
 
     @staticmethod
-    def get_historico(session_id: str) -> list[dict]:
+    def pertence_conta(session_id: str, account_id: int) -> bool:
+        """Autoriza a sessao sem carregar seu historico."""
+        if not ObjectId.is_valid(session_id):
+            return False
+        try:
+            return ConversationsRepository.conversations_collection.find_one(
+                {"_id": ObjectId(session_id), "account_id": account_id},
+                {"_id": 1},
+            ) is not None
+        except PyMongoError:
+            logger.exception("Erro ao verificar propriedade da sessao")
+            return False
+
+    @staticmethod
+    def get_historico(session_id: str, account_id: int) -> list[dict]:
         if not ObjectId.is_valid(session_id):
             return []
 
@@ -76,7 +90,7 @@ class ConversationsRepository:
             logger.info(f"Buscando histórico da sessão {session_id}")
 
             doc = ConversationsRepository.conversations_collection.find_one(
-                {"_id": ObjectId(session_id)}
+                {"_id": ObjectId(session_id), "account_id": account_id}
             )
 
             if doc is None:
@@ -94,7 +108,7 @@ class ConversationsRepository:
             return []
 
     @staticmethod
-    def sessao_ativa(session_id: str) -> bool:
+    def sessao_ativa(session_id: str, account_id: int) -> bool:
         # Id que nao e ObjectId (ex.: o "string" de exemplo do Swagger) nao e
         # sessao nenhuma: o chat abre uma nova em vez de devolver 500.
         if not ObjectId.is_valid(session_id):
@@ -105,7 +119,7 @@ class ConversationsRepository:
             logger.info(f"Verificando se a sessão {session_id} está ativa")
 
             doc = ConversationsRepository.conversations_collection.find_one(
-                {"_id": ObjectId(session_id)}
+                {"_id": ObjectId(session_id), "account_id": account_id}
             )
 
             ativa = doc is not None and doc.get("ended_at") is None
@@ -119,7 +133,7 @@ class ConversationsRepository:
             return False
 
     @staticmethod
-    def end_session(session_id: str) -> bool:
+    def end_session(session_id: str, account_id: int) -> bool:
         if not ObjectId.is_valid(session_id):
             return False
 
@@ -127,7 +141,7 @@ class ConversationsRepository:
             logger.info(f"Finalizando sessão {session_id}")
 
             result = ConversationsRepository.conversations_collection.update_one(
-                {"_id": ObjectId(session_id)},
+                {"_id": ObjectId(session_id), "account_id": account_id},
                 {
                     "$set": {
                         "ended_at": datetime.now(UTC),
@@ -146,7 +160,9 @@ class ConversationsRepository:
 
     @staticmethod
     def append_messages(session_id: str, user_msg: str, assistant_msg: str,
-                        receita: dict | None = None, assunto: dict | None = None):
+                        *, account_id: int, receita: dict | None = None, assunto: dict | None = None):
+        if not ObjectId.is_valid(session_id):
+            return
         try:
             logger.info(f"Salvando mensagens da sessão {session_id}")
             assistant = {"role": "assistant", "content": assistant_msg}
@@ -156,7 +172,7 @@ class ConversationsRepository:
                 assistant["assunto"] = assunto
 
             result = ConversationsRepository.conversations_collection.update_one(
-                {"_id": ObjectId(session_id)},
+                {"_id": ObjectId(session_id), "account_id": account_id},
                 {
                     "$push": {
                         "historico": {
