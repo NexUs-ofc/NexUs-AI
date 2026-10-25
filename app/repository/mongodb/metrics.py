@@ -50,6 +50,7 @@ class MetricsRepository:
         judge_decisions: list[str] | None = None,
         input_blocked: bool = False,
         output_blocked: bool = False,
+        judge_usage: dict | None = None,
     ) -> bool:
         try:
             logger.info(f"Salvando métrica de requisição {trace_id}")
@@ -70,6 +71,7 @@ class MetricsRepository:
                 "judge_decisions": judge_decisions or [],
                 "input_blocked": input_blocked,
                 "output_blocked": output_blocked,
+                "judge_usage": judge_usage or {},
             })
 
             logger.info(f"Métrica de requisição {trace_id} salva com sucesso")

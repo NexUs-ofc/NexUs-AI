@@ -22,3 +22,6 @@ class State(TypedDict):
     decisoes_juiz: list[str]
     saida_bloqueada: bool
     lista_confirmada: bool
+    juiz_aprovado: bool
+    juiz_seguro: bool
+    judge_usage: dict

@@ -4,18 +4,11 @@ import uuid
 from app.controller.config import logging
 from app.core.llms import guardrail_llm
 from app.core.llms import texto as texto_da_resposta
+from app.core.privacy import PII
 
 logger = logging.getLogger(__name__)
 
-# A ordem importa: o primeiro padrao que casar leva o trecho. CPF vinha antes
-# e o padrao dele casa 11 digitos seguidos, entao todo telefone de celular
-# saia rotulado como CPF. Agora o telefone, que exige a forma de telefone (DDD
-# e separador), e testado primeiro; o CPF so pega o que sobrar.
-PII = [
-    ("TELEFONE", r"(?<!\w)(?:\+?55[ -]?)?\(?\d{2}\)?[ -]?9?\d{4}[ -]?\d{4}(?!\w)"),
-    ("CPF",      r"(?<!\w)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\w)"),
-    ("EMAIL",    r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
-]
+
 
 
 def _bloquear(motivo, mensagem):

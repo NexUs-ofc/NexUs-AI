@@ -6,6 +6,7 @@ from typing import Literal
 
 from bson import ObjectId
 from langchain.tools import tool
+from pydantic import StrictInt
 
 from ..auth import identidade
 from ..model.mongodb.event import Event
@@ -20,7 +21,7 @@ from ..repository.mongodb.shopping_lists import (
 from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
 from ..repository.pgsql.stock import StockRepository
-from ..validation import validar_titulo
+from ..validation import validar_evento, validar_titulo
 
 events_repository = EventsRepository()
 
@@ -119,37 +120,36 @@ def create_event(
     titulo: str,
     descricao: str,
     data: str,
-    duracao: int,
+    duracao: StrictInt,
     local: str,
-    qtd_pessoas: int
-) -> Event:
+    qtd_pessoas: StrictInt
+) -> Event | str:
     """
     Insere um evento no banco de dados, campos obrigatórios:
         - titulo: Texto intuitivo sobre o evento;
         - descricao: Texto explicitando informações do evento, deve conter tipo do evento obrigatóriamente;
         - data: Data e hora do evento, no formato "AAAA-MM-DDTHH:MM";
-        - duracao: Duração do evento em minutos;
+        - duracao: Inteiro positivo. Duração do evento em minutos;
         - local: Localização do evento;
-        - qtd_pessoas: Total de participantes do evento;
+        - qtd_pessoas: Inteiro positivo. Total de participantes do evento;
     """
     household_id = identidade.perfil()
 
 
     try:
         titulo = validar_titulo(titulo)
-    except ValueError:
-        return None
-    evento = Event(
-        household_id=household_id,
-        title=titulo,
-        description=descricao,
-        date=_para_datetime(data),
-        duration=duracao,
-        local=local,
-        qtd_people=qtd_pessoas,
-    )
+        inicio = _para_datetime(data)
+        validar_evento(inicio, duracao, qtd_pessoas, descricao, local)
+        evento = Event(
+            household_id=household_id, title=titulo, description=descricao.strip(),
+            date=inicio, duration=duracao, local=local.strip(), qtd_people=qtd_pessoas,
+        )
+    except (ValueError, TypeError) as error:
+        return f"FALHA: evento nao criado. {error}"
 
-    return events_repository.create_event(event=evento)
+    return identidade.executar_gravacao(
+        "create_event", evento.to_dict(), lambda: events_repository.create_event(event=evento),
+    )
 
 
 @tool("get_events")
@@ -208,12 +208,15 @@ def postpone_event(
 
     event = events_repository.get_event_by_id(event_id)
 
-    if event is None:
+    if event is None or event.household_id != identidade.perfil():
         return None
 
     event.date = _para_datetime(new_date)
 
-    return events_repository.update_event(event)
+    return identidade.executar_gravacao(
+        "postpone_event", {"event_id": event_id, "new_date": new_date},
+        lambda: events_repository.update_event(event),
+    )
 
 
 @tool("update_description")
@@ -231,12 +234,15 @@ def update_description(
 
     event = events_repository.get_event_by_id(event_id)
 
-    if event is None:
+    if event is None or event.household_id != identidade.perfil():
         return None
 
     event.description = new_description
 
-    return events_repository.update_event(event)
+    return identidade.executar_gravacao(
+        "update_description", {"event_id": event_id, "new_description": new_description},
+        lambda: events_repository.update_event(event),
+    )
 
 
 @tool("cancel_event")
@@ -250,7 +256,11 @@ def cancel_event(
         - event_id: Identificador do evento que será cancelado.
     """
 
-    return events_repository.delete_event(event_id)
+    def remove_owned():
+        event = events_repository.get_event_by_id(event_id)
+        return bool(event and event.household_id == identidade.perfil() and events_repository.delete_event(event_id))
+
+    return identidade.executar_gravacao("cancel_event", {"event_id": event_id}, remove_owned)
 
 
 @tool("add_recipe")
@@ -354,7 +364,11 @@ def add_recipe(
         "ingredients": scaled_ingredients,
     }
 
-    added = events_repository.add_recipe_to_event(event_id, recipe_entry)
+    added = identidade.executar_gravacao(
+        "add_recipe", {"event_id": event_id, "titulo": titulo, "porcoes": porcoes,
+                       "ingredientes": ingredientes, "recipe_id": recipe_id},
+        lambda: events_repository.add_recipe_to_event(event_id, recipe_entry),
+    )
 
     if not added:
         return None
@@ -375,7 +389,13 @@ def remove_recipe(
         - recipe_id: Identificador da receita a remover.
     """
 
-    removed = events_repository.remove_recipe_from_event(event_id, recipe_id)
+    event = events_repository.get_event_by_id(event_id)
+    if event is None or event.household_id != identidade.perfil():
+        return None
+    removed = identidade.executar_gravacao(
+        "remove_recipe", {"event_id": event_id, "recipe_id": recipe_id},
+        lambda: events_repository.remove_recipe_from_event(event_id, recipe_id),
+    )
 
     if not removed:
         return None

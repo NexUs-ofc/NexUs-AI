@@ -3,7 +3,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelFallbackMiddleware
 
 from ..tools.calc_tools import (
     calcular_percentual,
@@ -54,6 +53,7 @@ from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
 from .prompts.prompt_events import EVENTS_PREAMBULO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PREAMBULO
+from .provider_policy import CallBudgetMiddleware, TransientModelFallback
 from .skills import SKILLS
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,8 @@ def _reserva_do_modelo(reserva):
     refeita no provedor de reserva. Sem reserva configurada, nada muda.
     """
 
-    return [ModelFallbackMiddleware(reserva)] if reserva is not None else []
+    fallback = [TransientModelFallback(reserva)] if reserva is not None else []
+    return [*fallback, CallBudgetMiddleware()]
 
 
 async def _carregar_tavily():

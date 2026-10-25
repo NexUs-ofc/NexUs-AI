@@ -2,11 +2,12 @@ from datetime import datetime
 
 from bson import ObjectId
 from pymongo import MongoClient
-from pymongo.errors import PyMongoError
+from pymongo.errors import AutoReconnect, PyMongoError, WTimeoutError
 
 from ...config import MONGODB_URI
 from ...controller.config import logging
 from ...model.mongodb.event import Event
+from ...validation import validar_evento
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class EventsRepository:
 
     @staticmethod
     def create_event(event: Event) -> Event | None:
+        validar_evento(event.date, event.duration, event.qtd_people, event.description, event.local)
         try:
             logger.info("Inserindo evento no MongoDB")
 
@@ -29,6 +31,8 @@ class EventsRepository:
 
             return event
 
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception("Erro ao inserir evento no MongoDB")
             return None
@@ -128,6 +132,8 @@ class EventsRepository:
 
             return event
 
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception(f"Erro ao atualizar evento {event.id}")
             return None
@@ -153,6 +159,8 @@ class EventsRepository:
 
             return True
 
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception(f"Erro ao adicionar receita ao evento {event_id}")
             return False
@@ -181,6 +189,8 @@ class EventsRepository:
 
             return True
 
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception(f"Erro ao remover receita do evento {event_id}")
             return False
@@ -205,6 +215,8 @@ class EventsRepository:
 
             return True
 
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception(f"Erro ao remover evento {event_id}")
             return False

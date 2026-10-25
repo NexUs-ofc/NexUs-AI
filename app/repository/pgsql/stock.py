@@ -1,6 +1,6 @@
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Row
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import InterfaceError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ...controller.config import logging
@@ -48,6 +48,9 @@ class StockRepository:
 
             return True
 
+        except (OperationalError, InterfaceError):
+            self.session.rollback()
+            raise
         except SQLAlchemyError:
             self.session.rollback()
 

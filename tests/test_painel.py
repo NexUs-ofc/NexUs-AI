@@ -222,32 +222,29 @@ def _resposta(texto):
 class TestJuizRegistraDecisao(unittest.TestCase):
     """O nó do juiz grava a decisão de cada leitura para o painel contar."""
 
-    def _rodar(self, primeira, segunda=None):
+    def _rodar(self, primeira):
         juiz_llm = MagicMock()
         juiz_llm.invoke.return_value = _resposta(primeira)
-        revisao = MagicMock()
-        revisao.invoke.return_value = _resposta(segunda or primeira)
         estado = {
             "trace_id": "t", "rota": "estoque", "mensagem": "tenho arroz?", "historico": [],
-            "evidencias": [], "resposta_agente": "{}", "devolucoes": 0,
+            "evidencias": [], "resposta_agente": '{"resposta":"Consulta de estoque."}', "devolucoes": 0,
         }
 
-        with patch.object(flow, "juiz_llm", juiz_llm), \
-             patch.object(flow, "revisao_segunda_llm", revisao), \
+        with patch.object(flow, "JUDGE_PROVIDER", "llm"), \
+             patch.object(flow, "juiz_llm", juiz_llm), \
              patch.object(flow, "span", lambda *a, **k: nullcontext()):
             return flow.juiz.__wrapped__(estado)
 
     def test_aprovado_de_primeira(self):
         self.assertEqual(self._rodar("VEREDITO: APROVADO")["decisoes_juiz"], ["aprovado"])
 
-    def test_segunda_opiniao_que_absolve_e_revertido(self):
-        estado = self._rodar("VEREDITO: DEVOLVER\nMOTIVO: numero errado", "VEREDITO: APROVADO")
-
-        self.assertEqual(estado["decisoes_juiz"], ["revertido"])
+    def test_formato_invalido_e_nao_confirmado(self):
+        estado = self._rodar("resposta fora do contrato")
+        self.assertEqual(estado["decisoes_juiz"], ["nao_confirmado"])
 
     def test_devolucao_confirmada(self):
         devolve = "VEREDITO: DEVOLVER\nMOTIVO: numero errado"
-        estado = self._rodar(devolve, devolve)
+        estado = self._rodar(devolve)
 
         self.assertEqual(estado["decisoes_juiz"], ["devolvido"])
 

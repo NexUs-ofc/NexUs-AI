@@ -2,7 +2,7 @@ import re
 
 from bson import ObjectId
 from pymongo import MongoClient
-from pymongo.errors import PyMongoError
+from pymongo.errors import AutoReconnect, PyMongoError, WTimeoutError
 
 from ...config import MONGODB_URI
 from ...controller.config import logging
@@ -26,6 +26,8 @@ class ShoppingListsRepository:
             result = ShoppingListsRepository.shopping_lists_collection.insert_one(shopping_list.to_dict())
             shopping_list.id = result.inserted_id
             return shopping_list
+        except (AutoReconnect, WTimeoutError):
+            raise
         except PyMongoError:
             logger.exception("Erro ao criar lista de compras")
             return None
@@ -70,6 +72,8 @@ class ShoppingListsRepository:
             if not result.matched_count:
                 return None
             return ShoppingListsRepository.get_list(list_id, household_id)
+        except (AutoReconnect, WTimeoutError):
+            raise
         except (PyMongoError, ValueError, TypeError, KeyError) as error:
             logger.exception("Erro ao atualizar lista de compras")
             raise ShoppingListUnavailable("Não foi possível atualizar a lista.") from error
