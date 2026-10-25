@@ -155,7 +155,8 @@ ENTRADA_PADRAO = """
     PERGUNTA_ORIGINAL=[o que a pessoa pediu]
     CHAMADO_POR=[agente que acionou, quando não foi uma pessoa]
 
-    PREFERENCIAS=[gostos e restrições, já consultados, quando a rota os traz]
+    PREFERENCIAS=[gostos, já consultados, quando a rota os traz]
+    RESTRICOES=[restrições alimentares do perfil, quando a rota as traz]
 
     Os identificadores já vêm na entrada. NUNCA os peça à pessoa: use o valor
     recebido como argumento das ferramentas que o exigirem.

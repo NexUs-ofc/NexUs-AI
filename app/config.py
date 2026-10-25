@@ -11,6 +11,13 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 PGSQL_URL = os.getenv("PGSQL_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Provedor principal dos modelos do grafo: "gemini" (padrao) ou "groq".
+# LLM_MODEL vazio usa o modelo padrao do provedor, definido em app/core/llms.py.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+LLM_MODEL = os.getenv("LLM_MODEL", "").strip()
+# Reserva: quando o principal falha (timeout, 504, cota), a mesma chamada e
+# refeita neste provedor. Vazio desliga a reserva.
+LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()
 QDRANT_DATABASE_URL = os.getenv("QDRANT_DATABASE_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 DOC_FILE_PATH = os.getenv("DOC_FILE_PATH")

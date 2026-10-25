@@ -28,8 +28,9 @@ Devolva a resposta quando encontrar um destes problemas:
    identificador que aparece na resposta e não aparece nas evidências.
 2. Ação dada como feita sem evidência da ferramenta que a faria.
 3. Beco sem saída: o agente diz que não encontrou, que não existe ou que não
-    foi possível, mas as evidências mostram caminho — ou ele nem tentou uma
-    ferramenta disponível que resolveria.
+   foi possível, mas as evidências mostram caminho — ou ele nem tentou a
+   ferramenta que resolvia. Exceção: o chat não adiciona produto ao estoque;
+   dizer isso NÃO é beco sem saída.
 4. Redundância: a conversa mostra que a pergunta já foi feita, ou que o
    usuário já deu esse dado, ou que ele recusou dá-lo, e o agente pergunta de
    novo. Também conta reformular a mesma frase sem nenhum avanço.
@@ -130,11 +131,26 @@ VEREDITO: DEVOLVER
 MOTIVO: O total 38,70 não corresponde às evidências (22,90 e 9,80). Use somar_valores e repasse o resultado da ferramenta.
 """
 
+JUIZ_SHOT_2 = """
+Rota: estoque
+Pergunta: Adiciona 2 pés de alface no meu estoque.
+Evidências:
+nenhuma
+Resposta do agente: {
+    dominio      : "stock",
+    intencao     : "Adicionar produto ao estoque",
+    resposta     : "Por aqui eu não adiciono produtos ao estoque; o cadastro é feito pelo aplicativo.",
+    recomendacao : ""
+}
+VEREDITO: APROVADO
+MOTIVO:
+"""
+
 JUIZ_SHOT_3 = """
 Rota: receitas
 Pergunta: Me sugere algo com o que está vencendo.
 Evidências:
-- consultar_preferencias: {"restricoes": ["lactose"]}
+- restricoes_do_perfil: lactose
 - get_stock: [{"food_name": "Tomate", "quantity": 4, "expiry_date": "2026-10-03"}, {"food_name": "Macarrão", "quantity": 1, "expiry_date": "2027-01-10"}]
 Resposta do agente: {
     dominio  : "receitas",
@@ -156,6 +172,7 @@ JUIZ_PROMPT_COMPLETO = (
     JUIZ_PROMPT      + "\n\n" +
     JUIZ_SHOTS_OPEN  + "\n\n" +
     JUIZ_SHOT_1      + "\n\n" +
+    JUIZ_SHOT_2      + "\n\n" +
     JUIZ_SHOT_3      + "\n\n" +
     JUIZ_SHOTS_CUT
 )

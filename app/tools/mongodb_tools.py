@@ -1,16 +1,20 @@
 import json
 import re
+import unicodedata
 from datetime import datetime
 
+from bson import ObjectId
 from langchain.tools import tool
 
 from ..auth import identidade
 from ..model.mongodb.event import Event
+from ..model.mongodb.recipe import Recipe
 from ..model.mongodb.shopping_list import ShoppingList
 from ..repository.mongodb.events import EventsRepository
 from ..repository.mongodb.recipes import RecipesRepository
 from ..repository.mongodb.shopping_lists import ShoppingListsRepository
 from ..repository.pgsql.config import SessionLocal
+from ..repository.pgsql.food import FoodRepository
 from ..repository.pgsql.stock import StockRepository
 
 events_repository = EventsRepository()
@@ -57,6 +61,33 @@ def _para_datetime(valor: str | None) -> datetime | None:
     raise ValueError(
         f"Data '{texto}' nao reconhecida. Use o formato AAAA-MM-DD ou "
         f"AAAA-MM-DDTHH:MM."
+    )
+
+
+def _normalizar(nome: str) -> str:
+    """Minusculo, sem acento e sem espaco nas pontas, para comparar nomes."""
+
+    sem_acento = unicodedata.normalize("NFKD", nome or "")
+    sem_acento = "".join(c for c in sem_acento if not unicodedata.combining(c))
+
+    return " ".join(sem_acento.lower().split())
+
+
+def _tem_no_estoque(nome: str, estoque: dict[str, float]) -> bool:
+    """
+    Ingrediente da receita casa com item do estoque pelo nome: igual, ou um
+    comeca pelo outro seguido de espaco ("leite" e "leite integral").
+    """
+
+    alvo = _normalizar(nome)
+
+    if not alvo:
+        return False
+
+    return any(
+        quantidade > 0
+        and (item == alvo or item.startswith(alvo + " ") or alvo.startswith(item + " "))
+        for item, quantidade in estoque.items()
     )
 
 
@@ -216,16 +247,26 @@ def cancel_event(
 @tool("add_recipe")
 def add_recipe(
     event_id: str,
-    recipe_id: str,
+    titulo: str = "",
+    porcoes: int = 0,
+    ingredientes: list[dict] | None = None,
+    recipe_id: str = "",
 ) -> Event | None:
     """
-    Escala os ingredientes de uma receita pela quantidade de pessoas do
-    evento (regra de três a partir do serving_size da receita), confere o
-    estoque do usuário e adiciona a receita já escalada ao evento.
+    Adiciona uma receita ao evento: escala os ingredientes para a quantidade
+    de pessoas do evento, confere o estoque pelo nome e grava no evento.
+
+    Use com a receita que recomend_recipe devolveu: passe titulo, porcoes e
+    ingredientes. Ela ganha um id gerado aqui e NÃO entra nas receitas salvas
+    do usuário. Para usar uma receita que ele já salvou, passe só recipe_id.
 
     Parâmetros:
         - event_id: Identificador do evento.
-        - recipe_id: Identificador da receita já confirmada pelo usuário.
+        - titulo: Título da receita.
+        - porcoes: Para quantas pessoas estão as quantidades informadas.
+        - ingredientes: [{"nome": str, "quantidade": str}], ex.:
+          [{"nome": "Picanha", "quantidade": "2 kg"}].
+        - recipe_id: Opcional. Id de uma receita salva, no lugar dos campos acima.
     """
 
     event = events_repository.get_event_by_id(event_id)
@@ -233,33 +274,69 @@ def add_recipe(
     if event is None:
         return None
 
-    recipe = RecipesRepository.get_recipe_by_id(recipe_id)
+    if recipe_id:
+        recipe = RecipesRepository.get_recipe_by_id(recipe_id)
 
-    if recipe is None:
-        return None
+        if recipe is None:
+            return None
+    else:
+        if not titulo or not ingredientes:
+            return None
 
-    ratio = event.qtd_people / recipe.serving_size
+        # Receita de evento nao vai para a collection de receitas: so as que
+        # o usuario pede para salvar ficam la. O id e gerado para o evento
+        # conseguir remover a receita depois (remove_recipe).
+        recipe = Recipe(
+            title=titulo,
+            serving_size=porcoes or event.qtd_people,
+            ingredients=[
+                {
+                    "name": str(
+                        item.get("nome") or item.get("ingrediente") or item.get("name") or ""
+                    ).strip(),
+                    "required_quantity": str(
+                        item.get("quantidade")
+                        or item.get("quantidade_total")
+                        or item.get("required_quantity")
+                        or ""
+                    ),
+                }
+                for item in ingredientes
+                if isinstance(item, dict)
+            ],
+            instructions="",
+            account_id=identidade.conta(),
+            _id=ObjectId(),
+        )
+
+    ratio = event.qtd_people / recipe.serving_size if recipe.serving_size else 1
 
     with SessionLocal() as session:
         stock_repository = StockRepository(session)
         stock_items = stock_repository.get_stock(event.household_id)
+        nomes = {food.id: food.name for food in FoodRepository(session).get_foods()}
 
-    stock_by_food = {item.food_id: item.quantity for item in stock_items}
+    # Estoque por nome do alimento: a receita guarda o nome, nao o food_id.
+    estoque: dict[str, float] = {}
+
+    for item in stock_items:
+        nome = _normalizar(nomes.get(item.food_id, ""))
+
+        if nome:
+            estoque[nome] = estoque.get(nome, 0) + (item.quantity or 0)
 
     scaled_ingredients = []
 
     for ingredient in recipe.ingredients:
-        food_id = ingredient["food_id"]
-        available = stock_by_food.get(food_id)
+        nome = str(ingredient.get("name") or ingredient.get("ingredient") or "").strip()
 
         scaled_ingredients.append({
-            "food_id": food_id,
-            "ingredient": f"food_{food_id}",
+            "ingredient": nome,
             "total_quantity": _scale_quantity(
-                ingredient["required_quantity"],
+                str(ingredient.get("required_quantity") or ""),
                 ratio,
             ),
-            "has_enough": available is not None and available > 0,
+            "has_enough": _tem_no_estoque(nome, estoque),
         })
 
     recipe_entry = {
@@ -309,7 +386,7 @@ def create_list(
     Parâmetros:
         - event_id: Identificador do evento relacionado (pode ser vazio).
         - title: Título da lista de compras.
-        - items: Lista de itens no formato [{"food_id": int, "ingredient": str, "quantity": str, "purchased": bool}].
+        - items: Lista de itens no formato [{"ingredient": str, "quantity": str, "purchased": bool}].
     """
     household_id = identidade.perfil()
 
@@ -348,7 +425,7 @@ def update_list(
 
     Parâmetros:
         - list_id: Identificador da lista de compras.
-        - items: Novo conjunto de itens no formato [{"food_id": int, "ingredient": str, "quantity": str, "purchased": bool}].
+        - items: Novo conjunto de itens no formato [{"ingredient": str, "quantity": str, "purchased": bool}].
     """
 
     return ShoppingListsRepository.update_list(list_id, items)

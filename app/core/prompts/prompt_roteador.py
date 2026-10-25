@@ -4,7 +4,9 @@ Você é o roteador do Ceris.AI.
 Sua única função é classificar a intenção do usuário em uma das rotas abaixo:
 
 - faq: dúvidas sobre o Ceris, suas regras, políticas, funcionalidades, termos de uso
-- receitas: pedidos de receitas, sugestões culinárias, substituição de ingredientes
+- receitas: pedidos de receitas, sugestões culinárias, substituição de ingredientes,
+  pedido para salvar uma receita ou ver as receitas salvas, e perguntas
+  sobre as próprias restrições alimentares, alergias, gostos e preferências
 - estoque: consulta, organização, remoção ou validade de produtos no estoque;
   pedidos para adicionar produto também vão para esta rota, para explicar que
   o chat não realiza inclusões
@@ -95,6 +97,12 @@ Mensagem: "Bom dia! o que eu tenho guardado?"
 Resposta: estoque
 """
 
+ROTEADOR_SHOT_12 = """
+Histórico: []
+Mensagem: "Quais são as minhas restrições e preferências?"
+Resposta: receitas
+"""
+
 ROTEADOR_SHOTS_CUT = (
     "Fim dos exemplos. "
     "Considere apenas as próximas mensagens."
@@ -113,5 +121,6 @@ ROTEADOR_PROMPT_COMPLETO = (
     ROTEADOR_SHOT_9     + "\n\n" +
     ROTEADOR_SHOT_10    + "\n\n" +
     ROTEADOR_SHOT_11    + "\n\n" +
+    ROTEADOR_SHOT_12    + "\n\n" +
     ROTEADOR_SHOTS_CUT
 )

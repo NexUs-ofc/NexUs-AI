@@ -1,11 +1,11 @@
 ---
 name: Receita do estoque
-description: Sugere uma receita que cabe no estoque de hoje, priorizando o que vence primeiro. Use quando a pessoa pede sugestão a partir do que ela já tem em casa, ou pede para aproveitar o que está vencendo.
+description: Gera uma receita nova, usando o estoque de hoje e priorizando o que vence primeiro. Use quando a pessoa pede uma receita nova, de um prato específico ("receita de pudim") ou a partir do que ela tem em casa.
 metadata:
   dominio: receitas
   rota: receitas
   intencao: Sugerir receita
-  ferramentas: [consultar_preferencias, get_stock, buscar_receitas_usuario, escalar_quantidades]
+  ferramentas: [consultar_preferencias, get_stock, escalar_quantidades]
   version: 1.0.0
 ---
 
@@ -13,8 +13,9 @@ metadata:
 
 ## Quando assumir esta skill
 
-A pessoa pede sugestão de receita a partir do que ela já tem em casa, ou pede
-para aproveitar o que está vencendo.
+A pessoa pede uma receita nova: um prato específico ("receita de pudim"), uma
+sugestão a partir do que ela já tem em casa, ou algo para aproveitar o que
+está vencendo.
 
 Não assuma esta skill se houver restrição alimentar ou pedido de substituição
 (use `receita-com-restricao`), nem se a entrada trouxer `CHAMADO_POR=events`
@@ -22,17 +23,18 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
 
 ## Fluxo
 
-1. As preferências já vêm na linha PREFERENCIAS da entrada. Comece direto por
+1. As restrições do perfil já vêm na linha RESTRICOES e as preferências na
+   linha PREFERENCIAS da entrada. Comece direto por
    `get_stock` — não gaste uma rodada pedindo o que já está na sua frente.
 2. `get_stock` já traz a validade de cada item, e você tem a data de hoje no
    contexto. O que está vencido ou vencendo sai dessa lista por comparação —
    não existe ferramenta a chamar para isso.
-3. Escolha uma receita cujos ingredientes principais já estejam no estoque,
-   com preferência pelos de validade mais curta.
-4. `buscar_receitas_usuario` SOMENTE se a pessoa pedir algo diferente do que
-   já foi sugerido antes.
-5. `escalar_quantidades` para ajustar as quantidades. Não multiplique de
-   cabeça.
+3. Escolha o prato. Se a pessoa pediu um prato ou um tipo ("uma carne
+   gostosa"), é ele, guiado por PREFERENCIAS. Se o pedido é aberto ("o que
+   faço hoje?"), prefira um prato com o que ela já tem, priorizando validade
+   curta. Coerência vem antes de aproveitar estoque.
+4. `escalar_quantidades` SOMENTE se a pessoa pediu um número de porções
+   diferente do da receita.
 
 ## Regras
 
@@ -46,12 +48,17 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
   descarte.
 - Se o não vencido não dá prato, diga o que dá, avise do vencido e ofereça a
   lista de compras.
-- A receita nasce do estoque, não do seu repertório. Se faltar ingrediente
-  principal, diga o que falta em vez de fingir que tem.
+- O estoque é base, não prisão. Se a pessoa pediu um prato, faça esse
+  prato: o que ela não tem entra em `ingredientes_faltantes` e, em
+  `recomendacao`, diga o que comprar ou o que do estoque substitui. Nunca
+  finja que tem o que falta.
+- Item do estoque só entra se combina com o prato. Não force ingrediente na
+  receita só porque ele está em casa.
 - Ingrediente que a pessoa não tem entra em `ingredientes_faltantes`, nunca
   some da lista.
-- Se o estoque estiver vazio, diga isso e ofereça montar a lista de compras.
-  Não invente uma receita genérica.
+- Se o estoque estiver vazio ou não der prato, sugira uma receita simples
+  guiada por PREFERENCIAS, com tudo em `ingredientes_faltantes`, e ofereça
+  montar a lista de compras.
 
 ## Saída
 
@@ -88,8 +95,8 @@ receita: {
 Entrada:
 ROUTE=receitas
 PERGUNTA_ORIGINAL=Me sugere algo com o que está vencendo.
+RESTRICOES=nenhuma restrição registrada
 
-(consultar_preferencias -> {"restricoes": []})
 (get_stock -> [{"food_name": "Tomate", "quantity": 4, "expiry_date": "2026-10-10"},
                {"food_name": "Macarrão", "quantity": 1, "expiry_date": "2027-01-10"}])
 

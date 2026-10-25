@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
@@ -14,29 +12,24 @@ logger = logging.getLogger(__name__)
 class RecipesRepository:
     client = MongoClient(MONGODB_URI)
     db = client.get_database("db_ceris")
+    # Receita salva e receita que existe aqui com o account_id do usuario.
+    # So entra quando o usuario pede para salvar; sugestao nao e gravada.
     recipes_collection = db.get_collection("recipes")
-    recipe_accounts_collection = db.get_collection("recipe_accounts")
 
     @staticmethod
-    def create_recipe(recipe: Recipe, account_id: int) -> Recipe | None:
+    def create_recipe(recipe: Recipe) -> Recipe | None:
         try:
-            logger.info("Inserindo receita no MongoDB")
+            logger.info(f"Salvando receita da conta {recipe.account_id}")
 
             result = RecipesRepository.recipes_collection.insert_one(recipe.to_dict())
             recipe.id = result.inserted_id
 
-            RecipesRepository.recipe_accounts_collection.insert_one({
-                "id_recipe": recipe.id,
-                "id_account": account_id,
-                "created_at": datetime.now(UTC),
-            })
-
-            logger.info("Receita inserida com sucesso")
+            logger.info("Receita salva com sucesso")
 
             return recipe
 
         except PyMongoError:
-            logger.exception("Erro ao inserir receita no MongoDB")
+            logger.exception("Erro ao salvar receita no MongoDB")
             return None
 
     @staticmethod
@@ -66,18 +59,9 @@ class RecipesRepository:
         try:
             logger.info("Buscando receitas do usuário")
 
-            vinculos = RecipesRepository.recipe_accounts_collection.find(
-                {"id_account": account_id}
-            )
-            recipe_ids = [v["id_recipe"] for v in vinculos]
-
-            if not recipe_ids:
-                logger.info("Nenhuma receita vinculada ao usuário")
-                return []
-
             docs = RecipesRepository.recipes_collection.find(
-                {"_id": {"$in": recipe_ids}}
-            ).limit(limite)
+                {"account_id": account_id}
+            ).sort("_id", -1).limit(limite)
 
             receitas = [Recipe.from_dict(doc) for doc in docs]
 

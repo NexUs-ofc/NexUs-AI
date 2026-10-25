@@ -38,6 +38,9 @@ A cada resposta dela:
 
 ## Regras
 
+- `remove_product` apaga o item inteiro: use só quando acabou ou foi
+  descartado tudo. Consumo parcial não se registra pela conversa.
+
 - Uma pergunta por vez. Lista de dez perguntas de uma vez faz a pessoa
   desistir.
 - Siga uma ordem que faça sentido: primeiro o que vence, depois o que faltava,
@@ -94,6 +97,6 @@ Resposta:
     "intencao": "Revisar estoque",
     "resposta": "Baixei os 2 iogurtes do seu estoque.",
     "recomendacao": "",
-    "acompanhamento": "O arroz estava em falta. Você comprou?"
+    "acompanhamento": "Mais alguma coisa que você consumiu ou jogou fora?"
 }
 ```
