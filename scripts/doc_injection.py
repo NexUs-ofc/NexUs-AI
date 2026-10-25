@@ -1,48 +1,34 @@
-# Arquivo de embedding, rodar apenas para subir a documentação técnica para o Qdrant Cloud. Não é necessário rodar em produção.
+"""Substitui a documentação no Qdrant após atualizar o PDF local."""
 
-
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-try:
-    from dotenv import load_dotenv
+from scripts.knowledge_load import ROOT, ambiente, sincronizar
 
-    load_dotenv()
-except ImportError:
-    pass
 
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+def main():
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from app.config import (
-    DOC_FILE_PATH,
-    GEMINI_API_KEY,
-    QDRANT_API_KEY,
-    QDRANT_DATABASE_URL,
-)
-from app.repository.qdrant.doc_repository import DOCS_COLLECTION
+    cliente, embeddings = ambiente()
+    try:
+        caminho = Path(os.getenv("DOC_FILE_PATH") or ROOT / "scripts/bases/NexUs_doc.pdf")
+        if not caminho.is_absolute():
+            caminho = ROOT / caminho
+        chunks = RecursiveCharacterTextSplitter(
+            chunk_size=400, chunk_overlap=50,
+        ).split_documents(PyPDFLoader(str(caminho)).load())
+        documentos = [
+            {"page_content": d.page_content, "metadata": d.metadata}
+            for d in chunks
+        ]
+        sincronizar(documentos, "nexus_docs", cliente, embeddings)
+    finally:
+        cliente.close()
 
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="gemini-embedding-2-preview",
-    google_api_key=GEMINI_API_KEY,
-)
 
-splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
-
-chunks = splitter.split_documents(PyPDFLoader(DOC_FILE_PATH).load())
-
-print(f"Subindo {len(chunks)} chunks da documentação para o Qdrant Cloud...")
-
-QdrantVectorStore.from_documents(
-    chunks,
-    embeddings,
-    url=QDRANT_DATABASE_URL,
-    api_key=QDRANT_API_KEY,
-    collection_name=DOCS_COLLECTION,
-)
-
-print("Documentação técnica indexada com sucesso na nuvem!")
+if __name__ == "__main__":
+    main()

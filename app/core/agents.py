@@ -31,18 +31,14 @@ from ..tools.mongodb_tools import (
     update_list,
 )
 from ..tools.pg_tools import (
-    add_product,
     get_brand_info,
     get_category_info,
     get_expired_products,
-    get_foods,
     get_missing_products,
     get_stock,
     remove_product,
-    resolver_alimento,
 )
 from ..tools.preference_tools import consultar_preferencias
-from ..tools.validade_tools import estimar_validade
 from .llms import estoque_llm, fast_llm, specialist_llm
 from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
 from .prompts.prompt_events import EVENTS_PREAMBULO
@@ -135,16 +131,12 @@ CATALOGO_FERRAMENTAS = {
     f.name: f
     for f in (
         resolver_data,
-        estimar_validade,
-        resolver_alimento,
-        add_product,
         remove_product,
         get_stock,
         get_missing_products,
         get_expired_products,
         get_category_info,
         get_brand_info,
-        get_foods,
         somar_valores,
         escalar_quantidades,
         calcular_percentual,

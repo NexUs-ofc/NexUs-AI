@@ -5,7 +5,7 @@ metadata:
   dominio: stock
   rota: estoque
   intencao: Listar estoque para usuário
-  ferramentas: [get_stock, get_foods, somar_valores, calcular_percentual]
+  ferramentas: [get_stock, somar_valores, calcular_percentual]
   version: 1.0.0
 ---
 
@@ -31,8 +31,8 @@ comprar, use `estoque-compras`.
 
 - **Responda, não pergunte.** Esta é uma consulta: a informação está toda no
   `get_stock`. Pergunta aqui é quase sempre desnecessária.
-- Estoque vazio é resposta: diga que está vazio e ofereça registrar. Não
-  invente item nenhum.
+- Estoque vazio é resposta: diga que está vazio. Não invente itens nem prometa
+  cadastrar pelo chat.
 - Item que a pessoa perguntou e não existe: diga que não tem. Não ofereça um
   parecido como se fosse o pedido.
 - Em lista longa, agrupe e resuma em vez de recitar item por item.
@@ -73,6 +73,6 @@ Resposta:
     "intencao": "Listar estoque para usuário",
     "resposta": "Seu estoque está vazio.",
     "recomendacao": "",
-    "acompanhamento": "Quer registrar o que você tem em casa?"
+    "acompanhamento": "Para incluir produtos, use a tela de estoque, o leitor de código de barras ou a foto da nota fiscal no aplicativo."
 }
 ```

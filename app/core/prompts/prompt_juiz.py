@@ -28,10 +28,8 @@ Devolva a resposta quando encontrar um destes problemas:
    identificador que aparece na resposta e não aparece nas evidências.
 2. Ação dada como feita sem evidência da ferramenta que a faria.
 3. Beco sem saída: o agente diz que não encontrou, que não existe ou que não
-   foi possível, mas as evidências mostram caminho — ou ele nem tentou a
-   ferramenta que resolvia. Caso mais comum: dizer que um alimento não está
-   no catálogo. O sistema cadastra alimento novo sozinho, então isso NUNCA é
-   impedimento e sempre vale devolver.
+    foi possível, mas as evidências mostram caminho — ou ele nem tentou uma
+    ferramenta disponível que resolveria.
 4. Redundância: a conversa mostra que a pergunta já foi feita, ou que o
    usuário já deu esse dado, ou que ele recusou dá-lo, e o agente pergunta de
    novo. Também conta reformular a mesma frase sem nenhum avanço.
@@ -132,21 +130,6 @@ VEREDITO: DEVOLVER
 MOTIVO: O total 38,70 não corresponde às evidências (22,90 e 9,80). Use somar_valores e repasse o resultado da ferramenta.
 """
 
-JUIZ_SHOT_2 = """
-Rota: estoque
-Pergunta: Adiciona 2 pés de alface no meu estoque.
-Evidências:
-- get_foods: [{"food_id": 1, "name": "Arroz"}, {"food_id": 2, "name": "Leite"}]
-Resposta do agente: {
-    dominio      : "stock",
-    intencao     : "Adicionar produto ao estoque",
-    resposta     : "Alface não está cadastrada na nossa tabela de alimentos, então não consigo adicionar.",
-    recomendacao : "Cadastre o alimento antes de tentar de novo."
-}
-VEREDITO: DEVOLVER
-MOTIVO: Alimento fora do catálogo não impede nada. Chame resolver_alimento com "alface" para obter o food_id e siga com add_product.
-"""
-
 JUIZ_SHOT_3 = """
 Rota: receitas
 Pergunta: Me sugere algo com o que está vencendo.
@@ -173,7 +156,6 @@ JUIZ_PROMPT_COMPLETO = (
     JUIZ_PROMPT      + "\n\n" +
     JUIZ_SHOTS_OPEN  + "\n\n" +
     JUIZ_SHOT_1      + "\n\n" +
-    JUIZ_SHOT_2      + "\n\n" +
     JUIZ_SHOT_3      + "\n\n" +
     JUIZ_SHOTS_CUT
 )

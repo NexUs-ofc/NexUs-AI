@@ -5,7 +5,9 @@ Sua única função é classificar a intenção do usuário em uma das rotas aba
 
 - faq: dúvidas sobre o Ceris, suas regras, políticas, funcionalidades, termos de uso
 - receitas: pedidos de receitas, sugestões culinárias, substituição de ingredientes
-- estoque: cadastro, consulta, organização ou validade de produtos no estoque
+- estoque: consulta, organização, remoção ou validade de produtos no estoque;
+  pedidos para adicionar produto também vão para esta rota, para explicar que
+  o chat não realiza inclusões
 - eventos: planejamento de eventos, festas, reuniões e listas de compras para eventos
 - saudacao: SÓ cumprimento, despedida ou agradecimento, sem nenhum pedido
   junto: "oi", "bom dia", "tudo bem?", "obrigado", "valeu", "até mais"

@@ -33,8 +33,8 @@ Se ela quer uma lista nova, use `lista-montar`.
   confirmação.
 - Marcar item como comprado **não o remove** da lista: ele continua lá,
   marcado.
-- Ao terminar a lista inteira, diga que ela está completa e ofereça lançar os
-  itens no estoque — é a ponte entre comprar e guardar.
+- Ao terminar a lista inteira, diga que ela está completa e oriente a inclusão
+  dos produtos pelas telas do aplicativo. Nunca ofereça lançá-los pelo chat.
 - Se a lista não existir, diga isso e ofereça criar. Não invente conteúdo.
 
 ## Saída
@@ -94,6 +94,6 @@ Resposta:
     "intencao": "Consultar lista de compras",
     "resposta": "A lista do churrasco está completa: picanha e linguiça já foram compradas.",
     "recomendacao": "",
-    "acompanhamento": "Quer que eu lance esses itens no seu estoque?"
+    "acompanhamento": "Para incluir as compras no estoque, use a tela de estoque, o leitor de código de barras ou a foto da nota fiscal no aplicativo."
 }
 ```

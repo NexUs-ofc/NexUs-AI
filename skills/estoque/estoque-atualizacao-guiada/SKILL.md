@@ -1,23 +1,23 @@
 ---
-name: Atualização guiada do estoque
-description: Conduz a pessoa passo a passo para refazer o estoque inteiro, perguntando sobre o que mudou até terminar. É a funcionalidade principal do estoque.
+name: Revisão guiada do estoque
+description: Conduz a pessoa passo a passo para revisar o estoque e registrar remoções. Use quando ela quer conferir o que mudou no estoque.
 metadata:
   dominio: stock
   rota: estoque
-  intencao: Atualizar estoque completo
-  ferramentas: [get_stock, get_expired_products, get_missing_products, resolver_alimento, resolver_data, add_product, remove_product]
+  intencao: Revisar estoque
+  ferramentas: [get_stock, get_expired_products, get_missing_products, remove_product]
   version: 1.0.0
 ---
 
-# Atualização guiada do estoque
+# Revisão guiada do estoque
 
 ## Quando assumir esta skill
 
-A pessoa quer refazer o estoque inteiro: "quero atualizar meu estoque", "vamos
-revisar o que eu tenho", "cheguei do mercado".
+A pessoa quer revisar o estoque: "quero atualizar meu estoque", "vamos
+revisar o que eu tenho".
 
-Para um item só, use `estoque-registrar`. Esta skill é o fluxo longo, de vários
-turnos.
+O chat não adiciona produtos. Se ela disser que comprou algo, deixe claro que
+essa inclusão não pode ser feita por aqui e continue apenas com a revisão.
 
 ## Fluxo
 
@@ -31,8 +31,7 @@ Na primeira mensagem, levante o panorama antes de perguntar qualquer coisa:
 
 A cada resposta dela:
 
-5. Registre o que mudou com `resolver_alimento` + `add_product`, ou com
-   `remove_product`.
+5. Registre as remoções confirmadas com `remove_product`.
 6. **Pergunte automaticamente se há mais alguma coisa**, e siga para o próximo
    grupo.
 7. Repita até ela dizer que acabou.
@@ -43,18 +42,19 @@ A cada resposta dela:
   desistir.
 - Siga uma ordem que faça sentido: primeiro o que vence, depois o que faltava,
   depois o resto.
-- **Registre conforme ela fala**, não acumule tudo para o fim. Se a conversa
-  cair, o que já foi dito está salvo.
+- **Registre as remoções conforme ela confirma**, não acumule tudo para o fim.
+  Se a conversa cair, o que já foi removido continua salvo.
 - Nunca pergunte unidade de medida, marca ou categoria. Nome, quantidade e
   validade bastam.
-- Se ela não souber a validade de um item, registre sem ela em vez de travar.
+- Se ela pedir para incluir um produto, não peça detalhes: explique que o chat
+  não realiza inclusões.
 - Se ela quiser parar no meio, pare. Diga o que foi registrado até ali e não
   insista.
 - Nunca repita uma pergunta que ela já respondeu nesta conversa.
 
 ## Saída
 
-- `intencao` : `"Atualizar estoque completo"`
+- `intencao` : `"Revisar estoque"`
 
 Nesta skill, `acompanhamento` quase sempre existe: é a próxima pergunta do
 roteiro. `recomendacao` e `acompanhamento` não podem dizer a mesma coisa.
@@ -73,7 +73,7 @@ PERGUNTA_ORIGINAL=Quero atualizar meu estoque.
 Resposta:
 {
     "dominio": "stock",
-    "intencao": "Atualizar estoque completo",
+    "intencao": "Revisar estoque",
     "resposta": "Levantei seu estoque, o que está vencendo e o que está em falta.",
     "recomendacao": "Vamos começar pelo que vence antes.",
     "acompanhamento": "Você ainda tem os 2 iogurtes que vencem amanhã, ou já consumiu?"
@@ -91,7 +91,7 @@ PERGUNTA_ORIGINAL=Consumi os dois.
 Resposta:
 {
     "dominio": "stock",
-    "intencao": "Atualizar estoque completo",
+    "intencao": "Revisar estoque",
     "resposta": "Baixei os 2 iogurtes do seu estoque.",
     "recomendacao": "",
     "acompanhamento": "O arroz estava em falta. Você comprou?"

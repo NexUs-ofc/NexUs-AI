@@ -17,7 +17,6 @@ from app.tools import (
 IDS = {"profile_id", "account_id", "household_id", "household_account_id"}
 
 TOOLS_COM_DONO = [
-    pg_tools.add_product,
     pg_tools.get_stock,
     pg_tools.get_expired_products,
     pg_tools.get_missing_products,

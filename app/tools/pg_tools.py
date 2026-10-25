@@ -1,5 +1,4 @@
 import json
-from datetime import date, datetime
 
 from langchain.tools import tool
 
@@ -9,38 +8,6 @@ from ..model.pgsql.pantry_item import Pantry_Item
 from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
 from ..repository.pgsql.stock import ConsultaIndisponivel, StockRepository
-
-# O schema gerado a partir de `date` exige AAAA-MM-DD, e o modelo repete o
-# formato que o usuario escreveu — em portugues, 20/10/2026. O Groq recusa a
-# chamada antes de chegar aqui, entao a data entra como texto.
-_FORMATOS_DATA = (
-    "%Y-%m-%d",
-    "%d/%m/%Y",
-    "%d-%m-%Y",
-    "%d/%m/%y",
-)
-
-
-def _para_data(valor: str | None) -> date | None:
-    """Converte a validade recebida do modelo. None quando nao vem nada."""
-
-    if valor is None or isinstance(valor, date):
-        return valor
-
-    texto = str(valor).strip()
-
-    if not texto:
-        return None
-
-    for formato in _FORMATOS_DATA:
-        try:
-            return datetime.strptime(texto, formato).date()
-        except ValueError:
-            continue
-
-    raise ValueError(
-        f"Data '{texto}' nao reconhecida. Use AAAA-MM-DD ou DD/MM/AAAA."
-    )
 
 
 def _food_lookup(session) -> dict[int, Food]:
@@ -67,129 +34,6 @@ def _to_json(data: list[dict], mensagem_vazio: str) -> str:
         return mensagem_vazio
 
     return json.dumps(data, ensure_ascii=False, default=str)
-
-
-@tool("resolver_alimento")
-def resolver_alimento(
-    nome: str,
-    categoria: str | None = None,
-) -> str:
-    """
-    Resolve o nome de um alimento no food_id correspondente, cadastrando-o
-    quando ainda não existir no catálogo.
-
-    Use sempre que precisar de um food_id a partir do nome que o usuário falou,
-    antes de add_product. Nunca peça o food_id ao usuário nem desista porque o
-    alimento não estava cadastrado.
-
-    Parâmetros:
-        - nome: Nome do alimento como o usuário falou. Ex: "alface", "tomate".
-        - categoria: Categoria do alimento, quando souber. Ex: "Hortifruti".
-          Sem ela, o alimento entra em "Outros".
-
-    Retorno:
-        - Um alimento encontrado: {"food_id": X, "food_name": "...", "criado": false}
-        - Vários encontrados: {"ambiguo": true, "opcoes": [...]} — pergunte ao
-          usuário qual deles antes de seguir.
-        - Nenhum encontrado: cadastra e devolve {"criado": true, ...}
-    """
-
-    with SessionLocal() as session:
-        repository = FoodRepository(session)
-
-        encontrados = repository.buscar_por_nome(nome)
-
-        if len(encontrados) == 1:
-            food = encontrados[0]
-
-            return json.dumps(
-                {"food_id": food.id, "food_name": food.name, "criado": False},
-                ensure_ascii=False,
-            )
-
-        if len(encontrados) > 1:
-            return json.dumps(
-                {
-                    "ambiguo": True,
-                    "opcoes": [
-                        {"food_id": f.id, "food_name": f.name, "marca": f.product_brand}
-                        for f in encontrados[:10]
-                    ],
-                },
-                ensure_ascii=False,
-            )
-
-        food = repository.criar(nome=nome, categoria=categoria)
-
-        if food is None:
-            return json.dumps(
-                {"erro": f"Não foi possível cadastrar o alimento '{nome}'."},
-                ensure_ascii=False,
-            )
-
-        return json.dumps(
-            {"food_id": food.id, "food_name": food.name, "criado": True},
-            ensure_ascii=False,
-        )
-
-
-@tool("add_product")
-def add_product(
-    food_id: int,
-    quantity: int,
-    expiry_date: str | None = None,
-) -> str:
-    """
-    Adiciona um produto ao estoque do usuário.
-
-    Parâmetros:
-        - food_id: Id do alimento.
-        - quantity: Quantidade disponível.
-        - expiry_date: Data de vencimento, no formato "AAAA-MM-DD". Deixe
-          vazio quando o produto não tem data exata (tomate, verdura, legume,
-          granel): o item entra sem validade.
-
-    Se o usuário já tiver esse mesmo alimento com essa mesma validade no
-    estoque, a quantidade é somada à linha existente.
-    """
-    profile_id = identidade.perfil()
-
-
-    with SessionLocal() as session:
-        repository = StockRepository(session)
-
-        validade = _para_data(expiry_date)
-
-        # Mesmo alimento e mesma validade somam na linha que ja existe, em
-        # vez de virar duplicata.
-        existente = repository.find_equivalente(
-            profile_id=profile_id,
-            food_id=food_id,
-            expiry_date=validade,
-        )
-
-        if existente is not None:
-            existente.quantity += quantity
-            pantry_item = existente
-        else:
-            pantry_item = Pantry_Item(
-                profile_id=profile_id,
-                food_id=food_id,
-                quantity=quantity,
-                expiry_date=validade,
-            )
-
-        salvo = repository.save(pantry_item)
-
-        if salvo is None:
-            return "Erro ao adicionar produto ao estoque."
-
-        foods = _food_lookup(session)
-
-        return _to_json(
-            [_pantry_item_to_dict(salvo, foods)],
-            "Erro ao adicionar produto ao estoque.",
-        )
 
 
 @tool("remove_product")
@@ -378,39 +222,4 @@ def get_brand_info() -> str:
         return _to_json(
             data,
             "Não há produtos suficientes no estoque para gerar um relatório por marca.",
-        )
-
-
-@tool("get_foods")
-def get_foods() -> str:
-    """
-    Lista todos os alimentos cadastrados.
-
-    Utilize esta ferramenta antes de adicionar um produto ao estoque
-    quando for necessário descobrir qual é o food_id correspondente.
-
-    Parâmetros:
-        Nenhum.
-    """
-
-    with SessionLocal() as session:
-        repository = FoodRepository(session)
-
-        foods = repository.get_foods()
-
-        data = [
-            {
-                "food_id": food.id,
-                "name": food.name,
-                "category_id": food.category_id,
-                "product_brand": food.product_brand,
-                "package_quantity": float(food.package_quantity),
-                "unit_of_measure": food.unit_of_measure,
-            }
-            for food in foods
-        ]
-
-        return _to_json(
-            data,
-            "Nenhum alimento cadastrado no sistema.",
         )

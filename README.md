@@ -110,6 +110,11 @@ log e segue sem ela. Já aconteceu de três skills de evento declararem
 skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 `tests/test_skills.py` falha quando isso volta a acontecer.
 
+O chat de estoque consulta produtos, acompanha validade e remove itens com
+autorização. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
+continua pelas telas do aplicativo, por cadastro manual, código de barras ou
+foto da nota fiscal.
+
 ## Endpoints
 
 | método | rota | autenticação | o que faz |
@@ -236,7 +241,12 @@ python scripts/doc_injection.py             # documentação em PDF
 python scripts/scan_receipt.py nota.png     # leitor de nota pela linha de comando
 ```
 
-As bases que eles consomem ficam em `scripts/bases/`.
+As bases que eles consomem ficam em `scripts/bases/`. A recarga usa IDs
+estáveis, publica todos os lotes e somente depois remove os documentos
+obsoletos da respectiva coleção (`nexus_faqs` ou `nexus_docs`). Reexecutar não
+acumula duplicatas. Uma falha de upload preserva os documentos anteriores.
+As coleções de memória e preferências não são alteradas. O PDF normativo
+possui uma cópia de texto em `scripts/bases/NexUs_doc.txt` para revisão.
 
 ## Observabilidade
 

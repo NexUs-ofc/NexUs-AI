@@ -4,3 +4,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 .claude
+CLAUDE.md
+
+# Contexto local e documentos de desenvolvimento orientado por especificacao
+AGENTS.md
+/specs/
+/.specify/
+/.sdd/
