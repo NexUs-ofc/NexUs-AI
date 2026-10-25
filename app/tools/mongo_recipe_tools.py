@@ -6,6 +6,7 @@ from langchain.tools import tool
 from ..auth import identidade
 from ..model.mongodb.recipe import Recipe
 from ..repository.mongodb.recipes import RecipesRepository, RecipeUnavailable
+from ..validation import ingredientes_basicos_ausentes, validar_titulo
 
 
 def _difficulty(value: str) -> str:
@@ -53,6 +54,7 @@ def salvar_receita(
     Se a receita anterior não estiver completa, pergunte o que falta antes de salvar.
     """
     try:
+        titulo = validar_titulo(titulo)
         if not titulo.strip() or not instrucoes.strip() or serving_size <= 0 or tempo_preparo_minutos <= 0:
             raise ValueError("Título, preparo, porções e tempo são obrigatórios.")
         saved_ingredients = []
@@ -69,6 +71,9 @@ def salvar_receita(
             })
         if not saved_ingredients:
             raise ValueError("A receita precisa de ingredientes.")
+        missing = ingredientes_basicos_ausentes(saved_ingredients, instrucoes)
+        if missing:
+            raise ValueError("Ingredientes usados no preparo sem quantidade na lista: " + ", ".join(missing))
         recipe = Recipe(
             title=titulo.strip(), serving_size=serving_size, ingredients=saved_ingredients,
             instructions=instrucoes.strip(), account_id=identidade.conta(),

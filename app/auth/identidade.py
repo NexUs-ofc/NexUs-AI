@@ -15,11 +15,13 @@ import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from copy import deepcopy
 from threading import RLock
 
 _perfil: ContextVar[int | None] = ContextVar("perfil", default=None)
 _conta: ContextVar[int | None] = ContextVar("conta", default=None)
 _gravacoes: ContextVar[tuple | None] = ContextVar("gravacoes", default=None)
+_assunto: ContextVar[dict | None] = ContextVar("assunto", default=None)
 
 
 class SemIdentidade(RuntimeError):
@@ -27,10 +29,11 @@ class SemIdentidade(RuntimeError):
 
 
 @contextmanager
-def da_requisicao(perfil: int, conta: int) -> Iterator[None]:
+def da_requisicao(perfil: int, conta: int, assunto: dict | None = None) -> Iterator[None]:
     marca_perfil = _perfil.set(perfil)
     marca_conta = _conta.set(conta)
     marca_gravacoes = _gravacoes.set(({}, RLock()))
+    marca_assunto = _assunto.set(deepcopy(assunto))
 
     try:
         yield
@@ -38,6 +41,12 @@ def da_requisicao(perfil: int, conta: int) -> Iterator[None]:
         _perfil.reset(marca_perfil)
         _conta.reset(marca_conta)
         _gravacoes.reset(marca_gravacoes)
+        _assunto.reset(marca_assunto)
+
+
+def assunto() -> dict | None:
+    """Origem do pedido vinda da sessão, não escolhida pelo modelo."""
+    return deepcopy(_assunto.get())
 
 
 def perfil() -> int:

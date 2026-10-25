@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 # saia rotulado como CPF. Agora o telefone, que exige a forma de telefone (DDD
 # e separador), e testado primeiro; o CPF so pega o que sobrar.
 PII = [
-    ("TELEFONE", r"\(?\d{2}\)?[\s-]?9?\d{4}[\s-]?\d{4}"),
-    ("CPF",      r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}"),
+    ("TELEFONE", r"(?<!\w)(?:\+?55[ -]?)?\(?\d{2}\)?[ -]?9?\d{4}[ -]?\d{4}(?!\w)"),
+    ("CPF",      r"(?<!\w)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\w)"),
     ("EMAIL",    r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
 ]
 
@@ -45,7 +45,9 @@ def desanonimizar(texto, mapa):
     for token in mapa:
         tipo = token.split("_")[1]
         texto = texto.replace(token, f"[{tipo} OMITIDO]")
-    return texto
+    # Tokens de turnos anteriores também não podem escapar na resposta.
+    return re.sub(r"\[PII_(TELEFONE|CPF|EMAIL)_[a-zA-Z0-9]+\]",
+                  lambda m: f"[{m[1]} OMITIDO]", texto)
 
 
 _PADROES_INJECAO = [
@@ -225,4 +227,7 @@ def checar_saida(resposta, mapa_pii, revisar=True):
         if texto:
             resposta = texto
 
-    return _saida_ok(resposta)
+    # A revisão não pode reintroduzir PII que a primeira passagem removeu.
+    for tipo, padrao in PII:
+        resposta = re.sub(padrao, f"[{tipo} OMITIDO]", resposta)
+    return _saida_ok(desanonimizar(resposta, mapa_pii))

@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Consultar lista de compras | Atualizar lista de compras
-  ferramentas: [get_list, update_list, calcular_percentual, somar_valores]
+  ferramentas: [get_list, renomear_lista, alterar_item_lista, calcular_percentual, somar_valores]
   version: 1.0.0
 ---
 
@@ -23,7 +23,7 @@ Se ela quer uma lista nova, use `lista-montar`.
 1. `get_list(title="nome citado")` para carregar a lista; sem título, consulte as recentes. Use o `_id` retornado, nunca pergunte id à pessoa.
 2. Se houver mais de uma lista com nome parecido, pergunte qual antes de
    alterar qualquer coisa.
-3. `update_list` com a alteração pedida. Para renomear, informe `title` e omita `items`. Para mudar itens, envie a lista COMPLETA com os ids existentes, os itens que permanecem e `checked` de cada um. `items: []` esvazia; omitir preserva.
+3. Para renomear: `renomear_lista` com `title`. Para itens: `alterar_item_lista` com o id do item e a operação `quantidade`, `comprado`, `adicionar` ou `remover`. Envie somente os campos da operação atual. Nunca substitua a lista completa para editar um item.
 4. `calcular_percentual` para o progresso, sempre que for mencioná-lo.
 
 ## Regras
@@ -32,6 +32,8 @@ Se ela quer uma lista nova, use `lista-montar`.
 - Um pedido explícito e sem ambiguidade já autoriza a alteração (“marca o arroz como comprado”). Não repita uma confirmação recebida. Pergunte somente se não souber qual lista ou item alterar.
 - Marcar item como comprado **não o remove** da lista: ele continua lá,
   marcado.
+- Não retome pedidos antigos que falharam. Alterar a quantidade não autoriza marcar comprado, e vice-versa.
+- Listas com títulos iguais: diferencie por data, evento e itens; peça uma escolha humana antes de alterar. Não exponha identificadores internos.
 - Ao terminar a lista inteira, diga que ela está completa e oriente a inclusão
   dos produtos pelas telas do aplicativo. Nunca ofereça lançá-los pelo chat.
 - Retorno `[]` significa nenhuma lista encontrada. Retorno `FALHA` significa consulta indisponível; não diga que a lista não existe.
@@ -66,7 +68,7 @@ PERGUNTA_ORIGINAL=Já comprei a picanha, marca lá.
 
 (get_list -> {"id": "l1", "titulo": "Churrasco", "itens": [
     {"nome": "Picanha", "comprado": false}, {"nome": "Linguiça", "comprado": false}]})
-(update_list -> ok)
+(alterar_item_lista -> ok)
 (calcular_percentual -> {"percentual": 50, "parte": 1, "total": 2})
 
 Resposta:

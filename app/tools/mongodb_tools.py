@@ -2,6 +2,7 @@ import json
 import re
 import unicodedata
 from datetime import datetime
+from typing import Literal
 
 from bson import ObjectId
 from langchain.tools import tool
@@ -19,6 +20,7 @@ from ..repository.mongodb.shopping_lists import (
 from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
 from ..repository.pgsql.stock import StockRepository
+from ..validation import validar_titulo
 
 events_repository = EventsRepository()
 
@@ -133,6 +135,10 @@ def create_event(
     household_id = identidade.perfil()
 
 
+    try:
+        titulo = validar_titulo(titulo)
+    except ValueError:
+        return None
     evento = Event(
         household_id=household_id,
         title=titulo,
@@ -389,12 +395,56 @@ def create_list(title: str, items: list[dict], event_id: str = "") -> str:
     Não salva receita, não cria evento e nunca inclui produtos no estoque.
     """
     household = identidade.perfil()
+    assunto = identidade.assunto() or {}
+    lista_do_evento = assunto.get("tipo") == "evento" and assunto.get("lista_evento")
+    conferencia_evento = None
+    if lista_do_evento and not event_id:
+        return ("FALHA: a lista solicitada é do evento ativo. Consulte get_events e informe o event_id. "
+                "Não crie uma lista de receita avulsa antiga.")
     if event_id:
         if not ObjectId.is_valid(event_id):
             return "FALHA: evento não encontrado. A lista não foi criada."
         event = events_repository.get_event_by_id(event_id)
         if event is None or event.household_id != household:
             return "FALHA: evento não encontrado. A lista não foi criada."
+        if lista_do_evento:
+            referencia = assunto.get("evento") or {}
+            esperado = referencia.get("_id") or referencia.get("id")
+            nome = referencia.get("titulo") or referencia.get("title")
+            if ((esperado and str(esperado) != str(event.id))
+                    or (not esperado and nome and _normalizar(nome) != _normalizar(event.title))):
+                return "FALHA: o evento informado não corresponde ao assunto ativo. Consulte e esclareça qual evento."
+            if not event.recipes:
+                return ("FALHA: o evento ativo ainda não tem receitas vinculadas. "
+                        "Peça a confirmação dos pratos antes de montar suas compras; não use uma receita avulsa anterior.")
+            # A lista genérica nasce do cardápio persistido do evento; os
+            # ingredientes propostos pelo modelo não podem trocar sua origem.
+            ingredientes = []
+            for receita in event.recipes:
+                if not isinstance(receita, dict):
+                    return "FALHA: o cardápio do evento não pôde ser interpretado. A lista não foi criada."
+                componentes = receita.get("ingredients") or receita.get("ingredientes") or []
+                if not isinstance(componentes, list) or not all(isinstance(item, dict) for item in componentes):
+                    return "FALHA: faltam ingredientes completos no cardápio do evento. A lista não foi criada."
+                for item in componentes:
+                    ingredientes.append({
+                        "name": item.get("ingredient") or item.get("name") or item.get("ingrediente"),
+                        "quantity": (item.get("total_quantity") or item.get("required_quantity")
+                                     or item.get("quantidade_total") or item.get("quantity")),
+                        "unitOfMeasure": item.get("unitOfMeasure") or item.get("unidade") or "",
+                    })
+            from .recipe_tools import ingredientes_para_comprar
+
+            calculo = ingredientes_para_comprar.invoke({"ingredientes": ingredientes})
+            try:
+                conferido = json.loads(calculo)
+                items = conferido["itens_para_comprar"]
+                conferencia_evento = conferido.get("conferencia", [])
+            except (ValueError, TypeError, KeyError):
+                return "FALHA: não foi possível conferir os ingredientes do evento. A lista não foi criada."
+            if not items:
+                return "SEM_COMPRA: não falta comprar ingredientes do evento. Nenhuma lista foi criada."
+            title = event.title
     try:
         if not items:
             raise ValueError("Informe os itens da lista antes de criar.")
@@ -415,7 +465,10 @@ def create_list(title: str, items: list[dict], event_id: str = "") -> str:
     )
     if result is None:
         return "FALHA: não foi possível criar a lista. Tente novamente."
-    return json.dumps(result.to_dict(), ensure_ascii=False, default=str)
+    resposta = result.to_dict()
+    if conferencia_evento is not None:
+        resposta["conferencia"] = conferencia_evento
+    return json.dumps(resposta, ensure_ascii=False, default=str)
 
 
 @tool("get_list")
@@ -453,7 +506,7 @@ def update_list(list_id: str, items: list[dict] | None = None, title: str | None
             return "FALHA: lista não encontrada."
         if items is None and title is None:
             return "FALHA: informe o que deseja alterar."
-        new_title = title.strip() if title is not None else existing.title
+        new_title = validar_titulo(title) if title is not None else existing.title
         if not new_title:
             return "FALHA: o título não pode ficar vazio."
         new_items = existing.items
@@ -492,3 +545,66 @@ def update_list(list_id: str, items: list[dict] | None = None, title: str | None
     if result is None:
         return "FALHA: lista não atualizada. Consulte novamente."
     return json.dumps(result.to_dict(), ensure_ascii=False, default=str)
+
+
+@tool("alterar_item_lista")
+def alterar_item_lista(
+    list_id: str,
+    operacao: Literal["quantidade", "comprado", "adicionar", "remover"],
+    item_id: str = "",
+    nome: str = "",
+    quantidade: float | None = None,
+    unidade: str | None = None,
+    comprado: bool | None = None,
+) -> str:
+    """Altera SOMENTE um item e os campos pedidos na mensagem atual.
+    Consulte get_list primeiro e use os ids retornados, nunca peça ids à pessoa.
+    quantidade: informa item_id, quantidade e opcionalmente unidade; não envia comprado.
+    comprado: informa item_id e comprado; não envia quantidade/unidade/nome.
+    remover: informa apenas item_id. adicionar: nome, quantidade e unidade, sem item_id.
+    Não reexecute pedidos antigos que falharam sem nova autorização.
+    """
+    try:
+        saved = ShoppingListsRepository.get_list(list_id, household_id=identidade.perfil())
+        if saved is None:
+            return "FALHA: lista não encontrada."
+        items = [dict(item) for item in saved.items]
+        if operacao == "adicionar":
+            if item_id or comprado is not None:
+                raise ValueError("Para adicionar, informe apenas nome, quantidade e unidade.")
+            items.append(normalize_item({"name": nome, "quantity": quantidade, "unitOfMeasure": unidade}))
+        else:
+            matches = [item for item in items if item["id"] == item_id]
+            if len(matches) != 1:
+                raise ValueError("Consulte novamente para identificar um único item desta lista.")
+            item = matches[0]
+            if operacao == "quantidade":
+                if comprado is not None or nome or quantidade is None:
+                    raise ValueError("Alterar quantidade não permite alterar o estado comprado ou o nome.")
+                item.update(normalize_item({**item, "quantity": quantidade,
+                                           "unitOfMeasure": unidade or item["unitOfMeasure"]}))
+            elif operacao == "comprado":
+                if comprado is None or quantidade is not None or unidade is not None or nome:
+                    raise ValueError("Marcar comprado não permite alterar outros campos.")
+                item["checked"] = comprado
+            else:
+                if quantidade is not None or unidade is not None or comprado is not None or nome:
+                    raise ValueError("Para remover, informe somente o item.")
+                items.remove(item)
+        result = identidade.executar_gravacao(
+            "alterar_item_lista", {"list_id": list_id, "operacao": operacao, "item_id": item_id,
+                                   "nome": nome, "quantidade": quantidade, "unidade": unidade,
+                                   "comprado": comprado},
+            lambda: ShoppingListsRepository.update_list(list_id, household_id=identidade.perfil(), items=items),
+        )
+    except (ValueError, TypeError, ZeroDivisionError, ShoppingListUnavailable) as error:
+        return f"FALHA: lista não alterada. {error}"
+    if result is None:
+        return "FALHA: lista não atualizada. Consulte novamente."
+    return json.dumps(result.to_dict(), ensure_ascii=False, default=str)
+
+
+@tool("renomear_lista")
+def renomear_lista(list_id: str, title: str) -> str:
+    """Renomeia a lista consultada, sem receber ou alterar seus itens."""
+    return update_list.invoke({"list_id": list_id, "title": title})

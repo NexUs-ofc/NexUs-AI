@@ -54,10 +54,12 @@ def calculate_missing(ingredients: list[dict], stock: list[dict], today: date) -
         matches = [s for s in stock if _name(str(s.get("food_name") or "")) == _name(item["name"])]
         need_unit = UNITS.get(_name(item["unitOfMeasure"]))
         available = Decimal(0)
-        comparable = bool(matches and need_unit)
+        # Ausência confirmada é zero, mesmo sem uma unidade conversível.
+        comparable = not matches or bool(need_unit)
         for record in matches:
             expiry = record.get("expiry_date")
             if not expiry:
+                comparable = False
                 continue
             try:
                 if date.fromisoformat(str(expiry)[:10]) < today:
@@ -110,7 +112,12 @@ def ingredientes_para_comprar(ingredientes: list[dict]) -> str:
     if response.startswith("FALHA"):
         return response
     try:
-        stock = json.loads(response) if response.startswith("[") else []
+        if response == "O usuário não possui nenhum produto cadastrado no estoque.":
+            stock = []
+        else:
+            stock = json.loads(response)
+            if not isinstance(stock, list):
+                return "FALHA: não foi possível interpretar o estoque; tente consultar novamente."
         result = calculate_missing(ingredientes, stock, date.today())
     except (ValueError, TypeError, ZeroDivisionError, InvalidOperation):
         return "FALHA: informe nome, quantidade numérica e unidade de cada ingrediente."

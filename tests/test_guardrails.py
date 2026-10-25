@@ -244,9 +244,8 @@ class TestCheararSaida(unittest.TestCase):
         with patch.object(g, "guardrail_llm", LLMFalso("STATUS: APROVADO\nRESPOSTA: fale com joao@teste.com")):
             r = g.checar_saida("fale com joao@teste.com", {})
 
-        # O texto do modelo so vale se nao reintroduzir o dado; aqui ele
-        # reintroduz, e o teste registra esse limite conhecido.
-        self.assertIn("joao@teste.com", r["conteudo"])
+        self.assertNotIn("joao@teste.com", r["conteudo"])
+        self.assertIn("[EMAIL OMITIDO]", r["conteudo"])
 
 
 if __name__ == "__main__":

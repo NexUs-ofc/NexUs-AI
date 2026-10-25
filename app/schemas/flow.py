@@ -1,5 +1,6 @@
 import json
 import re
+from copy import deepcopy
 from datetime import UTC, datetime
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -9,6 +10,11 @@ from langsmith import trace, traceable
 from app.auth import identidade
 from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
+from app.core.contexto_conversa import (
+    assunto_do_turno,
+    pedido_lista_generico,
+    resolver_assunto,
+)
 from app.core.llms import (
     MODELO,
     juiz_llm,
@@ -38,6 +44,7 @@ from app.repository.mongodb.tool_metrics import ToolMetricsRepository
 from app.repository.pgsql.config import SessionLocal
 from app.repository.pgsql.profile import ProfileRepository
 from app.repository.qdrant.preferences_repository import PreferencesRepository
+from app.validation import ingredientes_basicos_ausentes
 
 from .state import State
 
@@ -282,6 +289,27 @@ def _ultimos_turnos(historico: list[dict], quantos: int) -> list[dict]:
     return historico[-quantos:]
 
 
+def _ultima_receita(historico: list[dict]) -> dict | None:
+    """Preserva o objeto apresentado mesmo depois de trocar de seção."""
+    for turno in reversed(historico or []):
+        recipe = turno.get("receita") if turno.get("role") == "assistant" else None
+        if isinstance(recipe, dict) and _formatar_receita(recipe):
+            return deepcopy(recipe)
+    return None
+
+
+def _contexto_receita(state: State) -> str:
+    assunto = resolver_assunto(state.get("historico", []), state.get("mensagem", ""))
+    if not assunto:
+        return ""
+    if assunto["tipo"] == "receita":
+        return "\nULTIMA_RECEITA_APRESENTADA=" + json.dumps(assunto["receita"], ensure_ascii=False, default=str)
+    return ("\nASSUNTO_ATIVO=" + json.dumps(assunto, ensure_ascii=False, default=str) +
+            "\nUma lista genérica refere-se a este evento, não a uma receita avulsa antiga. "
+            "Consulte o evento e seu cardápio. Se faltar confirmação dos pratos ou quantidades, "
+            "peça esclarecimento; não use outra receita como substituição.")
+
+
 def _invocar_agente(
     agent,
     mensagem: str,
@@ -360,7 +388,7 @@ def _lista_gravada(response: str, evidences: list[dict]) -> tuple[dict, str] | N
     key = envelope["lista"].get("_id")
     for evidence in reversed(evidences):
         name = evidence.get("ferramenta")
-        if name not in {"create_list", "update_list"}:
+        if name not in {"create_list", "update_list", "alterar_item_lista", "renomear_lista"}:
             continue
         try:
             saved = json.loads(evidence.get("conteudo", ""))
@@ -390,7 +418,8 @@ def _invocar_com_confirmacao(agent, mensagem, historico, trace_id, revisao=""):
             return response, tokens_in, tokens_out, evidences
         confirmed = None
         for evidence in evidences:
-            if evidence.get("ferramenta") != expected:
+            actual = evidence.get("ferramenta")
+            if actual != expected and not (expected == "update_list" and actual in {"alterar_item_lista", "renomear_lista"}):
                 continue
             try:
                 result = json.loads(evidence.get("conteudo", ""))
@@ -404,14 +433,18 @@ def _invocar_com_confirmacao(agent, mensagem, historico, trace_id, revisao=""):
             elif result.get("_id") and isinstance(result.get("array_list"), list):
                 confirmed = result
         if confirmed is not None:
+            if expected == "salvar_receita":
+                envelope["receita"] = confirmed["receita"]
+                response = json.dumps(envelope, ensure_ascii=False, default=str)
             if expected in {"create_list", "update_list"}:
                 envelope["lista"] = confirmed
                 response = json.dumps(envelope, ensure_ascii=False)
             return response, tokens_in, tokens_out, evidences
         if attempt == 0:
+            tool = "renomear_lista ou alterar_item_lista" if expected == "update_list" else expected
             correction = (
                 "A operação NÃO tem confirmação. Consulte os dados e execute "
-                f"{expected} com os argumentos necessários. Não basta escrever "
+                f"{tool} com os argumentos necessários. Não basta escrever "
                 "que fez. Se não conseguir, informe a falha sem confirmar sucesso."
             )
             response, more_in, more_out, more_evidence = _invocar_agente(
@@ -554,6 +587,7 @@ def agente_receitas(state: State) -> State:
 
         if preferencias:
             mensagem += f"\nPREFERENCIAS={preferencias}"
+        mensagem += _contexto_receita(state)
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_com_confirmacao(
             AGENTES_DAS_SKILLS[_escolher_skill("receitas", state)],
@@ -562,6 +596,7 @@ def agente_receitas(state: State) -> State:
             state["trace_id"],
             state.get("veredito_juiz", ""),
         )
+        resposta_agente = _alinhar_receita_consultada(resposta_agente, evidencias)
         resposta_agente = _alinhar_receita_estoque(resposta_agente, evidencias)
         state["resposta_agente"] = resposta_agente
 
@@ -663,6 +698,7 @@ def agente_eventos(state: State) -> State:
             f"ROUTE=events\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
         )
+        mensagem += _contexto_receita(state)
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_com_confirmacao(
             AGENTES_DAS_SKILLS[_escolher_skill("eventos", state)],
@@ -671,6 +707,7 @@ def agente_eventos(state: State) -> State:
             state["trace_id"],
             state.get("veredito_juiz", ""),
         )
+        resposta_agente = _alinhar_lista_consultada(resposta_agente, evidencias)
         confirmed = _lista_gravada(resposta_agente, evidencias)
         state["lista_confirmada"] = confirmed is not None
         if confirmed:
@@ -682,6 +719,9 @@ def agente_eventos(state: State) -> State:
                 "recomendacao": "",
                 "lista": saved,
             }
+            if any(not c.get("comparacao_confirmada") and not c.get("dispensa_compra")
+                   for c in saved.get("conferencia", [])):
+                safe["recomendacao"] = "Confira as quantidades disponíveis antes de comprar os itens que não puderam ser comparados."
             for evidence in evidencias:
                 if evidence.get("ferramenta") == "ingredientes_para_comprar":
                     try:
@@ -1137,7 +1177,7 @@ def _formatar_receita(receita) -> str:
     difficulty = {"easy": "fácil", "medium": "média", "hard": "difícil"}.get(difficulty, difficulty)
     details = " · ".join(str(value) for value in (
         f"{servings} porções" if servings else "",
-        f"{minutes} minutos" if minutes else receita.get("tempo_estimado"),
+        f"{minutes} minutos" if minutes else receita.get("tempo_estimado") or receita.get("estimated_time"),
         difficulty,
     ) if value)
     lines = [title + (f" ({details})" if details else ""), "", "Ingredientes:"]
@@ -1194,6 +1234,57 @@ def _alinhar_receita_estoque(response: str, evidencias: list[dict]) -> str:
     return json.dumps(envelope, ensure_ascii=False)
 
 
+def _alinhar_receita_consultada(response: str, evidencias: list[dict]) -> str:
+    """Consulta reproduz o documento confirmado, sem reescrever o preparo."""
+    envelope = _ler_envelope(response)
+    if not envelope or envelope.get("intencao") != "Buscar receita anterior":
+        return response
+    for evidence in reversed(evidencias):
+        if evidence.get("ferramenta") != "buscar_receitas_usuario":
+            continue
+        try:
+            recipes = json.loads(evidence.get("conteudo", ""))
+        except (ValueError, TypeError):
+            return response
+        if not isinstance(recipes, list) or len(recipes) != 1 or not isinstance(recipes[0], dict):
+            return response
+        envelope = {"dominio": "receitas", "intencao": "Buscar receita anterior",
+                    "resposta": "Encontrei esta receita salva.", "receita": recipes[0]}
+        return json.dumps(envelope, ensure_ascii=False)
+    return response
+
+
+def _alinhar_lista_consultada(response: str, evidencias: list[dict]) -> str:
+    envelope = _ler_envelope(response)
+    if not envelope or envelope.get("intencao") != "Consultar lista de compras":
+        return response
+    for evidence in reversed(evidencias):
+        if evidence.get("ferramenta") != "get_list":
+            continue
+        try:
+            lists = json.loads(evidence.get("conteudo", ""))
+        except (ValueError, TypeError):
+            return response
+        if not isinstance(lists, list) or not lists or not all(isinstance(item, dict) for item in lists):
+            return response
+        if len(lists) == 1:
+            envelope = {"dominio": "events", "intencao": "Consultar lista de compras",
+                        "resposta": "Esta é sua lista de compras.", "lista": lists[0]}
+        else:
+            choices = []
+            for i, item in enumerate(lists, 1):
+                items = item.get("array_list") or []
+                if not isinstance(items, list) or not all(isinstance(x, dict) for x in items):
+                    return response
+                names = ", ".join(str(x.get("name", "")) for x in items[:3]) or "sem itens"
+                choices.append(f"{i}) {item.get('title', 'Lista')} — {names}")
+            envelope = {"dominio": "events", "intencao": "Consultar lista de compras",
+                        "resposta": "Encontrei estas listas (da mais recente para a mais antiga):\n" + "\n".join(choices),
+                        "acompanhamento": "Qual delas você deseja consultar? Pode indicar o número."}
+        return json.dumps(envelope, ensure_ascii=False)
+    return response
+
+
 def _formatar_lista(lista) -> str:
     if not isinstance(lista, dict):
         return ""
@@ -1247,6 +1338,15 @@ def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
     lista = _formatar_lista(dados.get("lista"))
     if dados.get("receita") and not receita:
         return "Não consegui recuperar a receita completa. Qual receita você deseja consultar?"
+    if receita:
+        obj = dados["receita"]
+        steps = obj.get("instructions") or obj.get("instrucoes") or ""
+        if isinstance(steps, list):
+            steps = "\n".join(str(step) for step in steps)
+        missing = ingredientes_basicos_ausentes(obj.get("ingredients") or obj.get("ingredientes") or [], steps)
+        if missing:
+            return ("A receita está incompleta: o preparo usa " + ", ".join(missing) +
+                    " sem informar as quantidades nos ingredientes. Posso completar a receita antes de você usar ou salvar?")
 
     if not partes[0] and not receita:
         return ""
@@ -1355,6 +1455,15 @@ def guardrail_saida(state: State) -> State:
             )
         else:
             state["resposta_final"] = resultado["conteudo"]
+
+        # Estado confirmado do estoque encerra a revisão vazia; não deixa o
+        # acompanhamento livre oferecer uma capacidade removida do chat.
+        envelope = _ler_envelope(state.get("resposta_agente", "")) or {}
+        if (not resultado.get("bloqueado") and state.get("rota") == "estoque"
+                and envelope.get("intencao") == "Revisar estoque"):
+            stock = [e.get("conteudo") for e in state.get("evidencias", []) if e.get("ferramenta") == "get_stock"]
+            if stock and stock[-1] in ("[]", "O usuário não possui nenhum produto cadastrado no estoque."):
+                state["resposta_final"] = "Seu estoque está vazio. Não há itens para revisar agora."
 
         state["saida_aprovada"] = True
 
@@ -1479,7 +1588,10 @@ def executar_chat(
     try:
         # Tudo que o grafo chama roda dentro desta identidade: as tools leem
         # a casa e a conta daqui, e nao do que o modelo resolver repassar.
-        with identidade.da_requisicao(household_account_id, account_id), trace(
+        assunto = resolver_assunto(historico, mensagem)
+        if assunto:
+            assunto["lista_evento"] = assunto["tipo"] == "evento" and pedido_lista_generico(mensagem)
+        with identidade.da_requisicao(household_account_id, account_id, assunto=assunto), trace(
             name="ceris_chat_request",
             run_type="chain",
             metadata={
@@ -1555,10 +1667,19 @@ def executar_chat(
 
     resposta = resultado["resposta_final"]
 
+    envelope = _ler_envelope(resultado.get("resposta_agente", "")) or {}
+    recipe = envelope.get("receita")
+    if (resultado.get("saida_bloqueada") or envelope.get("esclarecer")
+            or not _formatar_receita(recipe) or _formatar_receita(recipe) not in resposta):
+        recipe = None
+
     ConversationsRepository.append_messages(
         session_id,
         mensagem,
         resposta,
+        receita=recipe,
+        assunto=(assunto_do_turno(historico, mensagem, envelope, recipe)
+                 if resultado.get("entrada_aprovada") and not resultado.get("saida_bloqueada") else None),
     )
 
     return {
