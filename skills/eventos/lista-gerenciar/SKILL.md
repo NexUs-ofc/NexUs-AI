@@ -20,22 +20,22 @@ Se ela quer uma lista nova, use `lista-montar`.
 
 ## Fluxo
 
-1. `get_list` para carregar a lista. Case pelo título que a pessoa usou.
+1. `get_list(title="nome citado")` para carregar a lista; sem título, consulte as recentes. Use o `_id` retornado, nunca pergunte id à pessoa.
 2. Se houver mais de uma lista com nome parecido, pergunte qual antes de
    alterar qualquer coisa.
-3. `update_list` com a alteração pedida.
+3. `update_list` com a alteração pedida. Para renomear, informe `title` e omita `items`. Para mudar itens, envie a lista COMPLETA com os ids existentes, os itens que permanecem e `checked` de cada um. `items: []` esvazia; omitir preserva.
 4. `calcular_percentual` para o progresso, sempre que for mencioná-lo.
 
 ## Regras
 
 - Nunca peça `list_id`. Resolva por `get_list` e case pelo título.
-- Alteração só depois de confirmada pela pessoa. Consulta não precisa de
-  confirmação.
+- Um pedido explícito e sem ambiguidade já autoriza a alteração (“marca o arroz como comprado”). Não repita uma confirmação recebida. Pergunte somente se não souber qual lista ou item alterar.
 - Marcar item como comprado **não o remove** da lista: ele continua lá,
   marcado.
 - Ao terminar a lista inteira, diga que ela está completa e oriente a inclusão
   dos produtos pelas telas do aplicativo. Nunca ofereça lançá-los pelo chat.
-- Se a lista não existir, diga isso e ofereça criar. Não invente conteúdo.
+- Retorno `[]` significa nenhuma lista encontrada. Retorno `FALHA` significa consulta indisponível; não diga que a lista não existe.
+- O contrato dos itens usa `name`, `quantity`, `unitOfMeasure`, `checked` e `id`; preserve id e estado dos itens que não mudaram.
 
 ## Saída
 

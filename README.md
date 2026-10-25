@@ -231,6 +231,27 @@ Sem `JWT_SECRET_KEY` ou `API_KEY` o serviço não sobe, de propósito: faltando 
 chave, toda requisição tomaria 401 dizendo que a chave é inválida, e o erro
 pareceria do cliente em vez de configuração.
 
+
+## Receitas salvas e listas de compras
+
+O agente só salva receitas quando a pessoa pede. O documento em `recipes`
+preserva ingredientes com nome e quantidade, modo de preparo, `account_id`,
+`created_at` em UTC, `preparation_time_minutes` (minutos positivos) e
+`difficulty` (`easy`, `medium`, `hard`). Registros antigos sem esses
+metadados continuam legíveis; valores ausentes não são inventados.
+
+Listas são gravadas em `shopping_list`, no campo `array_list`, compatível
+com o Core. Os itens preservam id, nome, quantidade, unidade e `checked`.
+Consultas e alterações filtram a casa autenticada; é possível buscar pelo
+título e renomear sem substituir os itens.
+
+`ingredientes_para_comprar` soma lotes válidos e calcula somente quantidades
+comparáveis. Por exemplo, 150 g na receita e 100 g disponíveis resultam em
+50 g para comprar. Medidas sem equivalência são sinalizadas para conferência.
+Uma lista só é confirmada após retorno da gravação; seu texto é montado a
+partir dos dados salvos. Gravações equivalentes na mesma requisição não
+são repetidas durante revisões do agente.
+
 ## Scripts
 
 Rodados à mão, fora da API, e por isso fora da imagem:

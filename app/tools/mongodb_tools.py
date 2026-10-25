@@ -9,10 +9,13 @@ from langchain.tools import tool
 from ..auth import identidade
 from ..model.mongodb.event import Event
 from ..model.mongodb.recipe import Recipe
-from ..model.mongodb.shopping_list import ShoppingList
+from ..model.mongodb.shopping_list import ShoppingList, normalize_item
 from ..repository.mongodb.events import EventsRepository
 from ..repository.mongodb.recipes import RecipesRepository
-from ..repository.mongodb.shopping_lists import ShoppingListsRepository
+from ..repository.mongodb.shopping_lists import (
+    ShoppingListsRepository,
+    ShoppingListUnavailable,
+)
 from ..repository.pgsql.config import SessionLocal
 from ..repository.pgsql.food import FoodRepository
 from ..repository.pgsql.stock import StockRepository
@@ -271,11 +274,11 @@ def add_recipe(
 
     event = events_repository.get_event_by_id(event_id)
 
-    if event is None:
+    if event is None or event.household_id != identidade.perfil():
         return None
 
     if recipe_id:
-        recipe = RecipesRepository.get_recipe_by_id(recipe_id)
+        recipe = RecipesRepository.get_recipe_by_id(recipe_id, account_id=identidade.conta())
 
         if recipe is None:
             return None
@@ -374,58 +377,118 @@ def remove_recipe(
     return events_repository.get_event_by_id(event_id)
 
 
+
 @tool("create_list")
-def create_list(
-    event_id: str,
-    title: str,
-    items: list[dict],
-) -> ShoppingList | None:
+def create_list(title: str, items: list[dict], event_id: str = "") -> str:
+    """Cria uma lista de compras SOMENTE quando a pessoa pedir e confirmar os itens.
+    title: título escolhido ou nome da receita/evento.
+    items: [{"name": "Arroz", "quantity": 200, "unitOfMeasure": "g", "checked": false}].
+      Também aceita ingredient/quantity/purchased com quantidade "200 g".
+      Todos os itens precisam de nome, quantidade positiva e unidade.
+    event_id: opcional; deixe vazio para compras avulsas ou de uma receita.
+    Não salva receita, não cria evento e nunca inclui produtos no estoque.
     """
-    Cria uma lista de compras vinculada (ou não) a um evento.
-
-    Parâmetros:
-        - event_id: Identificador do evento relacionado (pode ser vazio).
-        - title: Título da lista de compras.
-        - items: Lista de itens no formato [{"ingredient": str, "quantity": str, "purchased": bool}].
-    """
-    household_id = identidade.perfil()
-
-
-    shopping_list = ShoppingList(
-        household_id=household_id,
-        title=title,
-        items=items,
-        event_id=event_id if event_id else None,
+    household = identidade.perfil()
+    if event_id:
+        if not ObjectId.is_valid(event_id):
+            return "FALHA: evento não encontrado. A lista não foi criada."
+        event = events_repository.get_event_by_id(event_id)
+        if event is None or event.household_id != household:
+            return "FALHA: evento não encontrado. A lista não foi criada."
+    try:
+        if not items:
+            raise ValueError("Informe os itens da lista antes de criar.")
+        shopping = ShoppingList(household_id=household, title=title, items=items, event_id=event_id)
+    except (ValueError, TypeError, ZeroDivisionError) as error:
+        return f"FALHA: lista não criada. {error}"
+    result = identidade.executar_gravacao(
+        "create_list", {
+            "title": shopping.title.casefold(),
+            "items": [
+                {"name": _normalizar(item["name"]), "quantity": float(item["quantity"]),
+                 "unitOfMeasure": _normalizar(item["unitOfMeasure"]), "checked": item["checked"]}
+                for item in shopping.items
+            ],
+            "event_id": shopping.event_id,
+        },
+        lambda: ShoppingListsRepository.create_list(shopping),
     )
-
-    return ShoppingListsRepository.create_list(shopping_list)
+    if result is None:
+        return "FALHA: não foi possível criar a lista. Tente novamente."
+    return json.dumps(result.to_dict(), ensure_ascii=False, default=str)
 
 
 @tool("get_list")
-def get_list(
-    list_id: str,
-) -> ShoppingList | None:
+def get_list(list_id: str = "", title: str = "") -> str:
+    """Consulta listas da casa autenticada. Nunca peça identificador à pessoa.
+    list_id: opcional, use um id já retornado pela consulta.
+    title: opcional, busca por trecho do título, como "jantar". Sem filtros
+      retorna até 20 listas recentes. Se houver mais de uma, pergunte qual.
+    Retorna uma lista JSON, com id, título e todos os itens (array_list).
     """
-    Consulta uma lista de compras pelo identificador.
-
-    Parâmetros:
-        - list_id: Identificador da lista de compras.
-    """
-
-    return ShoppingListsRepository.get_list(list_id)
+    try:
+        if list_id:
+            found = ShoppingListsRepository.get_list(list_id, household_id=identidade.perfil())
+            lists = [found] if found else []
+        else:
+            lists = ShoppingListsRepository.get_lists(identidade.perfil(), title=title)
+    except ShoppingListUnavailable:
+        return "FALHA: não foi possível consultar as listas. Isso não significa que não existam."
+    return json.dumps([item.to_dict() for item in lists], ensure_ascii=False, default=str)
 
 
 @tool("update_list")
-def update_list(
-    list_id: str,
-    items: list[dict],
-) -> ShoppingList | None:
+def update_list(list_id: str, items: list[dict] | None = None, title: str | None = None) -> str:
+    """Atualiza ou renomeia uma lista da casa após autorização da pessoa.
+    list_id: id descoberto por get_list, nunca pedido ao usuário.
+    items: conjunto COMPLETO de itens; mantenha os que não mudaram e seus ids.
+      [{"id": "...", "name": "Arroz", "quantity": 200, "unitOfMeasure": "g", "checked": true}].
+      Marcar comprado não remove o item. None preserva os itens; [] esvazia.
+    title: opcional, novo título. None mantém o título.
     """
-    Atualiza os itens de uma lista de compras existente.
-
-    Parâmetros:
-        - list_id: Identificador da lista de compras.
-        - items: Novo conjunto de itens no formato [{"ingredient": str, "quantity": str, "purchased": bool}].
-    """
-
-    return ShoppingListsRepository.update_list(list_id, items)
+    household = identidade.perfil()
+    try:
+        existing = ShoppingListsRepository.get_list(list_id, household_id=household)
+        if existing is None:
+            return "FALHA: lista não encontrada."
+        if items is None and title is None:
+            return "FALHA: informe o que deseja alterar."
+        new_title = title.strip() if title is not None else existing.title
+        if not new_title:
+            return "FALHA: o título não pode ficar vazio."
+        new_items = existing.items
+        if items is not None:
+            new_items = []
+            old_ids = {item["id"]: item for item in existing.items}
+            for raw in items:
+                item = normalize_item(raw)
+                if raw.get("id") and item["id"] not in old_ids:
+                    return "FALHA: um item não pertence a esta lista. Consulte novamente."
+                matches = [old for old in existing.items
+                           if _normalizar(old["name"]) == _normalizar(item["name"])
+                           and _normalizar(old["unitOfMeasure"]) == _normalizar(item["unitOfMeasure"])]
+                old = old_ids.get(raw.get("id"))
+                if not old and not raw.get("id") and len(matches) > 1:
+                    return "FALHA: há itens repetidos; consulte os ids antes de alterar."
+                if not old and len(matches) == 1:
+                    old = matches[0]
+                if old:
+                    item["id"] = old["id"]
+                    if not any(key in raw for key in ("checked", "purchased", "comprado")):
+                        item["checked"] = old["checked"]
+                new_items.append(item)
+            if len({item["id"] for item in new_items}) != len(new_items):
+                return "FALHA: o mesmo item foi informado mais de uma vez."
+        result = identidade.executar_gravacao(
+            "update_list", {"list_id": list_id, "items": items, "title": title},
+            lambda: ShoppingListsRepository.update_list(
+                list_id, household_id=household, items=new_items, title=new_title,
+            ),
+        )
+    except (ValueError, TypeError, ZeroDivisionError) as error:
+        return f"FALHA: lista não alterada. {error}"
+    except ShoppingListUnavailable:
+        return "FALHA: não foi possível atualizar a lista. Consulte novamente."
+    if result is None:
+        return "FALHA: lista não atualizada. Consulte novamente."
+    return json.dumps(result.to_dict(), ensure_ascii=False, default=str)

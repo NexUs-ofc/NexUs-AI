@@ -5,7 +5,7 @@ metadata:
   dominio: receitas
   rota: receitas
   intencao: Recomendar receita para evento
-  ferramentas: [consultar_preferencias, get_stock, escalar_quantidades, somar_valores]
+  ferramentas: [ingredientes_para_comprar, consultar_preferencias, get_stock, escalar_quantidades, somar_valores]
   version: 1.0.0
 ---
 
@@ -39,6 +39,12 @@ com quantidade de convidados.
 - Não invente a quantidade de pessoas. Se ela não veio e não dá para deduzir,
   peça em `esclarecer` — e só então.
 
+## Conferência antes de responder
+
+- Depois de escolher a receita, use `ingredientes_para_comprar` com ingredientes, quantidades e unidades para conferir o estoque. A ferramenta soma lotes e converte g/kg e ml/l. Nunca marque como suficiente só porque existe um pacote.
+- Se a comparação não for confirmada, não afirme suficiência: avise que a quantidade disponível precisa ser conferida. Não converta xícaras ou pitadas em gramas por palpite.
+- Todas as sugestões incluem porções, ingredientes com quantidades, passos completos, tempo_preparo_minutos e dificuldade. Tempo é estimativa culinária, não prazo garantido.
+
 ## Saída
 
 - `intencao` : `"Recomendar receita para evento"`
@@ -53,6 +59,7 @@ receita: {
     ],
     instrucoes: ["...", "..."],
     ingredientes_faltantes: ["..."],
+    tempo_preparo_minutos: 30,
     tempo_estimado: "...",
     dificuldade: "..."
 }

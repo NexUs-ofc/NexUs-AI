@@ -25,6 +25,8 @@ def _pantry_item_to_dict(item: Pantry_Item, foods: dict[int, Food]) -> dict:
         "food_id": item.food_id,
         "food_name": food.name if food else None,
         "quantity": item.quantity,
+        "package_quantity": getattr(food, "package_quantity", None),
+        "unit_of_measure": getattr(food, "unit_of_measure", None),
         "expiry_date": item.expiry_date.isoformat() if item.expiry_date else None,
     }
 

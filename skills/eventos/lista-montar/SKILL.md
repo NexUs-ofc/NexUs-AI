@@ -1,11 +1,11 @@
 ---
 name: Montar lista de compras
-description: Cria uma lista de compras, a partir das receitas de um evento, do que falta no estoque, ou de itens que a pessoa dita. Use quando ela quer uma lista nova.
+description: Cria uma lista de compras, a partir de uma receita da conversa ou salva, das receitas de um evento, do que falta no estoque, ou de itens que a pessoa dita. Use quando ela quer uma lista nova.
 metadata:
   dominio: events
   rota: eventos
   intencao: Criar lista de compras
-  ferramentas: [create_list, get_list, get_missing_products, get_events, recomend_recipe, somar_valores]
+  ferramentas: [ingredientes_para_comprar, create_list, get_list, get_stock, get_missing_products, get_events, buscar_receitas_usuario, somar_valores, calcular_percentual]
   version: 1.0.0
 ---
 
@@ -20,10 +20,9 @@ Se a lista já existe e ela quer ver ou alterar, use `lista-gerenciar`.
 
 ## Fluxo
 
-1. Descubra a origem pela pergunta. Na dúvida entre evento e estoque,
-   pergunte — é a única pergunta que vale fazer aqui.
-2. Reúna os itens da origem escolhida.
-3. `create_list` com o título e os itens.
+1. Leia a conversa antes de perguntar. “Dessa receita” significa a última receita apresentada: use seus ingredientes e quantidades, sem sugerir um prato novo. Para uma receita salva que não esteja no histórico, use `buscar_receitas_usuario` com o título.
+2. Para evento, `get_events` e suas receitas JÁ vinculadas; nunca regenere cardápio ao montar a lista. Para reposição, `get_missing_products`. Para receita, `get_stock` para conferir o que há. Não invente quantidades faltantes nem subtraia pacotes de gramas: sem unidade comparável, inclua o ingrediente para conferência e avise que a quantidade disponível não pôde ser confirmada.
+3. Para receita, chame `ingredientes_para_comprar` com TODOS os ingredientes e quantidades. Use `itens_para_comprar` como base de `create_list`, sem refazer contas. Para eventos, confira os ingredientes das receitas vinculadas da mesma forma. Onde a comparação não foi possível, avise que a quantidade precisa ser conferida. Só então `create_list` com o título e os itens.
 4. `somar_valores` se a pessoa pedir o custo estimado.
 
 ## Regras
@@ -34,7 +33,11 @@ Se a lista já existe e ela quer ver ou alterar, use `lista-gerenciar`.
   casando pelo título ou pela data que a pessoa mencionou.
 - Lista criada a partir de evento leva o nome do evento, para ela reconhecer
   depois.
-- Confirme antes de criar, e diga quantos itens a lista terá.
+- Pedido explícito com itens definidos (“crie a lista dessa receita”) já autoriza criar. Se você propôs uma lista e a pessoa confirmou, crie sem perguntar novamente. Pergunte só quando faltar receita, item, quantidade ou quando houver ambiguidade.
+- Para receita avulsa, não crie evento e deixe `event_id` vazio. Não salve a receita sem pedido separado.
+- `create_list` recebe título e itens com `name`, `quantity` numérica, `unitOfMeasure` e `checked: false`. Use as quantidades da receita. O retorno traz `_id` e `array_list`: repasse o que foi realmente criado.
+- Se todos os itens já estiverem disponíveis em quantidade confirmada, diga que não falta comprar; não crie lista vazia.
+- Falha de consulta ou gravação não é sucesso nem ausência de itens.
 
 ## Saída
 
@@ -64,7 +67,7 @@ ROUTE=events
 PERGUNTA_ORIGINAL=Monta a lista de compras do churrasco de sábado.
 
 (get_events -> [{"id": "e1", "titulo": "Churrasco", "data": "2026-10-10", "qtd_pessoas": 10}])
-(recomend_recipe -> {"ingredientes_faltantes": ["Picanha", "Linguiça"]})
+(get_events -> receitas vinculadas com Picanha 4kg e Linguiça 2kg em falta)
 (create_list -> {"id": "l1", "titulo": "Churrasco"})
 
 Resposta:

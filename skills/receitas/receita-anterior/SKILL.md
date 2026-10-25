@@ -24,8 +24,10 @@ Pedido de receita nova não é desta skill.
 
 1. Para salvar: a receita está no histórico da conversa, normalmente a última
    que você deu. Chame `salvar_receita` com ela como foi dada: título,
-   porções, cada ingrediente como {"nome", "quantidade"} e o modo de
-   preparo. Não informe food_id: a ferramenta descobre ou cadastra. Se
+   porções, cada ingrediente como {"nome", "quantidade"}, o modo de preparo,
+   tempo_preparo_minutos (minutos inteiros) e dificuldade (fácil, média ou difícil).
+   Reutilize tempo e dificuldade da receita apresentada; não os invente ao salvar.
+   Não informe food_id: ingredientes são salvos pelo nome, sem criar alimentos. Se
    houver mais de uma e não der para saber qual, pergunte em `esclarecer`.
 2. Para ver as salvas: `buscar_receitas_usuario`.
 3. Para recuperar uma receita dada antes: `buscar_receitas_usuario` primeiro;
@@ -34,9 +36,14 @@ Pedido de receita nova não é desta skill.
 ## Regras
 
 - Nunca salve sem a pessoa pedir.
+- Ao consultar uma receita salva, mantenha o objeto receita com título, porções, todos os ingredientes e instruções. Não omita ingredientes nem reescreva a receita para outra versão.
 - Não invente receita. Se não achar nem nas salvas nem no histórico, diga que
   não encontrou e ofereça gerar uma nova.
-- Se `salvar_receita` falhar, diga que não salvou.
+- Se `salvar_receita` falhar, diga que não salvou. Nunca confirme sucesso sem o retorno da ferramenta.
+- Salve TODOS os ingredientes e passos, sem resumir quantidades ou modo de preparo.
+- Se não houver receita completa na conversa nem nas salvas, peça qual receita deseja guardar; não gere outra no lugar.
+- `buscar_receitas_usuario` devolve conteúdo completo e id. Para mostrar uma receita, repasse ingredientes, porções, preparo, tempo e dificuldade que existem. Campo ausente em receita antiga é desconhecido, não motivo para inventar.
+- Se a pessoa disser só “salva essa”, use a última receita apresentada, sem pedir confirmação de novo.
 
 ## Saída
 
