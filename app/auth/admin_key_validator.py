@@ -7,7 +7,12 @@ from ..config import ADMIN_API_KEY
 
 ADMIN_KEY_HEADER = "X-Admin-Key"
 
-_admin_key_header = APIKeyHeader(name=ADMIN_KEY_HEADER, auto_error=False)
+_admin_key_header = APIKeyHeader(
+    name=ADMIN_KEY_HEADER,
+    scheme_name="AdminApiKey",
+    description="Chave do painel do administrador.",
+    auto_error=False,
+)
 
 
 def validate_admin_key(api_key: str = Security(_admin_key_header)) -> str:
