@@ -145,9 +145,15 @@ class ConversationsRepository:
             return False
 
     @staticmethod
-    def append_messages(session_id: str, user_msg: str, assistant_msg: str):
+    def append_messages(session_id: str, user_msg: str, assistant_msg: str,
+                        receita: dict | None = None, assunto: dict | None = None):
         try:
             logger.info(f"Salvando mensagens da sessão {session_id}")
+            assistant = {"role": "assistant", "content": assistant_msg}
+            if receita:
+                assistant["receita"] = receita
+            if assunto:
+                assistant["assunto"] = assunto
 
             result = ConversationsRepository.conversations_collection.update_one(
                 {"_id": ObjectId(session_id)},
@@ -156,7 +162,7 @@ class ConversationsRepository:
                         "historico": {
                             "$each": [
                                 {"role": "user", "content": user_msg},
-                                {"role": "assistant", "content": assistant_msg},
+                                assistant,
                             ]
                         }
                     },

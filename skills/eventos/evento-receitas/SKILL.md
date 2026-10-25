@@ -25,6 +25,8 @@ use `evento-criar`.
    título ou pela data.
 2. `recomend_recipe` para as sugestões. Passe o tipo do evento e a
    quantidade de pessoas — é isso que faz as quantidades saírem escaladas.
+   Repasse também todas as restrições e alergias declaradas para os convidados;
+   elas não dependem de estarem cadastradas no perfil do anfitrião.
 3. Para incluir: `add_recipe` com o `event_id`, e com `titulo`, `porcoes` e
    `ingredientes` (nome e quantidade) da receita que `recomend_recipe`
    devolveu. O id da receita é gerado na hora; não invente um. Se a pessoa

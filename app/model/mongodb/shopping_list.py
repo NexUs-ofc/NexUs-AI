@@ -1,8 +1,10 @@
 import math
 import re
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from bson import ObjectId
+
+from app.validation import validar_titulo
 
 
 def normalize_item(item: dict) -> dict:
@@ -36,7 +38,7 @@ def normalize_item(item: dict) -> dict:
     if food_id is not None and (isinstance(food_id, bool) or not isinstance(food_id, int) or food_id <= 0):
         raise TypeError("Identificador de alimento inválido.")
     return {
-        "id": str(item.get("id") or uuid4()),
+        "id": str(item.get("id") or item.get("_id") or uuid4()),
         "foodId": food_id,
         "name": name,
         "quantity": quantity,
@@ -50,7 +52,7 @@ class ShoppingList:
                  event_id: str | None = None, _id: ObjectId | None = None):
         self.id = _id
         self.household_id = household_id
-        self.title = title.strip()
+        self.title = validar_titulo(title)
         if not self.title:
             raise ValueError("Informe o título da lista.")
         self.items = [normalize_item(item) for item in items]
@@ -69,9 +71,16 @@ class ShoppingList:
 
     @classmethod
     def from_dict(cls, data: dict):
+        items = []
+        for index, raw in enumerate(data.get("array_list", data.get("items", []))):
+            item = dict(raw)
+            if not item.get("id") and not item.get("_id"):
+                # Identidade estável para leitura de legado, sem migrar o banco.
+                item["id"] = str(uuid5(NAMESPACE_URL, f"ceris:list:{data.get('_id')}:{index}"))
+            items.append(item)
         return cls(
             _id=data.get("_id"), household_id=data["household_id"],
-            title=data["title"], items=data.get("array_list", data.get("items", [])),
+            title=data["title"], items=items,
             event_id=data.get("event_id"),
         )
 

@@ -21,6 +21,7 @@ from ..tools.mongo_recipe_tools import (
 )
 from ..tools.mongodb_tools import (
     add_recipe,
+    alterar_item_lista,
     cancel_event,
     create_event,
     create_list,
@@ -28,8 +29,8 @@ from ..tools.mongodb_tools import (
     get_list,
     postpone_event,
     remove_recipe,
+    renomear_lista,
     update_description,
-    update_list,
 )
 from ..tools.pg_tools import (
     get_brand_info,
@@ -170,7 +171,8 @@ CATALOGO_FERRAMENTAS = {
         remove_recipe,
         create_list,
         get_list,
-        update_list,
+        renomear_lista,
+        alterar_item_lista,
         consultar_preferencias,
         buscar_historico,
         buscar_receitas_usuario,
