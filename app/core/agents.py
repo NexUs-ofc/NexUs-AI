@@ -40,6 +40,7 @@ from ..tools.pg_tools import (
     remove_product,
 )
 from ..tools.preference_tools import consultar_preferencias
+from ..tools.recipe_tools import ingredientes_para_comprar
 from .llms import (
     estoque_llm,
     estoque_reserva,
@@ -149,6 +150,7 @@ CATALOGO_FERRAMENTAS = {
     f.name: f
     for f in (
         resolver_data,
+        ingredientes_para_comprar,
         remove_product,
         get_stock,
         get_missing_products,

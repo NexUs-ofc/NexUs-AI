@@ -5,7 +5,7 @@ metadata:
   dominio: receitas
   rota: receitas
   intencao: Sugerir receita
-  ferramentas: [consultar_preferencias, get_stock, escalar_quantidades]
+  ferramentas: [ingredientes_para_comprar, consultar_preferencias, get_stock, escalar_quantidades]
   version: 1.0.0
 ---
 
@@ -60,6 +60,12 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
   guiada por PREFERENCIAS, com tudo em `ingredientes_faltantes`, e ofereça
   montar a lista de compras.
 
+## Conferência antes de responder
+
+- Depois de escolher a receita, use `ingredientes_para_comprar` com ingredientes, quantidades e unidades para conferir o estoque. A ferramenta soma lotes e converte g/kg e ml/l. Nunca marque como suficiente só porque existe um pacote.
+- Se a comparação não for confirmada, não afirme suficiência: avise que a quantidade disponível precisa ser conferida. Não converta xícaras ou pitadas em gramas por palpite.
+- Todas as sugestões incluem porções, ingredientes com quantidades, passos completos, tempo_preparo_minutos e dificuldade. Tempo é estimativa culinária, não prazo garantido.
+
 ## Saída
 
 - `intencao` : `"Sugerir receita"`
@@ -74,6 +80,7 @@ receita: {
     ],
     instrucoes: ["...", "..."],
     ingredientes_faltantes: ["..."],
+    tempo_preparo_minutos: 30,
     tempo_estimado: "...",
     dificuldade: "..."
 }

@@ -1,3 +1,5 @@
+import re
+
 from bson import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
@@ -7,6 +9,10 @@ from ...controller.config import logging
 from ...model.mongodb.recipe import Recipe
 
 logger = logging.getLogger(__name__)
+
+
+class RecipeUnavailable(RuntimeError):
+    """Consulta indisponível, diferente de nenhuma receita salva."""
 
 
 class RecipesRepository:
@@ -21,6 +27,7 @@ class RecipesRepository:
         try:
             logger.info(f"Salvando receita da conta {recipe.account_id}")
 
+            recipe.mark_created()
             result = RecipesRepository.recipes_collection.insert_one(recipe.to_dict())
             recipe.id = result.inserted_id
 
@@ -33,14 +40,16 @@ class RecipesRepository:
             return None
 
     @staticmethod
-    def get_recipe_by_id(recipe_id: str | ObjectId) -> Recipe | None:
+    def get_recipe_by_id(recipe_id: str | ObjectId, account_id: int) -> Recipe | None:
+        if not ObjectId.is_valid(recipe_id):
+            return None
         try:
             logger.info(f"Buscando receita {recipe_id}")
 
             if isinstance(recipe_id, str):
                 recipe_id = ObjectId(recipe_id)
 
-            doc = RecipesRepository.recipes_collection.find_one({"_id": recipe_id})
+            doc = RecipesRepository.recipes_collection.find_one({"_id": recipe_id, "account_id": account_id})
 
             if doc is None:
                 logger.info(f"Receita {recipe_id} não encontrada")
@@ -55,13 +64,14 @@ class RecipesRepository:
             return None
 
     @staticmethod
-    def get_user_recipes(account_id: int, limite: int = 5) -> list[Recipe]:
+    def get_user_recipes(account_id: int, limite: int = 20, titulo: str = "") -> list[Recipe]:
         try:
             logger.info("Buscando receitas do usuário")
 
-            docs = RecipesRepository.recipes_collection.find(
-                {"account_id": account_id}
-            ).sort("_id", -1).limit(limite)
+            query = {"account_id": account_id}
+            if titulo.strip():
+                query["title"] = {"$regex": re.escape(titulo.strip()), "$options": "i"}
+            docs = RecipesRepository.recipes_collection.find(query).sort("created_at", -1).limit(limite)
 
             receitas = [Recipe.from_dict(doc) for doc in docs]
 
@@ -69,6 +79,6 @@ class RecipesRepository:
 
             return receitas
 
-        except PyMongoError:
+        except PyMongoError as error:
             logger.exception("Erro ao buscar receitas do usuário")
-            return []
+            raise RecipeUnavailable("Falha ao consultar receitas salvas.") from error

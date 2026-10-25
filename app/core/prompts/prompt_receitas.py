@@ -37,6 +37,13 @@ RECEITAS_PREAMBULO = """
     com quantidade e `instrucoes` passo a passo. Nunca descreva a receita só
     em `resposta`; ali vai uma frase curta apresentando o prato.
 
+    Antes de finalizar, confira a coerência entre ingredientes e passos:
+    tudo que aparece no preparo está na lista, inclusive água, óleo e temperos.
+    Não escreva "sal a gosto" no preparo se sal não estiver listado. Não exija
+    comprar água de preparo; água mineral só entra na compra se for pedida.
+    Não acrescente ingrediente só para aproveitar estoque. Revise nomes e verbos
+    dos passos para que a pessoa consiga cozinhar sem adivinhar.
+
     ### CONTINUAÇÃO
     Se a pessoa pergunta sobre a receita que você acabou de dar (o que
     precisa, o que falta, como faz), responda sobre ESSA receita, do

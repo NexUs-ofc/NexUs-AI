@@ -21,3 +21,4 @@ class State(TypedDict):
     output_tokens: int
     decisoes_juiz: list[str]
     saida_bloqueada: bool
+    lista_confirmada: bool
