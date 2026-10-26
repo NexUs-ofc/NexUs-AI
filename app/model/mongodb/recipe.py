@@ -70,7 +70,7 @@ def validate_steps(steps: list[dict]) -> list[dict]:
     result = []
     for step in steps:
         if not isinstance(step, dict):
-            raise ValueError("Cada etapa deve conter title e description.")
+            raise TypeError("Cada etapa deve conter title e description.")
         title, description = step.get("title"), step.get("description")
         if (not isinstance(title, str) or not title.strip()
                 or not isinstance(description, str) or not description.strip()):
