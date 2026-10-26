@@ -15,6 +15,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # LLM_MODEL vazio usa o modelo padrao do provedor, definido em app/core/llms.py.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
 LLM_MODEL = os.getenv("LLM_MODEL", "").strip()
+TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "").strip()
+JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "jev" if TYPESAFE_API_KEY else "llm").strip().lower()
+JEV_MODEL = os.getenv("JEV_MODEL", "jev-latest").strip()
+if JUDGE_PROVIDER not in {"jev", "llm"}:
+    raise RuntimeError("JUDGE_PROVIDER deve ser jev ou llm.")
 # Reserva: quando o principal falha (timeout, 504, cota), a mesma chamada e
 # refeita neste provedor. Vazio desliga a reserva.
 LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()

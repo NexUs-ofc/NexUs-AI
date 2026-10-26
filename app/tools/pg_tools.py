@@ -59,7 +59,10 @@ def remove_product(
         if pantry_item is None or pantry_item.profile_id != identidade.perfil():
             return False
 
-        return repository.remove_product(pantry_item)
+        return identidade.executar_gravacao(
+            "remove_product", {"pantry_item_id": pantry_item_id},
+            lambda: repository.remove_product(pantry_item),
+        )
 
 
 @tool("get_stock")
@@ -69,6 +72,10 @@ def get_stock() -> str:
 
     Parâmetros:
     """
+    return identidade.consultar_uma_vez("get_stock", _consultar_estoque)
+
+
+def _consultar_estoque() -> str:
     profile_id = identidade.perfil()
 
 

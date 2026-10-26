@@ -1,5 +1,6 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime
 
@@ -10,6 +11,7 @@ from langgraph.graph import END, StateGraph
 from langsmith import trace, traceable
 
 from app.auth import identidade
+from app.config import JUDGE_PROVIDER
 from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
 from app.core.contexto_conversa import (
@@ -17,11 +19,11 @@ from app.core.contexto_conversa import (
     pedido_lista_generico,
     resolver_assunto,
 )
+from app.core.judge import Verdict, deterministic_verdict, evaluate_jev, privacy_verdict
 from app.core.llms import (
     MODELO,
     juiz_llm,
     orquestrador_llm,
-    revisao_segunda_llm,
     roteador_llm,
     seletor_llm,
     texto,
@@ -29,6 +31,8 @@ from app.core.llms import (
 from app.core.prompts.prompt_juiz import JUIZ_PROMPT_COMPLETO
 from app.core.prompts.prompt_orquestrador import ORQUESTRADOR_PROMPT_COMPLETO
 from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
+from app.core.provider_policy import transient
+from app.core.runtime_budget import BudgetExceeded, request_budget
 from app.core.skills import catalogo, do_agente
 from app.guardrails.guardrails import (
     PII,
@@ -51,6 +55,7 @@ from app.validation import ingredientes_basicos_ausentes
 from .state import State
 
 logger = logging.getLogger(__name__)
+_PROFILE_READS = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ceris-profile")
 
 # Uma devolucao, nao duas: cada uma re-executa o agente inteiro, com todas as
 # ferramentas de novo. No agente de receitas isso custa ~50s por rodada, e a
@@ -346,13 +351,21 @@ def _invocar_agente(
         HumanMessage(content=mensagem)
     )
 
-    resultado = agent.invoke(
-        {"messages": messages},
-        config={
-            "callbacks": [ToolLoggingCallback()],
-            "metadata": {"trace_id": trace_id},
-        },
-    )
+    # A correção usa os recibos existentes. Não deixa uma crítica do juiz
+    # produzir uma segunda criação/cancelamento com argumentos diferentes.
+    from contextlib import nullcontext
+
+    from langgraph.errors import GraphRecursionError
+
+    try:
+        with identidade.reparo_de_resposta() if revisao else nullcontext():
+            resultado = agent.invoke(
+                {"messages": messages},
+                config={"callbacks": [ToolLoggingCallback()], "metadata": {"trace_id": trace_id},
+                        "recursion_limit": 16},
+            )
+    except GraphRecursionError:
+        return json.dumps({"resposta": "Não consegui concluir todas as etapas. Confira os registros atuais antes de repetir uma alteração."}), 0, 0, []
 
     mensagens_saida = resultado.get("messages", [])
 
@@ -442,7 +455,21 @@ def _invocar_com_confirmacao(agent, mensagem, historico, trace_id, revisao=""):
                 envelope["lista"] = confirmed
                 response = json.dumps(envelope, ensure_ascii=False)
             return response, tokens_in, tokens_out, evidences
-        if attempt == 0:
+        if expected == "salvar_receita":
+            validation_prefix = "FALHA: receita não salva. "
+            invalid = next((str(e.get("conteudo", ""))[len(validation_prefix):]
+                            for e in reversed(evidences)
+                            if e.get("ferramenta") == "salvar_receita"
+                            and str(e.get("conteudo", "")).startswith(validation_prefix)), None)
+            if invalid:
+                response = json.dumps({
+                    "dominio": envelope.get("dominio", ""),
+                    "intencao": "Salvar receita",
+                    "resposta": f"Não salvei a receita. {invalid}",
+                    "esclarecer": f"{invalid} Pode corrigir esses dados antes de salvar?",
+                }, ensure_ascii=False)
+                return response, tokens_in, tokens_out, evidences
+        if attempt == 0 and identidade.reservar_reparo():
             tool = "renomear_lista ou alterar_item_lista" if expected == "update_list" else expected
             correction = (
                 "A operação NÃO tem confirmação. Consulte os dados e execute "
@@ -459,7 +486,12 @@ def _invocar_com_confirmacao(agent, mensagem, historico, trace_id, revisao=""):
             response = json.dumps({
                 "dominio": envelope.get("dominio", ""),
                 "intencao": envelope.get("intencao", ""),
-                "resposta": "Não consegui confirmar essa alteração. Tente novamente.",
+                "resposta": (
+                    "Não consegui confirmar o salvamento. Confira se as quantidades são positivas "
+                    "e têm unidade, e se os demais dados da receita estão completos."
+                    if expected == "salvar_receita" else
+                    "Não consegui confirmar essa alteração. Tente novamente."
+                ),
                 "recomendacao": "",
             }, ensure_ascii=False)
     return response, tokens_in, tokens_out, evidences
@@ -557,7 +589,7 @@ def _restricoes_prontas(profile_id: int) -> str:
             restricoes = ProfileRepository(session).get_restrictions(profile_id)
     except Exception:
         logger.warning("nao foi possivel ler as restricoes do perfil", exc_info=True)
-        restricoes = []
+        return "FALHA: não foi possível consultar as restrições do perfil."
 
     if not restricoes:
         return "nenhuma restrição registrada"
@@ -578,8 +610,13 @@ def agente_receitas(state: State) -> State:
             0,
         )
 
-        preferencias = _preferencias_prontas(account_id, state["mensagem"])
-        restricoes = _restricoes_prontas(state.get("household_account_id", 0))
+        prefs = _PROFILE_READS.submit(_preferencias_prontas, account_id, state["mensagem"])
+        restrictions = _PROFILE_READS.submit(_restricoes_prontas, state.get("household_account_id", 0))
+        preferencias, restricoes = prefs.result(), restrictions.result()
+        if restricoes.startswith("FALHA"):
+            state["resposta_agente"] = json.dumps({"resposta": "Não consegui consultar suas restrições alimentares agora. Tente novamente antes de gerar uma receita."})
+            state["resposta_final"] = _montar_sem_modelo(state["resposta_agente"])
+            return state
 
         mensagem = (
             f"ROUTE=receitas\n"
@@ -755,6 +792,16 @@ def agente_eventos(state: State) -> State:
 
 
 
+def _sem_ids(valor):
+    """A projeção semântica dos dois lados exclui metadados não exibidos."""
+    if isinstance(valor, dict):
+        return {k: _sem_ids(v) for k, v in valor.items()
+                if not k.endswith("_id") and k not in {"id", "foodId", "id_receita"}}
+    if isinstance(valor, list):
+        return [_sem_ids(v) for v in valor]
+    return valor
+
+
 def _compactar(conteudo: str) -> tuple[str, str]:
     """
     Reduz o retorno da ferramenta ao que o juiz precisa para conferir lastro.
@@ -768,6 +815,9 @@ def _compactar(conteudo: str) -> tuple[str, str]:
         dados = json.loads(conteudo)
     except (ValueError, TypeError):
         dados = None
+    if isinstance(dados, (dict, list)):
+        dados = _sem_ids(dados)
+        conteudo = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
 
     if not isinstance(dados, list) or not dados:
         if len(conteudo) > LIMITE_EVIDENCIA:
@@ -926,115 +976,73 @@ def _para_o_juiz(resposta_agente: str) -> str:
     if not isinstance(dados, dict):
         return resposta_agente
 
-    return json.dumps(_podar(dados), ensure_ascii=False)
+    return json.dumps(_podar(_sem_ids(dados)), ensure_ascii=False)
 
 
 @traceable(name="juiz", **_TRACE_NO)
 def juiz(state: State) -> State:
     with span(state["trace_id"], "juiz"):
-        evidencias = _formatar_evidencias(state.get("evidencias", []))
-
-        mensagem_usuario = (
-            f"Rota: {state.get('rota', '')}\n"
-            f"Conversa até agora:\n"
-            f"{_formatar_conversa(state.get('historico', []))}\n"
-            f"Pergunta: {state['mensagem']}\n"
-            f"Evidências:\n"
-            f"{evidencias}\n"
-            f"Resposta do agente:\n"
-            f"{_para_o_juiz(state.get('resposta_agente', ''))}"
-        )
-
-        # Juiz indisponivel (timeout, 429, 504) aprova: perder a revisao custa
-        # menos do que derrubar a resposta que o agente ja montou.
-        try:
-            resposta = juiz_llm.invoke([
-                SystemMessage(content=JUIZ_PROMPT_COMPLETO),
-                HumanMessage(content=mensagem_usuario),
-            ])
-        except Exception:
-            logger.warning("juiz indisponivel, aprovando", exc_info=True)
-            resposta = None
-
-        if resposta is None:
-            veredito, motivo = "APROVADO", ""
-            input_tokens, output_tokens = 0, 0
-        else:
-            veredito, motivo = _ler_veredito(texto(resposta))
-            input_tokens, output_tokens = extrair_tokens(resposta)
-
-        # Devolver custa a re-execucao completa do agente: 43,0s em estoque e
-        # 41,7s em receitas, medidos. Uma leitura do juiz custa ~0,5s. Como o
-        # veredito varia entre execucoes — duas das tres devolucoes observadas
-        # estavam erradas —, vale ler de novo antes de pagar a rodada.
-        #
-        # Semente diferente e obrigatorio: com a mesma semente e temperatura
-        # zero, repetir a chamada devolve o MESMO veredito e nao ha segunda
-        # opiniao nenhuma.
-        segunda = None
-
-        if veredito == "DEVOLVER":
-            try:
-                segunda = revisao_segunda_llm.invoke([
-                    SystemMessage(content=JUIZ_PROMPT_COMPLETO),
-                    HumanMessage(content=mensagem_usuario),
-                ])
-                veredito_2, motivo_2 = _ler_veredito(texto(segunda))
-            except Exception:
-                logger.warning("segunda leitura do juiz indisponivel", exc_info=True)
-                segunda = None
-                veredito_2, motivo_2 = "APROVADO", ""
-
-            entrada_2, saida_2 = extrair_tokens(segunda)
-            input_tokens += entrada_2
-            output_tokens += saida_2
-
-            # Divergencia absolve: a reprovacao era ruido do sorteio.
-            if veredito_2 == "APROVADO":
-                veredito, motivo = "APROVADO", ""
+        response = state.get("resposta_agente", "")
+        envelope = _ler_envelope(response)
+        candidate = _montar_sem_modelo(response) or _para_o_juiz(response)
+        evidence = _formatar_evidencias(state.get("evidencias", []))
+        history = _formatar_conversa(state.get("historico", []))
+        verdict = privacy_verdict(candidate) or deterministic_verdict(envelope, state.get("evidencias", []))
+        if verdict is None:
+            if JUDGE_PROVIDER == "jev":
+                verdict = evaluate_jev(state["mensagem"], candidate, evidence, history)
             else:
-                motivo = motivo_2 or motivo
-
-        # Uma decisao por leitura, para o painel: aprovado de primeira, devolvido,
-        # ou revertido quando a segunda opiniao absolveu a reprovacao.
-        if veredito == "DEVOLVER":
-            decisao = "devolvido"
-        elif segunda is not None:
-            decisao = "revertido"
-        else:
-            decisao = "aprovado"
-
-        state["decisoes_juiz"] = [*state.get("decisoes_juiz", []), decisao]
-
-        devolucoes = state.get("devolucoes", 0)
-
-        if veredito == "DEVOLVER" and devolucoes < LIMITE_DEVOLUCOES:
-            state["devolucoes"] = devolucoes + 1
-            state["veredito_juiz"] = motivo
-            state["limite_devolucoes"] = False
-        else:
-            state["veredito_juiz"] = ""
-            state["limite_devolucoes"] = veredito == "DEVOLVER"
-
-        state["input_tokens"] = state.get("input_tokens", 0) + input_tokens
-        state["output_tokens"] = state.get("output_tokens", 0) + output_tokens
-
-        logger.info(
-            "juiz avaliou a resposta do agente",
-            extra={
-                "trace_id": state["trace_id"],
-                "stage": "juiz",
-                "rota": state.get("rota", ""),
-                "veredito": veredito,
-                "motivo": motivo,
-                "segunda_leitura": segunda is not None,
-                "devolucoes": state.get("devolucoes", 0),
-                "limite_devolucoes": state.get("limite_devolucoes", False),
-            },
-        )
-
+                verdict = Verdict("review", "Avaliação pelo modelo de reserva.", "llm")
+        jev_input = verdict.input_tokens if verdict.source == "jev" else 0
+        jev_output = verdict.output_tokens if verdict.source == "jev" else 0
+        # Uma única escalada, sem a antiga segunda opinião. Falha não significa
+        # aprovação: entrega abstinência honesta quando não é possível validar.
+        if verdict.decision == "review":
+            tokens_in, tokens_out = verdict.input_tokens, verdict.output_tokens
+            try:
+                result = juiz_llm.invoke([
+                    SystemMessage(content=JUIZ_PROMPT_COMPLETO),
+                    HumanMessage(content=f"Rota: {state.get('rota', '')}\nConversa: {history}\n"
+                                 f"Pergunta: {state['mensagem']}\nEvidências: {evidence}\n"
+                                 f"Resposta do agente: {candidate}"),
+                ])
+                content = texto(result)
+                match = re.search(r"VEREDITO:\s*(APROVADO|DEVOLVER)", content)
+                if not match:
+                    raise ValueError("invalid_judge_verdict")
+                label, reason = _ler_veredito(content)
+                if label != match[1]:
+                    raise ValueError("invalid_judge_reason")
+                more_in, more_out = extrair_tokens(result)
+                verdict = Verdict("approve" if label == "APROVADO" else "repair", reason,
+                                  "llm_fallback", verdict.scores, tokens_in + more_in, tokens_out + more_out)
+            except Exception:  # noqa: BLE001 -- qualquer falha do avaliador exige abstinência.
+                verdict = Verdict("abstain", "Não foi possível validar a resposta.", "unavailable",
+                                  verdict.scores, tokens_in, tokens_out)
+        count = state.get("devolucoes", 0)
+        repair = (verdict.decision == "repair" and count < LIMITE_DEVOLUCOES
+                  and identidade.reservar_reparo())
+        state["veredito_juiz"] = verdict.reason if repair else ""
+        state["devolucoes"] = count + int(repair)
+        state["limite_devolucoes"] = verdict.decision in {"repair", "abstain"} and not repair
+        state["juiz_aprovado"] = verdict.decision == "approve"
+        state["juiz_seguro"] = verdict.decision == "approve" and verdict.source == "jev"
+        state["decisoes_juiz"] = [*state.get("decisoes_juiz", []),
+                                  "aprovado" if verdict.decision == "approve" else
+                                  "devolvido" if repair else "nao_confirmado"]
+        state["input_tokens"] = state.get("input_tokens", 0) + verdict.input_tokens - jev_input
+        state["output_tokens"] = state.get("output_tokens", 0) + verdict.output_tokens - jev_output
+        usage = state.get("judge_usage", {})
+        state["judge_usage"] = {"provider": "typesafe", "model": verdict.scores.get("modelo", ""),
+                                "input_tokens": usage.get("input_tokens", 0) + jev_input,
+                                "output_tokens": usage.get("output_tokens", 0) + jev_output}
+        logger.info("juiz avaliou a resposta do agente", extra={
+            "trace_id": state["trace_id"], "stage": "juiz", "rota": state.get("rota", ""),
+            "veredito": verdict.decision, "motivo": verdict.reason,
+            "judge_source": verdict.source, "judge_scores": verdict.scores,
+            "devolucoes": state["devolucoes"], "limite_devolucoes": state["limite_devolucoes"],
+        })
     return state
-
 
 
 PROMPT_SELETOR = """\
@@ -1373,6 +1381,17 @@ def _montar_sem_modelo(resposta_agente: str, saudou: bool = False) -> str:
 
 @traceable(name="orquestrador", **_TRACE_NO)
 def orquestrador(state: State) -> State:
+    if state.get("limite_devolucoes"):
+        state["resposta_final"] = (
+            "Não consegui confirmar uma resposta confiável para esse pedido. "
+            "Consulte os registros atuais antes de repetir uma alteração."
+        )
+        return state
+    if state.get("juiz_aprovado"):
+        rendered = _montar_sem_modelo(state.get("resposta_agente", ""), _saudou(state.get("mensagem", "")))
+        if rendered:
+            state["resposta_final"] = rendered
+            return state
     envelope = _ler_envelope(state.get("resposta_agente", ""))
     if envelope and _formatar_lista(envelope.get("lista")) and not state.get("limite_devolucoes"):
         state["resposta_final"] = _montar_sem_modelo(state["resposta_agente"], _saudou(state.get("mensagem", "")))
@@ -1437,7 +1456,8 @@ def guardrail_saida(state: State) -> State:
         resultado = checar_saida(
             state["resposta_final"],
             mapa,
-            revisar=state.get("rota") != "receitas" and not state.get("lista_confirmada"),
+            revisar=(state.get("rota") != "receitas" and not state.get("lista_confirmada")
+                     and not state.get("juiz_seguro") and not state.get("limite_devolucoes")),
         )
 
         # Bloqueio entrega a mensagem segura e encerra. Nao volta ao
@@ -1532,6 +1552,7 @@ def _registrar_metrica(
     decisoes_juiz: list[str] | None = None,
     bloqueio_entrada: bool = False,
     bloqueio_saida: bool = False,
+    judge_usage: dict | None = None,
 ) -> None:
     """Conta as tools e grava a metrica da requisicao, fora do caminho critico."""
 
@@ -1551,6 +1572,7 @@ def _registrar_metrica(
         judge_decisions=decisoes_juiz,
         input_blocked=bloqueio_entrada,
         output_blocked=bloqueio_saida,
+        judge_usage=judge_usage,
     )
 
 
@@ -1597,7 +1619,7 @@ def executar_chat(
         assunto = resolver_assunto(historico, mensagem)
         if assunto:
             assunto["lista_evento"] = assunto["tipo"] == "evento" and pedido_lista_generico(mensagem)
-        with identidade.da_requisicao(household_account_id, account_id, assunto=assunto), trace(
+        with identidade.da_requisicao(household_account_id, account_id, assunto=assunto), request_budget(), trace(
             name="ceris_chat_request",
             run_type="chain",
             metadata={
@@ -1628,17 +1650,31 @@ def executar_chat(
                 "decisoes_juiz": [],
                 "saida_bloqueada": False,
                 "lista_confirmada": False,
+                "juiz_aprovado": False,
+                "juiz_seguro": False,
+                "judge_usage": {},
             })
+            if identidade.escrita_incerta():
+                erro = True
+                tipo_erro = "WriteUncertain"
+                resultado["resposta_final"] = (
+                    "Não consegui confirmar o resultado de uma alteração. "
+                    "Confira os registros atuais antes de tentar novamente."
+                )
     except Exception as exc:
         erro = True
         tipo_erro = type(exc).__name__
 
-        logger.exception(
-            "Falha ao executar workflow",
-            extra={"trace_id": trace_id, "stage": "workflow"},
-        )
-
-        raise
+        if transient(exc):
+            logger.warning("provedores indisponíveis; pedido encerrado sem retry adicional",
+                           extra={"trace_id": trace_id, "stage": "workflow", "error_type": tipo_erro})
+            resultado = {"resposta_final": "A IA está temporariamente indisponível. Se você pediu uma alteração, confira os registros atuais antes de repetir o pedido.",
+                         "entrada_aprovada": True, "rota": "fallback"}
+            if isinstance(exc, BudgetExceeded):
+                resultado["resposta_final"] = "Não consegui concluir todas as etapas deste pedido. Confira os registros atuais antes de repetir uma alteração."
+        else:
+            logger.exception("Falha ao executar workflow", extra={"trace_id": trace_id, "stage": "workflow"})
+            raise
     finally:
         finished_at = datetime.now(UTC)
         duration_ms = (finished_at - started_at).total_seconds() * 1000
@@ -1647,6 +1683,9 @@ def executar_chat(
 
         if bloqueio_entrada:
             erro = True
+        if resultado is not None and resultado.get("limite_devolucoes"):
+            erro = True
+            tipo_erro = tipo_erro or "JudgeUnconfirmed"
 
         input_tokens = resultado.get("input_tokens", 0) if resultado is not None else 0
         output_tokens = resultado.get("output_tokens", 0) if resultado is not None else 0
@@ -1669,6 +1708,7 @@ def executar_chat(
             decisoes_juiz=resultado.get("decisoes_juiz", []) if resultado is not None else [],
             bloqueio_entrada=bloqueio_entrada,
             bloqueio_saida=bool(resultado.get("saida_bloqueada")) if resultado is not None else False,
+            judge_usage=resultado.get("judge_usage", {}) if resultado is not None else {},
         )
 
     resposta = resultado["resposta_final"]

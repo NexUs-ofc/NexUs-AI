@@ -32,6 +32,7 @@ from ..config import (
     LLM_MODEL,
     LLM_PROVIDER,
 )
+from .provider_policy import TransientFallback
 
 MODELO_PADRAO = {
     "groq": "openai/gpt-oss-20b",
@@ -57,10 +58,10 @@ RESERVA = (
     else None
 )
 
-# Teto de 2. Em 429 o cliente espera o retry-after antes de repetir, entao cada
-# tentativa a mais multiplica a espera que o usuario sente.
-TENTATIVAS = 2
-TIMEOUT_S = 90
+# Sem retry no SDK: a política faz no máximo uma troca transitória de provedor.
+# Evita multiplicar esperas entre SDK, fallback, agente e juiz.
+TENTATIVAS = 0
+TIMEOUT_S = 30
 
 # Única escolha que reduz: "medium" devolve o mesmo que o padrão.
 RACIOCINIO_CURTO = "low"
@@ -205,21 +206,16 @@ def _com_reserva(*args, **kwargs):
     principal = _cliente(*args, **kwargs)
     reserva = _reserva(*args, **kwargs)
 
-    if reserva is None:
-        return principal
-
-    return principal.with_fallbacks([reserva])
+    return TransientFallback(principal, reserva)
 
 
 # Devolve uma palavra: nome de rota ou de skill.
-escolha_llm = _com_reserva(0, RACIOCINIO_CURTO, TETO_ESCOLHA)
+escolha_llm = _com_reserva(0, RACIOCINIO_CURTO, TETO_ESCOLHA, timeout=12)
 
-# Devolve veredito curto e estruturado: juiz e guardrails. Teto curto e uma
-# tentativa: o veredito leva ~0,5s medido, e um juiz travado de 90s x 2
-# tentativas deixava a pessoa esperando mais de meio minuto. Quando ele falha,
-# o fluxo ja aprova por padrao, entao perder a chamada custa pouco.
-JUIZ_TIMEOUT_S = 20
-JUIZ_TENTATIVAS = 1
+# Guardrails usam revisão curta. Gemini exige deadline mínimo de 10 segundos.
+# O juiz Jev usa seu próprio cliente; sua escalada LLM não tem retry do SDK.
+JUIZ_TIMEOUT_S = 12
+JUIZ_TENTATIVAS = 0
 
 revisao_llm = _com_reserva(
     0, RACIOCINIO_CURTO, TETO_VEREDITO,
@@ -227,12 +223,11 @@ revisao_llm = _com_reserva(
 )
 
 # Escreve texto para a pessoa ler, de tamanho variável: sem teto.
-texto_llm = _com_reserva(0, RACIOCINIO_CURTO)
+texto_llm = _com_reserva(0, RACIOCINIO_CURTO, timeout=15)
 
-# Agentes: aqui o raciocínio é o trabalho. Temperatura alta porque receita e
-# sugestão ganham com variedade.
-specialist_llm = _cliente(0.7)
-specialist_reserva = _reserva(0.7)
+# Agentes: raciocínio curto com margem de saída para receita estruturada.
+specialist_llm = _cliente(0.4, RACIOCINIO_CURTO, 8192)
+specialist_reserva = _reserva(0.4, RACIOCINIO_CURTO, 8192)
 
 # Estoque e consulta e remocao, nao criacao: nao ganha com variedade nem com
 # raciocinio longo. Medido: com o raciocinio padrao o agente gastou 2048 tokens
@@ -244,10 +239,8 @@ TETO_ESTOQUE = 1200
 estoque_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
 estoque_reserva = _reserva(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
 
-# Segunda opinião do juiz. Semente diferente de proposito: com a mesma semente
-# e temperatura zero, repetir a chamada devolve o MESMO veredito, e segunda
-# opinião nenhuma. O sorteio precisa ser independente para a divergencia
-# aparecer — e e a divergencia que diz que a primeira reprovacao foi ruido.
+# Instância legada mantida para comparativos e compatibilidade dos testes.
+# O fluxo de produção não faz segunda opinião nem chama este cliente.
 revisao_segunda_llm = _com_reserva(
     0, RACIOCINIO_CURTO, TETO_VEREDITO, semente=20261010,
     timeout=JUIZ_TIMEOUT_S, tentativas=JUIZ_TENTATIVAS,
@@ -258,7 +251,10 @@ revisao_segunda_llm = _com_reserva(
 roteador_llm = escolha_llm
 seletor_llm = escolha_llm
 
-juiz_llm = revisao_llm
+juiz_llm = TransientFallback(_cliente(
+    0, RACIOCINIO_CURTO, TETO_VEREDITO, provedor=RESERVA or PROVEDOR,
+    timeout=6 if (RESERVA or PROVEDOR) == "groq" else 12, tentativas=0,
+), None)
 guardrail_llm = revisao_llm
 
 orquestrador_llm = texto_llm

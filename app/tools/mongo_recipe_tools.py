@@ -2,11 +2,17 @@ import json
 import unicodedata
 
 from langchain.tools import tool
+from pydantic import StrictInt
 
 from ..auth import identidade
 from ..model.mongodb.recipe import Recipe
 from ..repository.mongodb.recipes import RecipesRepository, RecipeUnavailable
-from ..validation import ingredientes_basicos_ausentes, validar_titulo
+from ..validation import (
+    ingredientes_basicos_ausentes,
+    inteiro_positivo,
+    validar_quantidade_receita,
+    validar_titulo,
+)
 
 
 def _difficulty(value: str) -> str:
@@ -37,16 +43,16 @@ def buscar_receitas_usuario(titulo: str = "") -> str:
 @tool("salvar_receita")
 def salvar_receita(
     titulo: str,
-    serving_size: int,
+    serving_size: StrictInt,
     ingredientes: list[dict],
     instrucoes: str,
-    tempo_preparo_minutos: int,
+    tempo_preparo_minutos: StrictInt,
     dificuldade: str,
 ) -> str:
     """Salva SOMENTE uma receita completa que a pessoa pediu para guardar.
     titulo: nome da receita dada na conversa, sem inventar uma nova.
     serving_size: número positivo de porções.
-    ingredientes: [{"nome": "Arroz", "quantidade": "200 g"}], todos com quantidade.
+    ingredientes: [{"nome": "Arroz", "quantidade": "200 g"}], todos com quantidade positiva e unidade, ou 'a gosto'.
       Também aceita ingrediente/quantidade_total do objeto receita. Sem cadastrar alimentos.
     instrucoes: modo de preparo completo, com um passo por linha.
     tempo_preparo_minutos: tempo total estimado em minutos inteiros positivos.
@@ -57,12 +63,16 @@ def salvar_receita(
         titulo = validar_titulo(titulo)
         if not titulo.strip() or not instrucoes.strip() or serving_size <= 0 or tempo_preparo_minutos <= 0:
             raise ValueError("Título, preparo, porções e tempo são obrigatórios.")
+        inteiro_positivo(serving_size, "Porcoes")
+        inteiro_positivo(tempo_preparo_minutos, "Tempo de preparo")
         saved_ingredients = []
         for item in ingredientes:
             if not isinstance(item, dict):
                 raise TypeError("Informe nome e quantidade de cada ingrediente.")
             name = str(item.get("nome") or item.get("ingrediente") or item.get("name") or "").strip()
-            quantity = str(item.get("quantidade") or item.get("quantidade_total") or item.get("required_quantity") or "").strip()
+            raw = next((item[key] for key in ("quantidade", "quantidade_total", "required_quantity")
+                        if key in item), None)
+            quantity = validar_quantidade_receita(raw, item.get("unidade") or item.get("unitOfMeasure") or "")
             if not name or not quantity:
                 raise ValueError("Informe nome e quantidade de todos os ingredientes.")
             saved_ingredients.append({

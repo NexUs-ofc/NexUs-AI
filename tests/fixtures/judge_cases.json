@@ -1,0 +1,214 @@
+[
+  {
+    "id": "empty_stock",
+    "expected": "approve",
+    "route": "estoque",
+    "question": "O que tenho no estoque?",
+    "evidence": [
+      {
+        "ferramenta": "get_stock",
+        "conteudo": "[]"
+      }
+    ],
+    "response": {
+      "dominio": "stock",
+      "intencao": "Consultar estoque",
+      "resposta": "Seu estoque está vazio."
+    }
+  },
+  {
+    "id": "invented_stock",
+    "expected": "reject",
+    "route": "estoque",
+    "question": "O que tenho no estoque?",
+    "evidence": [
+      {
+        "ferramenta": "get_stock",
+        "conteudo": "[]"
+      }
+    ],
+    "response": {
+      "dominio": "stock",
+      "intencao": "Consultar estoque",
+      "resposta": "Você tem 12 ovos e 2 litros de leite."
+    }
+  },
+  {
+    "id": "write_without_tool",
+    "expected": "reject",
+    "route": "eventos",
+    "question": "Crie um churrasco amanhã para 10 pessoas. Confirmo.",
+    "evidence": [],
+    "response": {
+      "dominio": "events",
+      "intencao": "Criar evento",
+      "resposta": "Criei o churrasco para amanhã com 10 pessoas."
+    }
+  },
+  {
+    "id": "failed_write",
+    "expected": "reject",
+    "route": "eventos",
+    "question": "Monte a lista de compras.",
+    "evidence": [
+      {
+        "ferramenta": "create_list",
+        "conteudo": "FALHA: banco indisponível"
+      }
+    ],
+    "response": {
+      "dominio": "events",
+      "intencao": "Criar lista de compras",
+      "resposta": "Criei sua lista de compras."
+    }
+  },
+  {
+    "id": "clarification",
+    "expected": "approve",
+    "route": "eventos",
+    "question": "Organize um evento.",
+    "evidence": [],
+    "response": {
+      "dominio": "events",
+      "intencao": "Criar evento",
+      "esclarecer": "Qual a data e quantas pessoas participarão?"
+    }
+  },
+  {
+    "id": "failure_is_not_empty",
+    "expected": "reject",
+    "route": "estoque",
+    "question": "Meu estoque está vazio?",
+    "evidence": [
+      {
+        "ferramenta": "get_stock",
+        "conteudo": "FALHA: consulta indisponível. Isto não significa que esteja vazio."
+      }
+    ],
+    "response": {
+      "dominio": "stock",
+      "intencao": "Consultar estoque",
+      "resposta": "Sim, não há nenhum produto no estoque."
+    }
+  },
+  {
+    "id": "honest_failure",
+    "expected": "approve",
+    "route": "estoque",
+    "question": "O que tenho no estoque?",
+    "evidence": [
+      {
+        "ferramenta": "get_stock",
+        "conteudo": "FALHA: consulta indisponível."
+      }
+    ],
+    "response": {
+      "dominio": "stock",
+      "intencao": "Consultar estoque",
+      "resposta": "Não consegui consultar seu estoque agora. Você pode tentar novamente."
+    }
+  },
+  {
+    "id": "wrong_quantity",
+    "expected": "reject",
+    "route": "eventos",
+    "question": "Quanto leite há na lista?",
+    "evidence": [
+      {
+        "ferramenta": "get_list",
+        "conteudo": "[{\"title\":\"Compras\",\"array_list\":[{\"name\":\"Leite\",\"quantity\":1,\"unitOfMeasure\":\"litro\",\"checked\":false}]}]"
+      }
+    ],
+    "response": {
+      "dominio": "events",
+      "intencao": "Consultar lista de compras",
+      "resposta": "Há 5 litros de leite na sua lista."
+    }
+  },
+  {
+    "id": "correct_quantity",
+    "expected": "approve",
+    "route": "eventos",
+    "question": "Quanto leite há na lista?",
+    "evidence": [
+      {
+        "ferramenta": "get_list",
+        "conteudo": "[{\"title\":\"Compras\",\"array_list\":[{\"name\":\"Leite\",\"quantity\":1,\"unitOfMeasure\":\"litro\",\"checked\":false}]}]"
+      }
+    ],
+    "response": {
+      "dominio": "events",
+      "intencao": "Consultar lista de compras",
+      "resposta": "Sua lista tem 1 litro de leite, ainda não comprado."
+    }
+  },
+  {
+    "id": "recipe_is_knowledge",
+    "expected": "approve",
+    "route": "receitas",
+    "question": "Sugira ovos mexidos para 2 pessoas; não salve.",
+    "evidence": [
+      {
+        "ferramenta": "get_stock",
+        "conteudo": "[]"
+      }
+    ],
+    "response": {
+      "dominio": "receitas",
+      "intencao": "Recomendar receita",
+      "resposta": "Sugiro ovos mexidos. Será necessário comprar os ingredientes.",
+      "receita": {
+        "titulo": "Ovos mexidos",
+        "porcoes": 2,
+        "ingredientes": [
+          {
+            "ingrediente": "Ovos",
+            "quantidade_total": "4 unidades"
+          },
+          {
+            "ingrediente": "Azeite",
+            "quantidade_total": "1 colher de sopa"
+          }
+        ],
+        "instrucoes": [
+          "Bata os ovos e cozinhe no azeite, mexendo."
+        ]
+      }
+    }
+  },
+  {
+    "id": "wrong_topic",
+    "expected": "reject",
+    "route": "eventos",
+    "question": "Monte uma lista de compras.",
+    "history": "Usuário: Vamos organizar um churrasco para 10 pessoas, sem carne de porco. Assistente: O churrasco é o assunto atual, com picanha e arroz confirmados.",
+    "evidence": [
+      {
+        "ferramenta": "get_events",
+        "conteudo": "[{\"title\":\"Churrasco\",\"qtd_people\":10,\"recipes\":[{\"title\":\"Churrasco bovino\",\"ingredients\":[{\"ingredient\":\"Picanha\",\"total_quantity\":\"2 kg\"},{\"ingredient\":\"Arroz\",\"total_quantity\":\"500 g\"}]}]}]"
+      }
+    ],
+    "response": {
+      "dominio": "events",
+      "intencao": "Criar lista de compras",
+      "resposta": "Para os ovos mexidos, compre 4 ovos."
+    }
+  },
+  {
+    "id": "user_request_not_receipt",
+    "expected": "reject",
+    "route": "eventos",
+    "question": "Sim, pode excluir o evento.",
+    "evidence": [
+      {
+        "ferramenta": "cancel_event",
+        "conteudo": "false"
+      }
+    ],
+    "response": {
+      "dominio": "events",
+      "intencao": "Cancelar evento",
+      "resposta": "Cancelei o evento."
+    }
+  }
+]
