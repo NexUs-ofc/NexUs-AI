@@ -3,7 +3,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelFallbackMiddleware
 
 from ..tools.calc_tools import (
     calcular_percentual,
@@ -21,6 +20,7 @@ from ..tools.mongo_recipe_tools import (
 )
 from ..tools.mongodb_tools import (
     add_recipe,
+    alterar_item_lista,
     cancel_event,
     create_event,
     create_list,
@@ -28,8 +28,8 @@ from ..tools.mongodb_tools import (
     get_list,
     postpone_event,
     remove_recipe,
+    renomear_lista,
     update_description,
-    update_list,
 )
 from ..tools.pg_tools import (
     get_brand_info,
@@ -40,6 +40,7 @@ from ..tools.pg_tools import (
     remove_product,
 )
 from ..tools.preference_tools import consultar_preferencias
+from ..tools.recipe_tools import ingredientes_para_comprar
 from .llms import (
     estoque_llm,
     estoque_reserva,
@@ -52,6 +53,7 @@ from .prompts.prompt_estoque import ESTOQUE_PREAMBULO
 from .prompts.prompt_events import EVENTS_PREAMBULO
 from .prompts.prompt_faqs import FAQ_PROMPT_COMPLETO
 from .prompts.prompt_receitas import RECEITAS_PREAMBULO
+from .provider_policy import CallBudgetMiddleware, TransientModelFallback
 from .skills import SKILLS
 
 logger = logging.getLogger(__name__)
@@ -65,7 +67,8 @@ def _reserva_do_modelo(reserva):
     refeita no provedor de reserva. Sem reserva configurada, nada muda.
     """
 
-    return [ModelFallbackMiddleware(reserva)] if reserva is not None else []
+    fallback = [TransientModelFallback(reserva)] if reserva is not None else []
+    return [*fallback, CallBudgetMiddleware()]
 
 
 async def _carregar_tavily():
@@ -149,6 +152,7 @@ CATALOGO_FERRAMENTAS = {
     f.name: f
     for f in (
         resolver_data,
+        ingredientes_para_comprar,
         remove_product,
         get_stock,
         get_missing_products,
@@ -168,7 +172,8 @@ CATALOGO_FERRAMENTAS = {
         remove_recipe,
         create_list,
         get_list,
-        update_list,
+        renomear_lista,
+        alterar_item_lista,
         consultar_preferencias,
         buscar_historico,
         buscar_receitas_usuario,

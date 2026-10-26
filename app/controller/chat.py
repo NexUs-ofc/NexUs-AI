@@ -58,13 +58,16 @@ def end_session(
 ):
     account_id = user["user_id"]
 
+    if not ConversationsRepository.pertence_conta(session_id, account_id):
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada.")
+
     memoria = encerrar_sessao(
         session_id=session_id,
         account_id=account_id,
         household_id=_casa_do_token(user, household_account_id) or account_id,
     )
 
-    encerrada = ConversationsRepository.end_session(session_id)
+    encerrada = ConversationsRepository.end_session(session_id, account_id)
 
     return {
         "session_id": session_id,

@@ -41,7 +41,7 @@ def resumir_sessao(session_id: str, account_id: int) -> str:
     suficiente para resumir.
     """
 
-    historico = ConversationsRepository.get_historico(session_id)
+    historico = ConversationsRepository.get_historico(session_id, account_id)
 
     if len(historico) < MINIMO_MENSAGENS_PARA_RESUMIR:
         logger.info(
@@ -76,6 +76,9 @@ def encerrar_sessao(session_id: str, account_id: int, household_id: int) -> dict
 
     Uma falha ao derivar preferências não impede o encerramento da sessão.
     """
+
+    if not ConversationsRepository.pertence_conta(session_id, account_id):
+        return {"resumo": "", "preferencias": []}
 
     resumo = resumir_sessao(session_id, account_id)
 

@@ -25,6 +25,8 @@ def _pantry_item_to_dict(item: Pantry_Item, foods: dict[int, Food]) -> dict:
         "food_id": item.food_id,
         "food_name": food.name if food else None,
         "quantity": item.quantity,
+        "package_quantity": getattr(food, "package_quantity", None),
+        "unit_of_measure": getattr(food, "unit_of_measure", None),
         "expiry_date": item.expiry_date.isoformat() if item.expiry_date else None,
     }
 
@@ -57,7 +59,10 @@ def remove_product(
         if pantry_item is None or pantry_item.profile_id != identidade.perfil():
             return False
 
-        return repository.remove_product(pantry_item)
+        return identidade.executar_gravacao(
+            "remove_product", {"pantry_item_id": pantry_item_id},
+            lambda: repository.remove_product(pantry_item),
+        )
 
 
 @tool("get_stock")
@@ -67,6 +72,10 @@ def get_stock() -> str:
 
     Parâmetros:
     """
+    return identidade.consultar_uma_vez("get_stock", _consultar_estoque)
+
+
+def _consultar_estoque() -> str:
     profile_id = identidade.perfil()
 
 

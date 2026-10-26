@@ -59,8 +59,10 @@ flowchart TD
     faq --> orq
 
     estoque --> juiz
-    receitas --> juiz
-    eventos --> juiz
+    receitas -->|receita estruturada| saida
+    receitas -->|sem texto aproveitável| orq
+    eventos -->|lista gravada e conferida| saida
+    eventos -->|demais casos| juiz
 
     juiz -->|devolveu, no máximo 1x| estoque
     juiz -->|devolveu, no máximo 1x| receitas
@@ -77,19 +79,20 @@ flowchart TD
 
 O que o desenho não diz:
 
-- **O juiz só vê estoque, receitas e eventos.** FAQ responde da base vetorial
-  e saudação é texto constante: não há evidência de ferramenta para conferir.
-- **A devolução do juiz é uma só** (`LIMITE_DEVOLUCOES = 1`). Cada devolução
-  re-executa o agente inteiro, que custa dezenas de segundos; com duas, a
-  resposta ia para a casa dos minutos.
+- **O juiz usa Jev nas rotas que exigem revisão semântica.** Receitas estruturadas
+  e listas confirmadas continuam nos caminhos de validação e renderização diretas;
+  FAQ e saudação também preservam seus caminhos próprios.
+- **Há uma única correção semântica por pedido**, compartilhada entre a confirmação
+  de escrita e o juiz. Após escrita confirmada ou incerta, a correção só pode ler
+  ou reutilizar o recibo existente: não executa outra criação com argumentos novos.
 - **Saudação não passa por orquestrador nem por guardrail.** O texto é
   constante e nosso, não carrega dado de ninguém para mascarar nem prosa para
   revisar.
 - **FAQ pode saltar o orquestrador** quando consegue montar a resposta sem
   modelo, o que corta uma ida ao Groq.
-- **Guardrail de saída que reprova devolve ao orquestrador**, não derruba a
-  requisição: a resposta é reescrita, e só uma recusa explícita vira mensagem
-  de bloqueio.
+- **Saída aprovada e segura pelo Jev é preservada**, passando pela máscara
+  determinística de PII sem nova redação. Nos demais caminhos a revisão existente
+  permanece; bloqueios entregam a mensagem segura e encerram.
 
 ## Skills
 
@@ -211,8 +214,12 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 
 | variável | para quê |
 | --- | --- |
-| `GROQ_API_KEY` | modelo de todos os nós do grafo |
-| `GEMINI_API_KEY` | embeddings do Qdrant |
+| `GROQ_API_KEY` | modelos Groq, conforme provedor principal/reserva configurado |
+| `GEMINI_API_KEY` | modelos Gemini e embeddings do Qdrant |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_FALLBACK_PROVIDER` | provedor/modelo principal e provedor de reserva |
+| `TYPESAFE_API_KEY` | autenticação do avaliador Jev; nunca enviada ao frontend |
+| `JUDGE_PROVIDER` | `jev` quando há chave TypeSafe, senão `llm`; permite escolher o avaliador |
+| `JEV_MODEL` | alias do modelo Jev, padrão `jev-latest`; a versão efetiva aparece nos logs |
 | `PGSQL_URL` | despensa |
 | `MONGODB_URI` | conversas, domínio, métricas e traces |
 | `QDRANT_DATABASE_URL`, `QDRANT_API_KEY` | base vetorial |
@@ -230,6 +237,27 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 Sem `JWT_SECRET_KEY` ou `API_KEY` o serviço não sobe, de propósito: faltando a
 chave, toda requisição tomaria 401 dizendo que a chave é inválida, e o erro
 pareceria do cliente em vez de configuração.
+
+
+## Receitas salvas e listas de compras
+
+O agente só salva receitas quando a pessoa pede. O documento em `recipes`
+preserva ingredientes com nome e quantidade, modo de preparo, `account_id`,
+`created_at` em UTC, `preparation_time_minutes` (minutos positivos) e
+`difficulty` (`easy`, `medium`, `hard`). Registros antigos sem esses
+metadados continuam legíveis; valores ausentes não são inventados.
+
+Listas são gravadas em `shopping_list`, no campo `array_list`, compatível
+com o Core. Os itens preservam id, nome, quantidade, unidade e `checked`.
+Consultas e alterações filtram a casa autenticada; é possível buscar pelo
+título e renomear sem substituir os itens.
+
+`ingredientes_para_comprar` soma lotes válidos e calcula somente quantidades
+comparáveis. Por exemplo, 150 g na receita e 100 g disponíveis resultam em
+50 g para comprar. Medidas sem equivalência são sinalizadas para conferência.
+Uma lista só é confirmada após retorno da gravação; seu texto é montado a
+partir dos dados salvos. Gravações equivalentes na mesma requisição não
+são repetidas durante revisões do agente.
 
 ## Scripts
 
@@ -261,25 +289,89 @@ modelo, 429 do Groq por hora, decisões do juiz, bloqueios dos guardrails e
 chamadas de cada tool. Só JSON — a apresentação é do painel.
 
 Para isso cada requisição grava, além do tempo e dos tokens, o modelo, o tipo
-do erro, a decisão de cada leitura do juiz (aprovado, devolvido ou revertido
-pela segunda opinião) e se o guardrail de entrada ou de saída bloqueou. A
+do erro, a decisão do juiz (`aprovado`, `devolvido` ou `nao_confirmado`)
+e se o guardrail de entrada ou de saída bloqueou. A
 leitura de nota grava uma métrica com a rota `nota_fiscal`, que fica fora do
 volume do chat.
 
+## Jev, retries e controle de alucinações
+
+O cliente de `app/core/jev_client.py` usa o endpoint oficial TypeSafe, pool de
+conexões e uma chamada com quatro critérios: lastro (Choice), fidelidade (Score
+de 0 a 2), relevância e segurança (Noul). Score, confiança e probabilidade têm
+significados distintos. Os limiares iniciais são conservadores, não uma promessa
+de acurácia calibrada: aprovação exige lastro apoiado com probabilidade ≥ 0,8,
+confiança ≥ 0,6, fidelidade normalizada ≥ 0,85, confiança do score ≥ 0,5,
+relevância ≥ 0,7 e segurança ≥ 0,9.
+
+Antes do score, código verifica recibos de ações anunciadas. Pedido, argumentos
+da chamada, `false`, `null` e falha de ferramenta não são prova de gravação.
+Incerteza ou falha do Jev escala uma única vez ao LLM; indisponibilidade ou
+veredito inválido não aprovam a resposta. Reprovação após o único reparo encerra
+com mensagem honesta, sem novos ciclos.
+
+O Jev tem no máximo duas tentativas, orçamento entre tentativas de 5 s, backoff
+com jitter e respeito a `Retry-After`. Só erros transitórios de transporte/HTTP
+408, 429, 5xx previstos e 529 são repetidos. Erros 400/401/403/422 e payload
+inválido não são repetidos. Após três falhas consecutivas, o circuito abre por
+30 s e permite uma sondagem de recuperação. Timeouts são de I/O; isso não é um
+prazo absoluto para todo o chat nem para cada byte de uma conexão lenta.
+
+Nos LLMs, retries dos SDKs ficam desativados. Há no máximo uma troca de provedor
+em falha transitória; erro de configuração/validação não dispara fallback.
+O agente tem limite de 16 passos do grafo, e esgotamento transitório dos provedores
+entrega resposta controlada. Leituras de estoque são reutilizadas apenas dentro
+da requisição e invalidadas após escrita; preferências e restrições independentes
+são lidas em paralelo. Restrição indisponível não significa ausência de alergias.
+
+Um orçamento compartilhado permite no máximo 12 chamadas aos LLMs por pedido,
+incluindo fallback, com janela de 60 s para iniciar chamadas. Uma chamada não
+começa se seu timeout configurado não cabe no tempo restante. Isso limita ciclos
+e esperas acumuladas, mas não cancela uma escrita em andamento nem promete prazo
+absoluto para I/O de banco, MCP ou outros serviços externos.
+
+As proteções de escrita são locais à requisição/processo. Não garantem execução
+única entre reinícios, réplicas ou reenvios HTTP independentes. Erro de conexão
+com resultado de escrita ambíguo bloqueia repetição automática e pede consulta
+dos registros. Não há rollback automático de uma ação já executada.
+
+`judge_usage` registra tokens TypeSafe separadamente, sem aplicar a eles a tarifa
+estimada dos LLMs. Logs do juiz contêm fonte, versão, scores e decisão. Os casos
+sintéticos versionados estão em `tests/fixtures/judge_cases.json` e
+`tests/fixtures/judge_adversarial_cases.json`; os testes offline não consomem API.
+
+## Validação antes da gravação e privacidade
+
+Eventos exigem data válida, duração e participantes inteiros positivos, descrição
+e local. Receitas exigem quantidades culinárias positivas com unidade reconhecida;
+frações e medidas explícitas como “a gosto” são preservadas, sem conversão estimada.
+Objetos, booleanos, valores não finitos e quantidades negativas não são aceitos.
+As ferramentas validam antes da escrita e os repositórios revalidam antes do insert;
+essas regras não alteram a leitura de documentos antigos.
+
+Erro de validação pede correção dos dados antes de salvar. A revisão posterior do
+juiz não substitui essa proteção e não desfaz gravações.
+
+Ter lastro nas evidências não autoriza divulgar dados privados de outra conta.
+Jev e o juiz de reserva recebem essa regra; telefone, CPF e e-mail em claro também
+recebem veto determinístico com os mesmos padrões usados na saída. Essa checagem
+não substitui a autorização por conta e sessão nem detecta toda possível
+ofuscação de dados pessoais.
+
 ## Limites conhecidos
 
-- **Cota do Groq.** No plano livre são 8.000 tokens por minuto e 200.000 por
-  dia. Uma requisição de chat com orquestrador fica na casa dos 9.000, ou
-  seja, estoura o minuto sozinha. Quando isso acontece o cliente espera o
-  `retry-after` e a demora aparece como latência, sem erro no log.
+- **Cotas externas.** Os provedores podem limitar tokens e requisições. Jev e
+  redução de chamadas não removem essas cotas. Depois da única troca transitória,
+  esgotamento encerra o pedido com resposta controlada em vez de aguardar retries
+  aninhados; consulte os limites contratados de cada conta.
 - `ALLOWED_TYPES` do leitor de nota aceita `application/octet-stream`, porque
   é o que alguns clientes mandam para imagem. Na prática, qualquer binário
   passa pela primeira peneira e só morre adiante, ao tentar abrir.
 - `/admin/langsmith` lê do LangSmith e `/admin/metrics` do Mongo. Medem a mesma
   coisa por caminhos diferentes, cada um com o seu cálculo de percentil, e
   podem divergir no painel.
-- O 429 do Groq contado no painel é o que chegou ao fim da requisição. O que o
-  retry do cliente absorveu vira latência e não aparece como erro.
+- O 429 contado no painel é o que chegou ao fim da requisição; uma falha absorvida
+  pela troca de provedor deve ser investigada nos traces, não só no total de erros.
 - `evento-gerenciar` é a skill padrão de eventos e pode cancelar evento: o
   seletor falhando deixa um palpite com poder de escrita. É a lacuna marcada
   como `expectedFailure` em `tests/test_skills.py`.

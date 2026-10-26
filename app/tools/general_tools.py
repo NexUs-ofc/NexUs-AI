@@ -21,13 +21,23 @@ def recomendar_receita(
     from ..core.agents import AGENTES_DAS_SKILLS
     from ..schemas.flow import _restricoes_prontas
 
+    assunto = identidade.assunto() or {}
+    contexto = ""
+    if assunto.get("tipo") == "evento":
+        import json
+        contexto = "\nCONTEXTO_DO_EVENTO=" + json.dumps(assunto, ensure_ascii=False, default=str)
+
+    restrictions = _restricoes_prontas(identidade.perfil())
+    if restrictions.startswith("FALHA"):
+        return "FALHA: não foi possível conferir as restrições alimentares; não gere receita sem essa consulta."
     request = f"""
         ROUTE=receitas
         CHAMADO_POR=events
-        RESTRICOES={_restricoes_prontas(identidade.perfil())}
+        RESTRICOES={restrictions}
         PERGUNTA_ORIGINAL=Recomende uma receita para esse evento seguindo explicitamente a sua descrição, utilizando como principal peso para essa recomendação a quantidade de pessoas, clima, preferências alimentares e o tipo do evento:\n\n{description}
     """
 
+    request += contexto
     response = AGENTES_DAS_SKILLS["receita-para-evento"].invoke({
         "messages": [{"role": "user", "content": request}]
     })

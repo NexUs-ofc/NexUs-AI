@@ -4,18 +4,11 @@ import uuid
 from app.controller.config import logging
 from app.core.llms import guardrail_llm
 from app.core.llms import texto as texto_da_resposta
+from app.core.privacy import PII
 
 logger = logging.getLogger(__name__)
 
-# A ordem importa: o primeiro padrao que casar leva o trecho. CPF vinha antes
-# e o padrao dele casa 11 digitos seguidos, entao todo telefone de celular
-# saia rotulado como CPF. Agora o telefone, que exige a forma de telefone (DDD
-# e separador), e testado primeiro; o CPF so pega o que sobrar.
-PII = [
-    ("TELEFONE", r"\(?\d{2}\)?[\s-]?9?\d{4}[\s-]?\d{4}"),
-    ("CPF",      r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}"),
-    ("EMAIL",    r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
-]
+
 
 
 def _bloquear(motivo, mensagem):
@@ -45,7 +38,9 @@ def desanonimizar(texto, mapa):
     for token in mapa:
         tipo = token.split("_")[1]
         texto = texto.replace(token, f"[{tipo} OMITIDO]")
-    return texto
+    # Tokens de turnos anteriores também não podem escapar na resposta.
+    return re.sub(r"\[PII_(TELEFONE|CPF|EMAIL)_[a-zA-Z0-9]+\]",
+                  lambda m: f"[{m[1]} OMITIDO]", texto)
 
 
 _PADROES_INJECAO = [
@@ -225,4 +220,7 @@ def checar_saida(resposta, mapa_pii, revisar=True):
         if texto:
             resposta = texto
 
-    return _saida_ok(resposta)
+    # A revisão não pode reintroduzir PII que a primeira passagem removeu.
+    for tipo, padrao in PII:
+        resposta = re.sub(padrao, f"[{tipo} OMITIDO]", resposta)
+    return _saida_ok(desanonimizar(resposta, mapa_pii))
