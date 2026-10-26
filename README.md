@@ -13,7 +13,7 @@ orquestrador que escreve o texto final e um guardrail de saída.
 
 | camada | o que é |
 | --- | --- |
-| modelo | Groq `openai/gpt-oss-20b` em todos os nós do grafo |
+| modelo | OpenAI `gpt-6-luna` nos nós do grafo, com Gemini e Groq como reservas ordenadas |
 | embeddings | Gemini `gemini-embedding-2-preview`, para o Qdrant |
 | despensa | PostgreSQL: itens, produtos, categorias, perfis |
 | conversas e domínio | MongoDB: sessões, receitas, eventos, listas, métricas e traces |
@@ -216,7 +216,8 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 | --- | --- |
 | `GROQ_API_KEY` | modelos Groq, conforme provedor principal/reserva configurado |
 | `GEMINI_API_KEY` | modelos Gemini e embeddings do Qdrant |
-| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_FALLBACK_PROVIDER` | provedor/modelo principal e provedor de reserva |
+| `OPENAI_API_KEY` | modelos OpenAI quando `LLM_PROVIDER=openai` |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_FALLBACK_PROVIDERS` | provedor/modelo principal e reservas ordenadas (`gemini,groq`) |
 | `TYPESAFE_API_KEY` | autenticação do avaliador Jev; nunca enviada ao frontend |
 | `JUDGE_PROVIDER` | `jev` quando há chave TypeSafe, senão `llm`; permite escolher o avaliador |
 | `JEV_MODEL` | alias do modelo Jev, padrão `jev-latest`; a versão efetiva aparece nos logs |

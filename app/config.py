@@ -11,9 +11,10 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 PGSQL_URL = os.getenv("PGSQL_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-# Provedor principal dos modelos do grafo: "gemini" (padrao) ou "groq".
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Provedor principal dos modelos do grafo: "openai" (padrao), "gemini" ou "groq".
 # LLM_MODEL vazio usa o modelo padrao do provedor, definido em app/core/llms.py.
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
 LLM_MODEL = os.getenv("LLM_MODEL", "").strip()
 TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "").strip()
 JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER", "jev" if TYPESAFE_API_KEY else "llm").strip().lower()
@@ -22,7 +23,14 @@ if JUDGE_PROVIDER not in {"jev", "llm"}:
     raise RuntimeError("JUDGE_PROVIDER deve ser jev ou llm.")
 # Reserva: quando o principal falha (timeout, 504, cota), a mesma chamada e
 # refeita neste provedor. Vazio desliga a reserva.
-LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()
+_fallbacks = os.getenv("LLM_FALLBACK_PROVIDERS") or os.getenv(
+    "LLM_FALLBACK_PROVIDER", "gemini,groq"
+)
+LLM_FALLBACK_PROVIDERS = tuple(
+    provider.strip().lower() for provider in _fallbacks.split(",") if provider.strip()
+)
+# Compatibilidade para imports/configurações antigas que esperavam uma reserva.
+LLM_FALLBACK_PROVIDER = LLM_FALLBACK_PROVIDERS[0] if LLM_FALLBACK_PROVIDERS else ""
 QDRANT_DATABASE_URL = os.getenv("QDRANT_DATABASE_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 DOC_FILE_PATH = os.getenv("DOC_FILE_PATH")
