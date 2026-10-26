@@ -6,7 +6,7 @@ from pymongo.errors import AutoReconnect, PyMongoError, WTimeoutError
 
 from ...config import MONGODB_URI
 from ...controller.config import logging
-from ...model.mongodb.recipe import Recipe
+from ...model.mongodb.recipe import Recipe, validate_steps
 from ...validation import validar_quantidade_receita
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ class RecipesRepository:
 
     @staticmethod
     def create_recipe(recipe: Recipe) -> Recipe | None:
+        recipe.Step = validate_steps(recipe.Step)
         for ingredient in recipe.ingredients:
             validar_quantidade_receita(ingredient.get("required_quantity"))
         try:

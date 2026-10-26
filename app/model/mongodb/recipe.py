@@ -9,7 +9,8 @@ class Recipe:
                  instructions: str, account_id: int | None, created_by: str = "ai",
                  _id: ObjectId | None = None, preparation_time_minutes: int | None = None,
                  difficulty: str | None = None, created_at: datetime | None = None,
-                 estimated_time: str | None = None):
+                 estimated_time: str | None = None, Step: list[dict] | None = None):
+        self.Step = Step
         self.id = _id
         self.title = title
         self.serving_size = serving_size
@@ -32,6 +33,8 @@ class Recipe:
             "estimated_time": self.estimated_time,
             "difficulty": self.difficulty, "created_at": self.created_at,
         }
+        if self.Step is not None:
+            doc["Step"] = self.Step
         if self.id is not None:
             doc["_id"] = self.id
         return doc
@@ -50,6 +53,7 @@ class Recipe:
             account_id=data.get("account_id"), created_by=data.get("created_by", "ai"),
             preparation_time_minutes=minutes, estimated_time=estimated,
             difficulty=data.get("difficulty"), created_at=data.get("created_at"),
+            Step=data.get("Step"),
         )
 
     def mark_created(self):
@@ -57,3 +61,19 @@ class Recipe:
 
     def __repr__(self):
         return f"Recipe(id={self.id}, title={self.title!r}, account_id={self.account_id})"
+
+
+def validate_steps(steps: list[dict]) -> list[dict]:
+    """Validate preparation before writing, without coercing values."""
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("Informe ao menos uma etapa em Step.")
+    result = []
+    for step in steps:
+        if not isinstance(step, dict):
+            raise ValueError("Cada etapa deve conter title e description.")
+        title, description = step.get("title"), step.get("description")
+        if (not isinstance(title, str) or not title.strip()
+                or not isinstance(description, str) or not description.strip()):
+            raise ValueError("title e description devem ser textos nao vazios.")
+        result.append({"title": title.strip(), "description": description.strip()})
+    return result

@@ -101,6 +101,7 @@ Quando um produto atinge uma quantidade reduzida, o sistema poderá emitir uma n
 
 4.5. Como são sugeridas receitas?
 As sugestões utilizam os produtos cadastrados no estoque.
+Ao pedir para salvar uma receita, o modo de preparo e as etapas ordenadas são preservados, cada uma com título e descrição completos.
 
 4.6. Como funcionam os eventos?
 O usuário informa os dados do evento e o sistema auxilia no planejamento dos produtos necessários.

@@ -1,11 +1,12 @@
 import json
+import re
 import unicodedata
 
 from langchain.tools import tool
 from pydantic import StrictInt
 
 from ..auth import identidade
-from ..model.mongodb.recipe import Recipe
+from ..model.mongodb.recipe import Recipe, validate_steps
 from ..repository.mongodb.recipes import RecipesRepository, RecipeUnavailable
 from ..validation import (
     ingredientes_basicos_ausentes,
@@ -48,6 +49,7 @@ def salvar_receita(
     instrucoes: str,
     tempo_preparo_minutos: StrictInt,
     dificuldade: str,
+    Step: list[dict] | None = None,
 ) -> str:
     """Salva SOMENTE uma receita completa que a pessoa pediu para guardar.
     titulo: nome da receita dada na conversa, sem inventar uma nova.
@@ -55,6 +57,8 @@ def salvar_receita(
     ingredientes: [{"nome": "Arroz", "quantidade": "200 g"}], todos com quantidade positiva e unidade, ou 'a gosto'.
       Também aceita ingrediente/quantidade_total do objeto receita. Sem cadastrar alimentos.
     instrucoes: modo de preparo completo, com um passo por linha.
+    Step: lista ordenada de {"title": "Titulo da etapa", "description": "Preparo completo da etapa"}.
+      Inclua todos os passos da receita, sem inventar nem resumir o preparo.
     tempo_preparo_minutos: tempo total estimado em minutos inteiros positivos.
     dificuldade: fácil, média ou difícil. Reutilize os dados da receita apresentada.
     Se a receita anterior não estiver completa, pergunte o que falta antes de salvar.
@@ -84,10 +88,23 @@ def salvar_receita(
         missing = ingredientes_basicos_ausentes(saved_ingredients, instrucoes)
         if missing:
             raise ValueError("Ingredientes usados no preparo sem quantidade na lista: " + ", ".join(missing))
+        steps = validate_steps(Step if Step is not None else [
+            {"title": f"Etapa {index}",
+             "description": re.sub(r"^\s*\d+[.)]\s*", "", line).strip()}
+            for index, line in enumerate(
+                (line for line in instrucoes.splitlines() if line.strip()), start=1,
+            )
+        ])
+        missing_steps = ingredientes_basicos_ausentes(saved_ingredients, "\n".join(
+            step["description"] for step in steps
+        ))
+        if missing_steps:
+            raise ValueError("Ingredientes das etapas sem quantidade: " + ", ".join(missing_steps))
         recipe = Recipe(
             title=titulo.strip(), serving_size=serving_size, ingredients=saved_ingredients,
             instructions=instrucoes.strip(), account_id=identidade.conta(),
             preparation_time_minutes=tempo_preparo_minutos, difficulty=_difficulty(dificuldade),
+            Step=steps,
         )
         recipe.mark_created()
     except (ValueError, TypeError) as error:
