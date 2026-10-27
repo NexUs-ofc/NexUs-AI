@@ -133,6 +133,20 @@ class ConversationsRepository:
             return False
 
     @staticmethod
+    def sessao_encerrada(session_id: str, account_id: int) -> bool:
+        if not ObjectId.is_valid(session_id):
+            return False
+        try:
+            doc = ConversationsRepository.conversations_collection.find_one(
+                {"_id": ObjectId(session_id), "account_id": account_id},
+                {"ended_at": 1},
+            )
+            return doc is not None and doc.get("ended_at") is not None
+        except PyMongoError:
+            logger.exception("Erro ao consultar estado de encerramento da sessão")
+            return False
+
+    @staticmethod
     def end_session(session_id: str, account_id: int) -> bool:
         if not ObjectId.is_valid(session_id):
             return False
@@ -160,7 +174,8 @@ class ConversationsRepository:
 
     @staticmethod
     def append_messages(session_id: str, user_msg: str, assistant_msg: str,
-                        *, account_id: int, receita: dict | None = None, assunto: dict | None = None):
+                        *, account_id: int, receita: dict | None = None, assunto: dict | None = None,
+                        trace_id: str | None = None):
         if not ObjectId.is_valid(session_id):
             return
         try:
@@ -182,7 +197,8 @@ class ConversationsRepository:
                             ]
                         }
                     },
-                    "$set": {"updated_at": datetime.now(UTC)}
+                    "$set": {"updated_at": datetime.now(UTC),
+                              **({"last_trace_id": trace_id} if trace_id else {})}
                 }
             )
 
@@ -190,3 +206,31 @@ class ConversationsRepository:
 
         except PyMongoError:
             logger.exception("Erro ao salvar mensagens")
+
+    @staticmethod
+    def submit_section_feedback(session_id: str, account_id: int, rating: int, comment: str | None):
+        if not ObjectId.is_valid(session_id):
+            return "missing", None
+        try:
+            query = {"_id": ObjectId(session_id), "account_id": account_id,
+                     "ended_at": {"$ne": None}, "section_feedback": {"$exists": False}}
+            doc = ConversationsRepository.conversations_collection.find_one(
+                {"_id": ObjectId(session_id), "account_id": account_id},
+                {"ended_at": 1, "last_trace_id": 1, "section_feedback": 1},
+            )
+            if doc is None:
+                return "missing", None
+            if doc.get("ended_at") is None:
+                return "open", None
+            if doc.get("section_feedback") is not None:
+                return "duplicate", None
+            result = ConversationsRepository.conversations_collection.update_one(
+                query, {"$set": {"section_feedback": {
+                    "rating": rating, "comment": comment, "status": "pending",
+                    "created_at": datetime.now(UTC),
+                }}},
+            )
+            return ("claimed", doc.get("last_trace_id")) if result.matched_count else ("duplicate", None)
+        except PyMongoError:
+            logger.exception("Erro ao persistir avaliação da sessão")
+            return "unavailable", None
