@@ -1,5 +1,6 @@
 import json
 import re
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -1630,6 +1631,7 @@ def executar_chat(
         with identidade.da_requisicao(household_account_id, account_id, assunto=assunto), request_budget(), trace(
             name="ceris_chat_request",
             run_type="chain",
+            run_id=uuid.UUID(hex=trace_id),
             metadata={
                 "session_id": session_id,
                 "household_account_id": household_account_id,
@@ -1735,6 +1737,7 @@ def executar_chat(
         receita=recipe,
         assunto=(assunto_do_turno(historico, mensagem, envelope, recipe)
                  if resultado.get("entrada_aprovada") and not resultado.get("saida_bloqueada") else None),
+        trace_id=trace_id,
     )
 
     return {

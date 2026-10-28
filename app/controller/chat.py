@@ -1,7 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from langsmith import Client
+from pydantic import BaseModel, Field
 
+from app.controller.config import logging
 from app.schemas.flow import executar_chat
 from app.schemas.memory import encerrar_sessao
 
@@ -11,6 +14,13 @@ from ..model.dto.chat_response import ChatResponse
 from ..repository.mongodb.conversations import ConversationsRepository
 
 router = APIRouter(prefix="/chat")
+logger = logging.getLogger(__name__)
+
+
+class SectionFeedback(BaseModel):
+    nota: int = Field(ge=1, le=5)
+    feedback: str | None = Field(default=None, max_length=2000)
+
 
 def _casa_do_token(user: dict, informada: int | None) -> int | None:
     """
@@ -55,23 +65,60 @@ def end_session(
     session_id: str,
     user: Annotated[dict, Depends(get_current_user)],
     household_account_id: int | None = None,
+    avaliacao: SectionFeedback | None = None,
 ):
     account_id = user["user_id"]
 
     if not ConversationsRepository.pertence_conta(session_id, account_id):
         raise HTTPException(status_code=404, detail="Sessao nao encontrada.")
 
-    memoria = encerrar_sessao(
-        session_id=session_id,
-        account_id=account_id,
-        household_id=_casa_do_token(user, household_account_id) or account_id,
-    )
+    # Persist the closed state first. Summary generation or LangSmith outages
+    # must never leave a conversation open after the user requested closure.
+    ja_encerrada = ConversationsRepository.sessao_encerrada(session_id, account_id)
+    encerrada = ja_encerrada or ConversationsRepository.end_session(session_id, account_id)
+    memoria = {"resumo": "", "preferencias": []}
+    if encerrada and not ja_encerrada:
+        try:
+            memoria = encerrar_sessao(
+                session_id=session_id,
+                account_id=account_id,
+                household_id=_casa_do_token(user, household_account_id) or account_id,
+            )
+        except Exception:
+            logger.exception("Falha ao finalizar memória da sessão já fechada")
 
-    encerrada = ConversationsRepository.end_session(session_id, account_id)
+    resultado_feedback = "nao_enviada"
+    if avaliacao is not None:
+        estado, trace_id = ConversationsRepository.submit_section_feedback(
+            session_id, account_id, avaliacao.nota, avaliacao.feedback,
+        )
+        if estado == "claimed" and trace_id:
+            try:
+                Client().create_feedback(
+                    run_id=trace_id,
+                    key="avaliacao_secao",
+                    score=avaliacao.nota,
+                    comment=avaliacao.feedback,
+                )
+                ConversationsRepository.update_section_feedback_status(
+                    session_id, account_id, "sent",
+                )
+                resultado_feedback = "registrada"
+            except Exception:
+                logger.exception("Não foi possível registrar a avaliação no LangSmith")
+                ConversationsRepository.update_section_feedback_status(
+                    session_id, account_id, "failed",
+                )
+                resultado_feedback = "falha_no_registro"
+        elif estado == "duplicate":
+            resultado_feedback = "ja_registrada"
+        else:
+            resultado_feedback = estado
 
     return {
         "session_id": session_id,
         "encerrada": encerrada,
         "resumo": memoria["resumo"] or None,
         "preferencias": memoria["preferencias"],
+        "avaliacao": resultado_feedback,
     }
