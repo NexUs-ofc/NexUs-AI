@@ -61,13 +61,13 @@ logger = logging.getLogger(__name__)
 TAVILY_HABILITADAS = {"tavily_search"}
 
 
-def _reserva_do_modelo(reserva):
+def _reserva_do_modelo(reservas):
     """
     Se o modelo principal do agente falhar (timeout, 504, cota), a chamada e
     refeita no provedor de reserva. Sem reserva configurada, nada muda.
     """
 
-    fallback = [TransientModelFallback(reserva)] if reserva is not None else []
+    fallback = [TransientModelFallback(*reservas)] if reservas else []
     return [*fallback, CallBudgetMiddleware()]
 
 

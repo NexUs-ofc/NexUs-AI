@@ -25,18 +25,22 @@ de raciocínio não aceitam) e se o teto se chama max_tokens ou
 max_completion_tokens.
 """
 
+import httpx
+
 from ..config import (
     GEMINI_API_KEY,
     GROQ_API_KEY,
-    LLM_FALLBACK_PROVIDER,
+    LLM_FALLBACK_PROVIDERS,
     LLM_MODEL,
     LLM_PROVIDER,
+    OPENAI_API_KEY,
 )
 from .provider_policy import TransientFallback
 
 MODELO_PADRAO = {
     "groq": "openai/gpt-oss-20b",
     "gemini": "gemini-3.5-flash-lite",
+    "openai": "gpt-6-luna",
 }
 
 if LLM_PROVIDER not in MODELO_PADRAO:
@@ -47,15 +51,15 @@ if LLM_PROVIDER not in MODELO_PADRAO:
 PROVEDOR = LLM_PROVIDER
 MODELO = LLM_MODEL or MODELO_PADRAO[PROVEDOR]
 
-_CHAVE = {"groq": GROQ_API_KEY, "gemini": GEMINI_API_KEY}
+_CHAVE = {"groq": GROQ_API_KEY, "gemini": GEMINI_API_KEY, "openai": OPENAI_API_KEY}
 
 # Reserva: outro provedor, com chave configurada. Sem isso, fica sem reserva.
-RESERVA = (
-    LLM_FALLBACK_PROVIDER
-    if LLM_FALLBACK_PROVIDER in MODELO_PADRAO
-    and LLM_FALLBACK_PROVIDER != PROVEDOR
-    and _CHAVE.get(LLM_FALLBACK_PROVIDER)
-    else None
+RESERVAS = tuple(
+    provider
+    for provider in LLM_FALLBACK_PROVIDERS
+    if provider in MODELO_PADRAO
+    and provider != PROVEDOR
+    and _CHAVE.get(provider)
 )
 
 # Sem retry no SDK: a política faz no máximo uma troca transitória de provedor.
@@ -76,6 +80,9 @@ SEMENTE = 42
 TETO_ESCOLHA = 2048
 TETO_VEREDITO = 2048
 
+_openai_http_client = None
+_openai_async_client = None
+
 
 def _cliente(
     temperatura: float,
@@ -91,6 +98,11 @@ def _cliente(
     if provedor == "gemini":
         return _cliente_gemini(
             temperatura, raciocinio, teto, semente, timeout, tentativas, modelo,
+        )
+
+    if provedor == "openai":
+        return _cliente_openai(
+            temperatura, teto, semente, timeout, tentativas, modelo,
         )
 
     from langchain_groq import ChatGroq
@@ -114,6 +126,47 @@ def _cliente(
         api_key=GROQ_API_KEY,
         max_retries=tentativas,
         request_timeout=timeout,
+        **extras,
+    )
+
+
+def _cliente_openai(
+    temperatura: float,
+    teto: int | None,
+    semente: int | None,
+    timeout: int,
+    tentativas: int,
+    modelo: str,
+):
+    """Cliente econômico com tool calling compatível no Chat Completions."""
+
+    global _openai_async_client, _openai_http_client
+
+    from langchain_openai import ChatOpenAI
+
+    if _openai_http_client is None:
+        # Compartilhar o transporte evita criar um pool TLS por papel do grafo
+        # e reduz bastante o tempo de inicialização, sobretudo no Windows.
+        _openai_http_client = httpx.Client()
+        _openai_async_client = httpx.AsyncClient()
+
+    extras = {}
+    if teto:
+        extras["max_completion_tokens"] = teto
+    if semente is not None:
+        extras["seed"] = semente
+
+    return ChatOpenAI(
+        model=modelo,
+        temperature=temperatura,
+        api_key=OPENAI_API_KEY,
+        max_retries=tentativas,
+        timeout=timeout,
+        http_client=_openai_http_client,
+        http_async_client=_openai_async_client,
+        # O GPT-6 Luna exige reasoning_effort=none para function calling no
+        # endpoint Chat Completions usado pelo create_agent.
+        reasoning_effort="none",
         **extras,
     )
 
@@ -186,13 +239,10 @@ def texto(resposta) -> str:
     return str(conteudo)
 
 
-def _reserva(*args, **kwargs):
-    """Mesmo cliente no provedor de reserva, ou None quando nao ha reserva."""
+def _reservas(*args, **kwargs):
+    """Clientes de reserva na ordem configurada, ignorando chaves ausentes."""
 
-    if RESERVA is None:
-        return None
-
-    return _cliente(*args, provedor=RESERVA, **kwargs)
+    return [_cliente(*args, provedor=provider, **kwargs) for provider in RESERVAS]
 
 
 def _com_reserva(*args, **kwargs):
@@ -204,9 +254,9 @@ def _com_reserva(*args, **kwargs):
     """
 
     principal = _cliente(*args, **kwargs)
-    reserva = _reserva(*args, **kwargs)
+    reservas = _reservas(*args, **kwargs)
 
-    return TransientFallback(principal, reserva)
+    return TransientFallback(principal, reservas)
 
 
 # Devolve uma palavra: nome de rota ou de skill.
@@ -227,7 +277,7 @@ texto_llm = _com_reserva(0, RACIOCINIO_CURTO, timeout=15)
 
 # Agentes: raciocínio curto com margem de saída para receita estruturada.
 specialist_llm = _cliente(0.4, RACIOCINIO_CURTO, 8192)
-specialist_reserva = _reserva(0.4, RACIOCINIO_CURTO, 8192)
+specialist_reserva = _reservas(0.4, RACIOCINIO_CURTO, 8192)
 
 # Estoque e consulta e remocao, nao criacao: nao ganha com variedade nem com
 # raciocinio longo. Medido: com o raciocinio padrao o agente gastou 2048 tokens
@@ -237,7 +287,7 @@ specialist_reserva = _reserva(0.4, RACIOCINIO_CURTO, 8192)
 TETO_ESTOQUE = 1200
 
 estoque_llm = _cliente(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
-estoque_reserva = _reserva(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
+estoque_reserva = _reservas(0, RACIOCINIO_CURTO, TETO_ESTOQUE)
 
 # Instância legada mantida para comparativos e compatibilidade dos testes.
 # O fluxo de produção não faz segunda opinião nem chama este cliente.
@@ -251,10 +301,9 @@ revisao_segunda_llm = _com_reserva(
 roteador_llm = escolha_llm
 seletor_llm = escolha_llm
 
-juiz_llm = TransientFallback(_cliente(
-    0, RACIOCINIO_CURTO, TETO_VEREDITO, provedor=RESERVA or PROVEDOR,
-    timeout=6 if (RESERVA or PROVEDOR) == "groq" else 12, tentativas=0,
-), None)
+juiz_llm = _com_reserva(
+    0, RACIOCINIO_CURTO, TETO_VEREDITO, timeout=JUIZ_TIMEOUT_S, tentativas=0,
+)
 guardrail_llm = revisao_llm
 
 orquestrador_llm = texto_llm
@@ -265,4 +314,4 @@ groq_llm = specialist_llm
 # Agente de FAQ: modelo puro, porque create_agent precisa ligar as ferramentas
 # nele. A reserva entra pelo middleware.
 fast_llm = _cliente(0, RACIOCINIO_CURTO)
-fast_reserva = _reserva(0, RACIOCINIO_CURTO)
+fast_reserva = _reservas(0, RACIOCINIO_CURTO)

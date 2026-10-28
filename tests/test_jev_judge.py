@@ -10,14 +10,15 @@ from pymongo.errors import AutoReconnect, WTimeoutError
 from sqlalchemy.exc import OperationalError
 
 from app.auth import identidade
-from app.core.judge import Verdict, deterministic_verdict, parse_verdict
+from app.core import provider_policy
 from app.core.jev_client import JevClient, JevUnavailable
+from app.core.judge import Verdict, deterministic_verdict, parse_verdict
 from app.core.provider_policy import TransientFallback, transient
 from app.core.runtime_budget import BudgetExceeded, request_budget
-from app.schemas import flow
 from app.model.mongodb.recipe import Recipe
 from app.repository.mongodb.recipes import RecipesRepository
 from app.repository.pgsql.stock import StockRepository
+from app.schemas import flow
 
 
 def answer():
@@ -242,6 +243,10 @@ class JudgeGraphTest(unittest.TestCase):
 
 
 class RetrySideEffectTest(unittest.TestCase):
+    def tearDown(self):
+        with provider_policy._circuit_lock:
+            provider_policy._circuit_open_until.clear()
+
     def test_conexao_sql_perdida_no_commit_nao_reexecuta_remocao(self):
         session = Mock()
         session.commit.side_effect = OperationalError("COMMIT", {}, RuntimeError("conexão perdida"))
@@ -260,7 +265,11 @@ class RetrySideEffectTest(unittest.TestCase):
                 recipe = Recipe("Arroz", 2, [], "Cozinhe.", 124)
                 with identidade.da_requisicao(124, 124), patch.object(RecipesRepository, "recipes_collection", collection):
                     for _ in range(2):
-                        self.assertIsNone(identidade.executar_gravacao("salvar_receita", {"title": "Arroz"}, lambda: RecipesRepository.create_recipe(recipe)))
+                        self.assertIsNone(identidade.executar_gravacao(
+                            "salvar_receita",
+                            {"title": "Arroz"},
+                            lambda recipe=recipe: RecipesRepository.create_recipe(recipe),
+                        ))
                     self.assertTrue(identidade.escrita_incerta())
                 self.assertEqual(collection.insert_one.call_count, 1)
 
@@ -286,6 +295,19 @@ class RetrySideEffectTest(unittest.TestCase):
             with self.assertRaises(BudgetExceeded):
                 caller.invoke("a")
         primary.invoke.assert_not_called()
+
+    def test_orcamento_esgotado_nao_e_falha_do_provedor_nem_chama_reserva(self):
+        primary, reserve = Mock(), Mock()
+        primary.timeout = 3
+        now = [0]
+        caller = TransientFallback(primary, reserve)
+        with request_budget(seconds=5, clock=lambda: now[0]):
+            now[0] = 4
+            with self.assertRaises(BudgetExceeded):
+                caller.invoke("a")
+        primary.invoke.assert_not_called()
+        reserve.invoke.assert_not_called()
+        self.assertFalse(provider_policy._circuit_open(primary, clock=lambda: 4))
 
     def test_provedores_esgotados_retornam_resposta_controlada_sem_500(self):
         class Exhausted(Exception):
@@ -346,8 +368,62 @@ class RetrySideEffectTest(unittest.TestCase):
         wrapped = TransientFallback(primary, reserve)
         self.assertEqual(wrapped.invoke("test"), "ok")
         self.assertEqual(reserve.invoke.call_count, 1)
+        with provider_policy._circuit_lock:
+            provider_policy._circuit_open_until.clear()
         primary.invoke.side_effect = ValueError("schema inválido")
         with self.assertRaises(ValueError):
             wrapped.invoke("test")
         self.assertEqual(reserve.invoke.call_count, 1)
         self.assertFalse(transient(ValueError("schema")))
+
+    def test_falha_transitoria_abre_circuito_compartilhado_entre_nos(self):
+        class Primary:
+            timeout = 12
+
+            def __init__(self, error=None):
+                self.error = error
+                self.calls = 0
+
+            def invoke(self, input, config=None, **kwargs):
+                self.calls += 1
+                if self.error:
+                    raise self.error
+                return "primary"
+
+        first = Primary(httpx.ReadTimeout("timeout"))
+        second = Primary()
+        reserve_one, reserve_two = Mock(), Mock()
+        reserve_one.invoke.return_value = "fallback-1"
+        reserve_two.invoke.return_value = "fallback-2"
+
+        self.assertEqual(TransientFallback(first, reserve_one).invoke("a"), "fallback-1")
+        self.assertEqual(TransientFallback(second, reserve_two).invoke("b"), "fallback-2")
+        self.assertEqual(first.calls, 1)
+        self.assertEqual(second.calls, 0)
+
+    def test_cadeia_tenta_openai_gemini_e_groq_em_ordem(self):
+        class Provider:
+            def __init__(self, result):
+                self.result, self.calls = result, 0
+
+            def invoke(self, value, config=None, **kwargs):
+                self.calls += 1
+                if isinstance(self.result, Exception):
+                    raise self.result
+                return self.result
+
+        class OpenAI(Provider):
+            pass
+
+        class Gemini(Provider):
+            pass
+
+        class Groq(Provider):
+            pass
+
+        openai = OpenAI(httpx.ReadTimeout("openai"))
+        gemini = Gemini(httpx.ReadTimeout("gemini"))
+        groq = Groq("ok")
+
+        self.assertEqual(TransientFallback(openai, [gemini, groq]).invoke("pedido"), "ok")
+        self.assertEqual((openai.calls, gemini.calls, groq.calls), (1, 1, 1))

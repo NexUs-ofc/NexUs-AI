@@ -366,6 +366,14 @@ def _invocar_agente(
                         "recursion_limit": 16},
             )
     except GraphRecursionError:
+        logger.exception(
+            "GraphRecursionError dentro do agente",
+            extra={
+                "trace_id": trace_id,
+                "stage": "agent",
+                "recursion_limit": 16,
+            },
+        )
         return json.dumps({"resposta": "Não consegui concluir todas as etapas. Confira os registros atuais antes de repetir uma alteração."}), 0, 0, []
 
     mensagens_saida = resultado.get("messages", [])
