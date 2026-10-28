@@ -4,10 +4,14 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from app.config import (
+    GEMINI_API_KEY,
     GROQ_API_KEY,
     LANGCHAIN_API_KEY,
     LANGCHAIN_PROJECT,
     LANGCHAIN_TRACING_V2,
+    LLM_FALLBACK_PROVIDERS,
+    LLM_PROVIDER,
+    OPENAI_API_KEY,
 )
 from app.controller.config import logging
 
@@ -80,11 +84,16 @@ def _checar_tcp(url: str) -> str:
     return "alcançável"
 
 
-def _checar_groq() -> str:
-    if not GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY não configurada")
-
-    return _checar_tcp("https://api.groq.com")
+def _checar_llm(provider: str) -> str:
+    configs = {
+        "openai": (OPENAI_API_KEY, "OPENAI_API_KEY", "https://api.openai.com"),
+        "gemini": (GEMINI_API_KEY, "GEMINI_API_KEY", "https://generativelanguage.googleapis.com"),
+        "groq": (GROQ_API_KEY, "GROQ_API_KEY", "https://api.groq.com"),
+    }
+    key, variable, endpoint = configs[provider]
+    if not key:
+        raise RuntimeError(f"{variable} não configurada")
+    return _checar_tcp(endpoint)
 
 
 def _checar_langsmith() -> str:
@@ -134,11 +143,19 @@ def checar_saude() -> dict:
     vivem no LangSmith e nos relatórios.
     """
 
+    providers = tuple(
+        provider
+        for provider in dict.fromkeys((LLM_PROVIDER, *LLM_FALLBACK_PROVIDERS))
+        if provider in {"openai", "gemini", "groq"}
+    )
     checagens = [
         _medir("MongoDB", _checar_mongodb),
         _medir("PostgreSQL", _checar_postgres),
         _medir("Qdrant", _checar_qdrant),
-        _medir("Groq", _checar_groq),
+        *[
+            _medir(provider.title(), lambda provider=provider: _checar_llm(provider))
+            for provider in providers
+        ],
         _medir("LangSmith", _checar_langsmith),
     ]
 
