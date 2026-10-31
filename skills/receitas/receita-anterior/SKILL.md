@@ -25,7 +25,7 @@ Pedido de receita nova não é desta skill.
 1. Para salvar: a receita está no histórico da conversa, normalmente a última
    que você deu. Chame `salvar_receita` com ela como foi dada: título,
    porções, cada ingrediente como {"nome", "quantidade"}, o modo de preparo,
-   `Step` como lista ordenada de objetos {"title": "Titulo curto", "description": "Texto completo da etapa"},
+   `steps` como lista ordenada de objetos {"title": "Titulo curto", "description": "Texto completo da etapa"},
    tempo_preparo_minutos (minutos inteiros) e dificuldade (fácil, média ou difícil).
    Reutilize tempo e dificuldade da receita apresentada; não os invente ao salvar.
    Não informe food_id: ingredientes são salvos pelo nome, sem criar alimentos. Se
