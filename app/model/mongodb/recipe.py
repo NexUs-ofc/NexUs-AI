@@ -9,8 +9,8 @@ class Recipe:
                  instructions: str, account_id: int | None, created_by: str = "ai",
                  _id: ObjectId | None = None, preparation_time_minutes: int | None = None,
                  difficulty: str | None = None, created_at: datetime | None = None,
-                 estimated_time: str | None = None, Step: list[dict] | None = None):
-        self.Step = Step
+                 estimated_time: str | None = None, steps: list[dict] | None = None):
+        self.steps = steps
         self.id = _id
         self.title = title
         self.serving_size = serving_size
@@ -33,8 +33,8 @@ class Recipe:
             "estimated_time": self.estimated_time,
             "difficulty": self.difficulty, "created_at": self.created_at,
         }
-        if self.Step is not None:
-            doc["Step"] = self.Step
+        if self.steps is not None:
+            doc["steps"] = self.steps
         if self.id is not None:
             doc["_id"] = self.id
         return doc
@@ -53,7 +53,7 @@ class Recipe:
             account_id=data.get("account_id"), created_by=data.get("created_by", "ai"),
             preparation_time_minutes=minutes, estimated_time=estimated,
             difficulty=data.get("difficulty"), created_at=data.get("created_at"),
-            Step=data.get("Step"),
+            steps=data.get("steps"),
         )
 
     def mark_created(self):
@@ -66,7 +66,7 @@ class Recipe:
 def validate_steps(steps: list[dict]) -> list[dict]:
     """Validate preparation before writing, without coercing values."""
     if not isinstance(steps, list) or not steps:
-        raise ValueError("Informe ao menos uma etapa em Step.")
+        raise ValueError("Informe ao menos uma etapa em steps.")
     result = []
     for step in steps:
         if not isinstance(step, dict):

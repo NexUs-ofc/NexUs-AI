@@ -42,47 +42,48 @@ class RecipeStorageTest(unittest.TestCase):
         self.assertEqual(doc["account_id"], 124)
         self.assertIsInstance(doc["created_at"], datetime)
 
-    def test_step_estruturado_chega_ao_documento_inserido(self):
+    def test_steps_estruturados_chegam_ao_documento_inserido(self):
         steps = [{"title": "Lavar", "description": "Lave o arroz."},
                  {"title": "Cozinhar", "description": "Cozinhe por 20 minutos."}]
         collection = Mock()
         collection.insert_one.return_value.inserted_id = ObjectId()
         with patch.object(RecipesRepository, "recipes_collection", collection):
-            result = mongo_recipe_tools.salvar_receita.invoke({**self.args, "Step": steps})
+            result = mongo_recipe_tools.salvar_receita.invoke({**self.args, "steps": steps})
         document = collection.insert_one.call_args.args[0]
-        self.assertEqual(document["Step"], steps)
-        self.assertEqual(json.loads(result)["receita"]["Step"], steps)
-        self.assertEqual(Recipe.from_dict(document).to_dict()["Step"], steps)
+        self.assertEqual(document["steps"], steps)
+        self.assertNotIn("Step", document)
+        self.assertEqual(json.loads(result)["receita"]["steps"], steps)
+        self.assertEqual(Recipe.from_dict(document).to_dict()["steps"], steps)
         self.assertEqual(document["instructions"], self.args["instrucoes"])
 
-    def test_chamada_anterior_deriva_step_sem_perder_preparo(self):
+    def test_chamada_sem_steps_deriva_etapas_sem_perder_preparo(self):
         with patch.object(RecipesRepository, "create_recipe", side_effect=lambda recipe: recipe) as save:
             mongo_recipe_tools.salvar_receita.invoke(self.args)
-        self.assertEqual(save.call_args.args[0].Step, [
+        self.assertEqual(save.call_args.args[0].steps, [
             {"title": "Etapa 1", "description": "Lave o arroz."},
             {"title": "Etapa 2", "description": "Cozinhe por 20 minutos."},
         ])
 
-    def test_step_invalido_nao_e_gravado(self):
+    def test_steps_invalidos_nao_sao_gravados(self):
         for steps in ([], [{}], [{"title": " ", "description": "Lave."}],
                       [{"title": "Lavar", "description": 123}]):
             with self.subTest(steps=steps), patch.object(RecipesRepository, "create_recipe") as save:
-                result = mongo_recipe_tools.salvar_receita.invoke({**self.args, "Step": steps})
+                result = mongo_recipe_tools.salvar_receita.invoke({**self.args, "steps": steps})
                 self.assertIn("FALHA", result)
                 save.assert_not_called()
 
-    def test_repositorio_revalida_step_antes_de_inserir(self):
+    def test_repositorio_revalida_steps_antes_de_inserir(self):
         recipe = Recipe(title="Arroz", serving_size=2, ingredients=[],
-                        instructions="Lave.", account_id=124, Step=[{"title": "Lavar"}])
+                        instructions="Lave.", account_id=124, steps=[{"title": "Lavar"}])
         with patch.object(RecipesRepository, "recipes_collection") as collection:
             with self.assertRaises(ValueError):
                 RecipesRepository.create_recipe(recipe)
             collection.insert_one.assert_not_called()
 
-    def test_leitura_legada_nao_inventa_step(self):
+    def test_leitura_sem_etapas_nao_inventa_steps(self):
         recipe = Recipe(title="Arroz", serving_size=2, ingredients=[],
                         instructions="Lave.", account_id=124)
-        self.assertNotIn("Step", Recipe.from_dict(recipe.to_dict()).to_dict())
+        self.assertNotIn("steps", Recipe.from_dict(recipe.to_dict()).to_dict())
 
     def test_receita_incompleta_nao_e_salva(self):
         for field, value in (("instrucoes", " "), ("titulo", ""), ("serving_size", 0),
