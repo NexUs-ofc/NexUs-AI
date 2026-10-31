@@ -25,7 +25,7 @@ class RecipesRepository:
 
     @staticmethod
     def create_recipe(recipe: Recipe) -> Recipe | None:
-        recipe.Step = validate_steps(recipe.Step)
+        recipe.steps = validate_steps(recipe.steps)
         for ingredient in recipe.ingredients:
             validar_quantidade_receita(ingredient.get("required_quantity"))
         try:

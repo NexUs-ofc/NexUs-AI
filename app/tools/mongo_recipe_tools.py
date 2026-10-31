@@ -49,7 +49,7 @@ def salvar_receita(
     instrucoes: str,
     tempo_preparo_minutos: StrictInt,
     dificuldade: str,
-    Step: list[dict] | None = None,
+    steps: list[dict] | None = None,
 ) -> str:
     """Salva SOMENTE uma receita completa que a pessoa pediu para guardar.
     titulo: nome da receita dada na conversa, sem inventar uma nova.
@@ -57,7 +57,7 @@ def salvar_receita(
     ingredientes: [{"nome": "Arroz", "quantidade": "200 g"}], todos com quantidade positiva e unidade, ou 'a gosto'.
       Também aceita ingrediente/quantidade_total do objeto receita. Sem cadastrar alimentos.
     instrucoes: modo de preparo completo, com um passo por linha.
-    Step: lista ordenada de {"title": "Titulo da etapa", "description": "Preparo completo da etapa"}.
+    steps: lista ordenada de {"title": "Titulo da etapa", "description": "Preparo completo da etapa"}.
       Inclua todos os passos da receita, sem inventar nem resumir o preparo.
     tempo_preparo_minutos: tempo total estimado em minutos inteiros positivos.
     dificuldade: fácil, média ou difícil. Reutilize os dados da receita apresentada.
@@ -88,7 +88,7 @@ def salvar_receita(
         missing = ingredientes_basicos_ausentes(saved_ingredients, instrucoes)
         if missing:
             raise ValueError("Ingredientes usados no preparo sem quantidade na lista: " + ", ".join(missing))
-        steps = validate_steps(Step if Step is not None else [
+        steps = validate_steps(steps if steps is not None else [
             {"title": f"Etapa {index}",
              "description": re.sub(r"^\s*\d+[.)]\s*", "", line).strip()}
             for index, line in enumerate(
@@ -104,7 +104,7 @@ def salvar_receita(
             title=titulo.strip(), serving_size=serving_size, ingredients=saved_ingredients,
             instructions=instrucoes.strip(), account_id=identidade.conta(),
             preparation_time_minutes=tempo_preparo_minutos, difficulty=_difficulty(dificuldade),
-            Step=steps,
+            steps=steps,
         )
         recipe.mark_created()
     except (ValueError, TypeError) as error:
