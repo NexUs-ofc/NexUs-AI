@@ -101,7 +101,7 @@
   },
   {
     "pergunta": "Posso compartilhar minha lista?",
-    "resposta": "Você pode exporta-la como texto, e enviar para quem você quiser."
+    "resposta": "Não encontrei um fluxo de compartilhamento ou exportação de listas no aplicativo. As listas ficam disponíveis na área de Listas da sua conta."
   },
   {
     "pergunta": "A lista é atualizada automaticamente após uma compra?",
@@ -125,7 +125,7 @@
   },
   {
     "pergunta": "Como são sugeridas receitas?",
-    "resposta": "As sugestões utilizam os produtos cadastrados no estoque."
+    "resposta": "A Cerita pode considerar os produtos cadastrados no estoque. Se você pedir uma receita sem usar o estoque, ela deve sugerir uma receita independente dele; se pedir para usar o que tem, deve partir dos itens confirmados e indicar o que faltar."
   },
   {
     "pergunta": "Como funcionam os eventos?",
@@ -149,15 +149,15 @@
   },
   {
     "pergunta": "Meus dados estão protegidos?",
-    "resposta": "Sim. O sistema segue as diretrizes da LGPD."
+    "resposta": "O Ceris usa autenticação e controles de acesso para proteger os dados da conta. Consulte o aviso de privacidade oficial para saber quais dados são tratados e por quanto tempo."
   },
   {
     "pergunta": "Quem pode acessar meu estoque?",
-    "resposta": "Somente usuários autorizados da sua conta."
+    "resposta": "O estoque é associado à casa autenticada. O acesso depende das permissões da conta e os serviços necessários ao funcionamento podem processar dados conforme o aviso de privacidade do Ceris."
   },
   {
     "pergunta": "Minhas informações são compartilhadas com terceiros?",
-    "resposta": "Não, salvo quando autorizado pelo usuário ou exigido por lei."
+    "resposta": "Para oferecer as funções do Ceris, alguns dados podem ser processados por provedores de IA, armazenamento e observabilidade. Consulte o aviso de privacidade oficial para conhecer os fornecedores, finalidades e prazos de retenção."
   },
   {
     "pergunta": "O aplicativo solicita minha senha durante uma conversa?",
@@ -165,7 +165,7 @@
   },
   {
     "pergunta": "Posso excluir minha conta?",
-    "resposta": "Caso essa funcionalidade esteja disponível, ela poderá ser solicitada nas configurações da conta."
+    "resposta": "Não há uma opção de exclusão de conta identificada nas configurações do aplicativo. Consulte o aviso de privacidade ou os canais oficiais do NexUs para solicitar orientação sobre exclusão."
   },
   {
     "pergunta": "As informações da nota fiscal ficam armazenadas?",
@@ -173,7 +173,7 @@
   },
   {
     "pergunta": "Posso controlar quais notificações recebo?",
-    "resposta": "Sim. As notificações podem ser configuradas nas preferências da conta."
+    "resposta": "As notificações podem ser habilitadas ou desabilitadas nas configurações do Android. No Ceris, elas são organizadas em canais do sistema, como produtos, eventos e lojas."
   },
   {
     "pergunta": "O Ceris acessa outros aplicativos do meu celular?",
@@ -189,11 +189,11 @@
   },
   {
     "pergunta": "Qual é o email de suporte?",
-    "resposta": "O email de suporte do NexUs é nexus.inter2026@gmail.com"
+    "resposta": "Consulte os canais oficiais de atendimento publicados pelo NexUs. Não consigo confirmar um endereço de e-mail de suporte nesta conversa."
   },
   {
     "pergunta": "Qual é o telefone de suporte?",
-    "resposta": "O telefone de suporte do NexUs é +55 11 98673-2740"
+    "resposta": "Consulte os canais oficiais de atendimento publicados pelo NexUs. Não consigo confirmar um telefone de suporte nesta conversa."
   },
   {
     "pergunta": "O código de barras não foi reconhecido. O que faço?",
@@ -217,7 +217,7 @@
   },
   {
     "pergunta": "As receitas sugeridas não utilizam todos os meus produtos.",
-    "resposta": "As sugestões priorizam os ingredientes mais adequados disponíveis no momento."
+    "resposta": "A Cerita escolhe ingredientes compatíveis com o prato, então uma sugestão não precisa usar todo o estoque. Você também pode pedir explicitamente uma receita com itens específicos do estoque."
   },
   {
     "pergunta": "O aplicativo está lento.",
@@ -417,7 +417,7 @@
   },
   {
     "pergunta": "Posso compartilhar uma lista com outra pessoa da casa?",
-    "resposta": "Sim. A lista pode ser compartilhada exportando-a como texto para quem você quiser."
+    "resposta": "Não encontrei um fluxo de compartilhamento de listas no aplicativo. Consulte o aviso de privacidade para saber como o acesso da casa é organizado."
   },
   {
     "pergunta": "Como funcionam as receitas?",
@@ -457,11 +457,11 @@
   },
   {
     "pergunta": "Como desativo as notificações?",
-    "resposta": "Nas configurações da conta ou do aparelho, você pode desativar as notificações do Ceris."
+    "resposta": "Abra as configurações do Android, encontre o Ceris e desative as notificações ou ajuste os canais disponíveis."
   },
   {
     "pergunta": "Posso escolher quando ser avisado sobre a validade?",
-    "resposta": "Sim. Os lembretes de validade são enviados antes do vencimento, nas preferências da conta."
+    "resposta": "O aplicativo envia lembretes conforme as regras do recurso. Não há uma preferência no Ceris para escolher o horário; você pode controlar as notificações nas configurações do Android."
   },
   {
     "pergunta": "Por que não vejo a aba de estoque?",
@@ -485,7 +485,7 @@
   },
   {
     "pergunta": "A conversa com a Cerita fica salva?",
-    "resposta": "A conversa é encerrada ao sair da tela, e a Cerita guarda um resumo do que foi útil para ajudar você nas próximas vezes."
+    "resposta": "As mensagens são salvas na sessão da sua conta. A janela enviada ao agente é limitada para manter o contexto do modelo; ao encerrar a sessão, o sistema pode criar um resumo para consultas futuras da mesma conta."
   },
   {
     "pergunta": "Como começo uma nova conversa com a Cerita?",
@@ -525,11 +525,11 @@
   },
   {
     "pergunta": "Como entro em contato com o suporte?",
-    "resposta": "Você pode falar com a equipe pelo e-mail ou pelo telefone de suporte informados neste atendimento."
+    "resposta": "Consulte os canais oficiais de atendimento publicados pelo NexUs. O chat não deve inventar nem exibir um contato que não consiga validar."
   },
   {
     "pergunta": "Quais são os horários de atendimento do suporte?",
-    "resposta": "O atendimento é feito pelos canais de suporte do NexUs, e o horário pode variar. Consulte o e-mail ou o telefone de suporte para confirmar."
+    "resposta": "Não encontrei um horário de atendimento confirmado. Consulte os canais oficiais publicados pelo NexUs."
   },
   {
     "pergunta": "Quem vê as minhas listas?",
@@ -537,11 +537,11 @@
   },
   {
     "pergunta": "Meus dados são vendidos?",
-    "resposta": "Não. Os dados são usados apenas para o funcionamento do Ceris."
+    "resposta": "O código do app não permite confirmar uma política de venda de dados. Consulte o aviso de privacidade oficial do Ceris para essa informação."
   },
   {
     "pergunta": "Posso apagar meus dados?",
-    "resposta": "Sim, conforme a LGPD. Para solicitar a exclusão dos seus dados, entre em contato com o suporte."
+    "resposta": "Consulte o aviso de privacidade oficial do Ceris para conhecer o procedimento de acesso ou exclusão dos seus dados. Não posso confirmar um prazo ou fluxo que não esteja documentado."
   },
   {
     "pergunta": "O Ceris guarda a foto da nota fiscal?",
