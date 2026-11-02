@@ -216,7 +216,6 @@ def needs_deep_pass(parsed: dict) -> bool:
     if any(not i["raw_text"] for i in items):
         return True
     # Codigo de barras ilegivel nao dispara a passada funda: ela roda o OCR mais
-    # duas vezes (~45s medidos, o corte do DisCloud e 30s) e o app casa os itens
-    # pelo nome, nao pelo EAN.
+    # duas vezes (~45s medidos) e o app casa os itens pelo nome, nao pelo EAN.
     t = parsed.get("total")
     return t is not None and abs(items_sum(items) - t) > 0.1

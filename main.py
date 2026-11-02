@@ -1,15 +1,14 @@
-"""Entrypoint para a Discloud (GitHub Integration).
+"""Entrypoint alternativo para executar o serviço FastAPI.
 
-A Discloud executa `python MAIN` por padrão. O serviço FastAPI mora em
-`app/app.py` e só expõe o objeto `app`, sem bloco `__main__`, então um
-`python app/app.py` subiria e sairia sem servir nada.
+O serviço FastAPI mora em `app/app.py` e só expõe o objeto `app`, sem bloco
+`__main__`, então um `python app/app.py` subiria e sairia sem servir nada.
 
 Este shim não altera nada do código existente: só inicia o mesmo objeto
-que o Dockerfile já usa (`uvicorn app.app:app`), na porta/host que a
-Discloud exige para `TYPE=site` (proxy -> 0.0.0.0:8080).
+que o Dockerfile também usa (`uvicorn app.app:app`), usando a porta informada
+pelo ambiente ou a porta padrão do serviço.
 
 O `rapidocr-onnxruntime` arrasta o `opencv-python` (variante com GUI),
-que precisa de libGL — e a imagem da Discloud não tem. No runtime o app
+que precisa de libGL — e a imagem de runtime pode não ter. No runtime o app
 roda como usuário sem permissão de escrita no site-packages global, e o
 "user site" que o pip cria como fallback não entra no sys.path (ele é
 montado no boot, antes de a pasta existir). Por isso a troca para o
