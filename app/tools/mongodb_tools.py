@@ -405,19 +405,22 @@ def remove_recipe(
 
 
 @tool("create_list")
-def create_list(title: str, items: list[dict], event_id: str = "") -> str:
+def create_list(title: str, items: list[dict], event_id: str = "", date: str = "") -> str:
     """Cria uma lista de compras SOMENTE quando a pessoa pedir e confirmar os itens.
     title: título escolhido ou nome da receita/evento.
     items: [{"name": "Arroz", "quantity": 200, "unitOfMeasure": "g", "checked": false}].
       Também aceita ingredient/quantity/purchased com quantidade "200 g".
       Todos os itens precisam de nome, quantidade positiva e unidade.
     event_id: opcional; deixe vazio para compras avulsas ou de uma receita.
+    date: data opcional da lista no formato AAAA-MM-DD. Para lista de evento,
+      a data do evento é aplicada automaticamente e prevalece sobre este campo.
     Não salva receita, não cria evento e nunca inclui produtos no estoque.
     """
     household = identidade.perfil()
     assunto = identidade.assunto() or {}
     lista_do_evento = assunto.get("tipo") == "evento" and assunto.get("lista_evento")
     conferencia_evento = None
+    data_lista = date or None
     if lista_do_evento and not event_id:
         return ("FALHA: a lista solicitada é do evento ativo. Consulte get_events e informe o event_id. "
                 "Não crie uma lista de receita avulsa antiga.")
@@ -427,6 +430,11 @@ def create_list(title: str, items: list[dict], event_id: str = "") -> str:
         event = events_repository.get_event_by_id(event_id)
         if event is None or event.household_id != household:
             return "FALHA: evento não encontrado. A lista não foi criada."
+        if event.date:
+            data_evento = event.date
+            data_lista = (data_evento.date().isoformat() if isinstance(data_evento, datetime)
+                          else data_evento.isoformat() if hasattr(data_evento, "isoformat")
+                          else str(data_evento)[:10])
         if lista_do_evento:
             referencia = assunto.get("evento") or {}
             esperado = referencia.get("_id") or referencia.get("id")
@@ -468,7 +476,10 @@ def create_list(title: str, items: list[dict], event_id: str = "") -> str:
     try:
         if not items:
             raise ValueError("Informe os itens da lista antes de criar.")
-        shopping = ShoppingList(household_id=household, title=title, items=items, event_id=event_id)
+        shopping = ShoppingList(
+            household_id=household, title=title, items=items,
+            event_id=event_id, date=data_lista,
+        )
     except (ValueError, TypeError, ZeroDivisionError) as error:
         return f"FALHA: lista não criada. {error}"
     result = identidade.executar_gravacao(
@@ -480,6 +491,7 @@ def create_list(title: str, items: list[dict], event_id: str = "") -> str:
                 for item in shopping.items
             ],
             "event_id": shopping.event_id,
+            "date": shopping.date,
         },
         lambda: ShoppingListsRepository.create_list(shopping),
     )

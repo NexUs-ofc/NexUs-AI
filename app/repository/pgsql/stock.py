@@ -65,7 +65,8 @@ class StockRepository:
             stmt = (
                 select(Pantry_Item)
                 .where(
-                    Pantry_Item.profile_id == profile_id
+                    Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.quantity > 0,
                 )
             )
 
@@ -94,6 +95,7 @@ class StockRepository:
                 select(Pantry_Item)
                 .where(
                     Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.quantity > 0,
                     Pantry_Item.expiry_date <= func.current_date() + text("INTERVAL '7 days'")
                 )
             )
@@ -121,24 +123,25 @@ class StockRepository:
 
             stmt = (
                 select(
-                    Pantry_Item.food_id,
-                    func.sum(Pantry_Item.quantity).label("quantity"),
+                    Pantry_Product_Setting.food_id,
+                    func.coalesce(func.sum(Pantry_Item.quantity), 0).label("quantity"),
                     Pantry_Product_Setting.minimum_quantity,
                 )
-                .join(
-                    Pantry_Product_Setting,
+                .select_from(Pantry_Product_Setting)
+                .outerjoin(
+                    Pantry_Item,
                     (Pantry_Product_Setting.food_id == Pantry_Item.food_id)
                     & (Pantry_Product_Setting.profile_id == Pantry_Item.profile_id)
                 )
                 .where(
-                    Pantry_Item.profile_id == profile_id
+                    Pantry_Product_Setting.profile_id == profile_id,
                 )
                 .group_by(
-                    Pantry_Item.food_id,
+                    Pantry_Product_Setting.food_id,
                     Pantry_Product_Setting.minimum_quantity
                 )
                 .having(
-                    func.sum(Pantry_Item.quantity)
+                    func.coalesce(func.sum(Pantry_Item.quantity), 0)
                     < Pantry_Product_Setting.minimum_quantity
                 )
             )
@@ -180,7 +183,8 @@ class StockRepository:
                     Food.category_id == Category.id
                 )
                 .where(
-                    Pantry_Item.profile_id == profile_id
+                    Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.quantity > 0,
                 )
                 .group_by(
                     Category.category_name
@@ -217,7 +221,8 @@ class StockRepository:
                     Pantry_Item.food_id == Food.id
                 )
                 .where(
-                    Pantry_Item.profile_id == profile_id
+                    Pantry_Item.profile_id == profile_id,
+                    Pantry_Item.quantity > 0,
                 )
                 .group_by(
                     Food.product_brand

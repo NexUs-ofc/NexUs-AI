@@ -17,7 +17,7 @@ def menciona_evento(texto: str) -> bool:
 def pedido_evento_novo(texto: str) -> bool:
     """Reconhece pedido de criação de um evento novo."""
     texto = normalizar(texto)
-    verbos_evento = r"(?:crie?|criar|faca|fazer|farei|marque|marcar|agende|agendar|marcado|marcada|organize|organizar)"
+    verbos_evento = r"(?:crie?|criar|faca|fazer|farei|prepare?|preparar|planeje|planejar|marque|marcar|agende|agendar|marcado|marcada|organize|organizar)"
     return menciona_evento(texto) and bool(re.search(
         rf"\b{verbos_evento}\b.{{0,60}}\bevento\b|\bevento\b.{{0,60}}\b{verbos_evento}\b", texto,
     ))

@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Consultar lista de compras | Atualizar lista de compras
-  ferramentas: [get_list, renomear_lista, alterar_item_lista, calcular_percentual, somar_valores]
+  ferramentas: [get_list, update_list, renomear_lista, alterar_item_lista, calcular_percentual, somar_valores]
   version: 1.0.0
 ---
 

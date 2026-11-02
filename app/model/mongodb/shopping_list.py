@@ -1,5 +1,6 @@
 import math
 import re
+from datetime import date as Date
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from bson import ObjectId
@@ -49,7 +50,8 @@ def normalize_item(item: dict) -> dict:
 
 class ShoppingList:
     def __init__(self, household_id: int, title: str, items: list[dict],
-                 event_id: str | None = None, _id: ObjectId | None = None):
+                 event_id: str | None = None, date: str | None = None,
+                 _id: ObjectId | None = None):
         self.id = _id
         self.household_id = household_id
         self.title = validar_titulo(title)
@@ -57,6 +59,16 @@ class ShoppingList:
             raise ValueError("Informe o título da lista.")
         self.items = [normalize_item(item) for item in items]
         self.event_id = str(event_id) if event_id else None
+        self.date = self._normalize_date(date)
+
+    @staticmethod
+    def _normalize_date(value: str | None) -> str | None:
+        if value is None or not str(value).strip():
+            return None
+        try:
+            return Date.fromisoformat(str(value).strip()[:10]).isoformat()
+        except ValueError as error:
+            raise ValueError("A data da lista deve estar no formato AAAA-MM-DD.") from error
 
     def to_dict(self) -> dict:
         doc = {
@@ -64,6 +76,7 @@ class ShoppingList:
             "title": self.title,
             "array_list": self.items,
             "event_id": self.event_id,
+            "date": self.date,
         }
         if self.id is not None:
             doc["_id"] = self.id
@@ -81,7 +94,7 @@ class ShoppingList:
         return cls(
             _id=data.get("_id"), household_id=data["household_id"],
             title=data["title"], items=items,
-            event_id=data.get("event_id"),
+            event_id=data.get("event_id"), date=data.get("date"),
         )
 
     def __repr__(self):

@@ -31,13 +31,14 @@ Se a lista já existe e ela quer ver ou alterar, use `lista-gerenciar`.
   Comprar o que já se tem é o desperdício que o Ceris combate.
 - Nunca peça `list_id` nem `event_id`. Resolva por `get_list` e `get_events`,
   casando pelo título ou pela data que a pessoa mencionou.
-- Lista criada a partir de evento leva o nome do evento, para ela reconhecer
-  depois.
+- Lista criada a partir de evento leva o nome e a data do evento, para ela
+  reconhecer quando precisa comprar. Para lista avulsa, só informe `date` se a
+  pessoa disser uma data; caso contrário, deixe sem data.
 - Para pedido genérico com evento ativo, `create_list` exige `event_id` e calcula as compras a partir das receitas vinculadas. Se o evento só tiver sugestões sem cardápio confirmado, pergunte quais pratos serão usados; não crie lista de outra receita nem vincule pratos sem autorização.
 - Restrições dos convidados continuam valendo ao longo do evento. Não substitua o cardápio por receita avulsa para contornar dados faltantes.
 - Pedido explícito com itens definidos (“crie a lista dessa receita”) já autoriza criar. Se você propôs uma lista e a pessoa confirmou, crie sem perguntar novamente. Pergunte só quando faltar receita, item, quantidade ou quando houver ambiguidade.
 - Para receita avulsa, não crie evento e deixe `event_id` vazio. Não salve a receita sem pedido separado.
-- `create_list` recebe título e itens com `name`, `quantity` numérica, `unitOfMeasure` e `checked: false`. Use as quantidades da receita. O retorno traz `_id` e `array_list`: repasse o que foi realmente criado.
+- `create_list` recebe título, itens com `name`, `quantity` numérica, `unitOfMeasure` e `checked: false`, além de `event_id` quando a lista pertencer ao evento. Lista vinculada recebe automaticamente a data real do evento; para lista avulsa, envie `date` apenas se a pessoa informou a data. O retorno traz `_id`, `date` e `array_list`: repasse o que foi realmente criado.
 - Se todos os itens já estiverem disponíveis em quantidade confirmada, diga que não falta comprar; não crie lista vazia.
 - Falha de consulta ou gravação não é sucesso nem ausência de itens.
 

@@ -69,6 +69,40 @@ def test_requisicoes_seguidas_nao_herdam_a_casa_anterior():
         identidade.perfil()
 
 
+def test_operacao_adiada_nao_executa_acao_ate_despacho_aprovado():
+    chamadas = []
+    with identidade.da_requisicao(124, 124, autorizador_gravacao=lambda *_: False):
+        recibo = identidade.adiar_operacao(
+            "create_event", {"titulo": "Jantar"}, "pedido explícito de criar evento",
+        )
+        assert "op-1" in recibo
+        proposta = identidade.obter_operacoes_pendentes()
+        assert proposta == [{
+            "id": "op-1", "operacao": "create_event",
+            "argumentos": {"titulo": "Jantar"},
+            "justificativa": "pedido explícito de criar evento",
+        }]
+        # O despacho nunca chama a persistência quando a autorização falha.
+        assert identidade.executar_gravacao(
+            "create_event", {"titulo": "Jantar"}, lambda: chamadas.append("gravou"),
+        ) is None
+    assert chamadas == []
+
+
+def test_gravacao_aprovada_pelo_dispatcher_nao_chama_o_juiz_uma_segunda_vez():
+    chamadas_juiz = []
+    chamadas_banco = []
+    with (identidade.da_requisicao(
+            124, 124, autorizador_gravacao=lambda *_: chamadas_juiz.append("juiz") or False,
+          ), identidade.permitir_gravacao_aprovada("create_event", {"titulo": "Jantar"})):
+        resultado = identidade.executar_gravacao(
+            "create_event", {"titulo": "Jantar"}, lambda: chamadas_banco.append("gravou") or True,
+        )
+    assert resultado is True
+    assert chamadas_banco == ["gravou"]
+    assert chamadas_juiz == []
+
+
 def test_remove_product_nao_apaga_item_de_outra_casa(monkeypatch):
     class Item:
         profile_id = 1

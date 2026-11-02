@@ -48,14 +48,25 @@ def _casa_do_token(user: dict, informada: int | None) -> int | None:
     return casa
 
 
-@router.post("/", response_model=ChatResponse)
+def _conta_do_token(user: dict, informada: int | None) -> int:
+    """Usa account_id do corpo somente no token de desenvolvimento user_id=0."""
+    conta = user["user_id"] or informada
+    if not conta:
+        raise HTTPException(
+            status_code=422,
+            detail="account_id e obrigatorio com token de desenvolvimento.",
+        )
+    return conta
+
+
+@router.post("/", response_model=ChatResponse, response_model_exclude_none=True)
 def send_message(request: ChatRequest, user: Annotated[dict, Depends(get_current_user)]):
     try:
         resultado = executar_chat(
             mensagem=request.mensagem,
             session_id=request.session_id,
             household_account_id=_casa_do_token(user, request.household_account_id),
-            account_id=user["user_id"],
+            account_id=_conta_do_token(user, request.account_id),
         )
     except ConversationStoreUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -63,6 +74,7 @@ def send_message(request: ChatRequest, user: Annotated[dict, Depends(get_current
     return ChatResponse(
         resposta=resultado["resposta"],
         session_id=resultado["session_id"],
+        respostas_recomendadas=resultado.get("respostas_recomendadas"),
     )
 
 

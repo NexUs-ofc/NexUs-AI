@@ -51,7 +51,14 @@ def calculate_missing(ingredients: list[dict], stock: list[dict], today: date) -
                            "tem_suficiente": False, "comparacao_confirmada": False,
                            "dispensa_compra": True})
             continue
-        matches = [s for s in stock if _name(str(s.get("food_name") or "")) == _name(item["name"])]
+        # Linhas legadas com saldo zero/negativo não representam alimento
+        # disponível. Tratá-las como correspondências tornava a comparação
+        # incerta (por exemplo, por falta de validade) em vez de indicar falta.
+        matches = [
+            s for s in stock
+            if (_name(str(s.get("food_name") or "")) == _name(item["name"])
+                and Decimal(str(s.get("quantity") or 0)) > 0)
+        ]
         need_unit = UNITS.get(_name(item["unitOfMeasure"]))
         available = Decimal(0)
         # Ausência confirmada é zero, mesmo sem uma unidade conversível.
