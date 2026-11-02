@@ -441,3 +441,7 @@ ofuscação de dados pessoais.
   como `expectedFailure` em `tests/test_skills.py`.
 - O MCP do Tavily carrega na importação, o que custa alguns segundos por
   processo que sobe.
+
+## Containers e Kubernetes
+
+Consulte o [guia de containers e Kubernetes](docs/containers.md) para build, configuração e execução em qualquer cluster.
