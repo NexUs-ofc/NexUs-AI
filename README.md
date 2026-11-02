@@ -232,6 +232,11 @@ Ou direto, do venv:
 python -m pytest -q tests
 ```
 
+Em Pull Requests direcionadas à `main`, o workflow `AI CI` executa `ruff check
+app/`, compila os módulos Python com `compileall` e valida a presença e o JSON
+das bases. Ele não executa chamadas reais aos provedores de LLM nem a suíte de
+integração completa.
+
 A suíte deve usar dublês para banco, modelos e ferramentas. A importação dos
 agentes pode carregar o MCP da Tavily, e spans de observabilidade podem gravar
 no Mongo se não forem substituídos nos testes; configure esses pontos antes de
