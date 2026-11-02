@@ -9,13 +9,16 @@ from bson import ObjectId
 from langchain_core.messages import AIMessage
 
 from app.auth import identidade
-from app.core.contexto_conversa import assunto_do_turno, resolver_assunto, pedido_lista_generico
+from app.core.contexto_conversa import (
+    assunto_do_turno,
+    pedido_lista_generico,
+    resolver_assunto,
+)
 from app.model.mongodb.event import Event
-from app.repository.mongodb.shopping_lists import ShoppingListsRepository
 from app.repository.mongodb.conversations import ConversationsRepository
+from app.repository.mongodb.shopping_lists import ShoppingListsRepository
 from app.schemas import flow
 from app.tools import general_tools, mongodb_tools, recipe_tools
-
 
 EGGS = {"titulo": "Ovos mexidos", "porcoes": 2,
         "ingredientes": [{"ingrediente": "Ovos", "quantidade_total": "2 unidades"}],
@@ -84,6 +87,20 @@ class ShoppingContextTest(unittest.TestCase):
             "intencao": "Criar evento", "evento": {"_id": str(ObjectId()), "titulo": "Aniversário"}}, None)
         self.assertNotIn("restricoes_declaradas", source)
         self.assertNotIn("porco", source["pedido"])
+
+    def test_confirmacao_curta_preserva_receita_pendente(self):
+        pending = {"tipo": "receita_pendente", "pedido":
+                   "Faça uma receita de arroz para duas pessoas, sem óleo"}
+        history = [{"role": "assistant", "content": "Posso completar a receita?",
+                    "assunto": pending}]
+        for answer in ("sim", "pode", "não", "2 porções"):
+            with self.subTest(answer=answer):
+                self.assertEqual(resolver_assunto(history, answer), pending)
+
+    def test_pedido_novo_nao_herda_receita_pendente(self):
+        pending = {"tipo": "receita_pendente", "pedido": "Faça uma receita de arroz"}
+        history = [{"role": "assistant", "content": "Posso completar?", "assunto": pending}]
+        self.assertIsNone(resolver_assunto(history, "Qual a previsão do tempo?"))
 
     def test_generico_nao_se_confunde_com_itens_ou_receita_explicitos(self):
         for text in ("Monte uma lista de compras", "Pode montar a lista de compras?", "Agora crie a lista", "Sim, monte a lista"):

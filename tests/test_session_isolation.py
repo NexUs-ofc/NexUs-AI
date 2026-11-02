@@ -2,19 +2,24 @@
 import copy
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
 from datetime import UTC, datetime
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from bson import ObjectId
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
+from pymongo.errors import AutoReconnect
 
-from app.app import app
-from app.auth.dependencies import get_current_user
 from app.auth import identidade
 from app.controller import chat
-from app.repository.mongodb.conversations import ConversationsRepository as Repo
+from app.model.dto.chat_request import ChatRequest
+from app.repository.mongodb.conversations import (
+    ConversationsRepository as Repo,
+)
+from app.repository.mongodb.conversations import (
+    ConversationStoreUnavailable,
+)
 from app.schemas import flow, memory
 
 
@@ -95,6 +100,19 @@ class SessionIsolationTest(unittest.TestCase):
             Repo.append_messages(sid, "hello", "reply", account_id=124)
         self.assertEqual(self.collection.queries, [])
 
+    def test_store_indisponivel_nao_parece_historico_vazio(self):
+        with patch.object(Repo, "conversations_collection") as collection:
+            collection.find_one.side_effect = AutoReconnect("Mongo indisponível")
+            with self.assertRaises(ConversationStoreUnavailable):
+                Repo.get_historico(str(self.own), 124)
+
+    def test_resposta_nao_e_confirmada_quando_historico_nao_salvou(self):
+        with patch.object(Repo, "conversations_collection") as collection:
+            collection.update_one.side_effect = AutoReconnect("Mongo indisponível")
+            with self.assertRaises(ConversationStoreUnavailable):
+                Repo.append_messages(str(self.own), "pergunta", "resposta",
+                                     account_id=124, strict=True)
+
     def test_direct_summary_cannot_copy_foreign_history(self):
         with patch.object(memory, "_gerar_resumo") as model, \
              patch.object(memory.MemoryRepository, "salvar_resumo") as save:
@@ -131,32 +149,30 @@ class SessionIsolationTest(unittest.TestCase):
             results = list(pool.map(probe, range(100)))
         self.assertTrue(all(r == ([], True, False) for r in results))
 
-    def test_http_foreign_and_missing_sessions_return_404_before_models(self):
-        previous = app.dependency_overrides.copy()
-        app.dependency_overrides[get_current_user] = lambda: {"user_id": 124}
-        try:
-            with patch.object(flow.ceris_workflow, "invoke") as graph, \
-                 patch.object(chat, "encerrar_sessao") as close_memory, \
-                 patch.object(Repo, "sessao_recente") as recent, \
-                 TestClient(app) as client:
-                for sid in (self.other, ObjectId()):
-                    with self.subTest(session=str(sid)):
-                        response = client.post("/chat/", json={
-                            "mensagem": "Show the previous recipe",
-                            "session_id": str(sid), "account_id": 125,
-                            "household_account_id": 125,
-                        })
-                        self.assertEqual(response.status_code, 404)
-                        response = client.delete("/chat/" + str(sid))
-                        self.assertEqual(response.status_code, 404)
+    def test_chat_controller_recusa_sessoes_alheias_antes_do_modelo(self):
+        with patch.object(flow.ceris_workflow, "invoke") as graph, \
+             patch.object(chat, "encerrar_sessao") as close_memory, \
+             patch.object(Repo, "sessao_recente") as recent:
+            for sid in (self.other, ObjectId()):
+                with self.subTest(session=str(sid)):
+                    request = ChatRequest(
+                        mensagem="Mostre a receita anterior",
+                        session_id=str(sid),
+                        account_id=125,
+                        household_account_id=125,
+                    )
+                    with self.assertRaises(HTTPException) as response:
+                        chat.send_message(request, {"user_id": 124})
+                    self.assertEqual(response.exception.status_code, 404)
+
+                    with self.assertRaises(HTTPException) as response:
+                        chat.end_session(str(sid), {"user_id": 124})
+                    self.assertEqual(response.exception.status_code, 404)
             graph.assert_not_called()
             close_memory.assert_not_called()
             recent.assert_not_called()
             self.assertEqual(self.collection.docs[1]["historico"], self.foreign_history)
             self.assertNotIn("ended_at", self.collection.docs[1])
-        finally:
-            app.dependency_overrides.clear()
-            app.dependency_overrides.update(previous)
 
     def test_owner_close_passes_account_to_repository(self):
         with patch.object(chat, "encerrar_sessao", return_value={"resumo": "", "preferencias": []}) as close:
@@ -167,9 +183,9 @@ class SessionIsolationTest(unittest.TestCase):
     def test_legacy_invalid_session_placeholder_still_starts_owned_session(self):
         # Stop before the graph: verifies the existing Swagger fallback path.
         with patch.object(Repo, "sessao_recente", return_value=None) as recent, \
-             patch.object(Repo, "create_session", side_effect=RuntimeError("stop")) as create:
-            with self.assertRaisesRegex(RuntimeError, "stop"):
-                flow.executar_chat("Hello", "string", 124, 124)
+             patch.object(Repo, "create_session", side_effect=RuntimeError("stop")) as create, \
+             self.assertRaisesRegex(RuntimeError, "stop"):
+            flow.executar_chat("Hello", "string", 124, 124)
         recent.assert_called_once_with(124)
         create.assert_called_once_with(124)
 

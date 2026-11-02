@@ -262,7 +262,8 @@ class RetrySideEffectTest(unittest.TestCase):
             with self.subTest(error=type(error).__name__):
                 collection = Mock()
                 collection.insert_one.side_effect = error
-                recipe = Recipe("Arroz", 2, [], "Cozinhe.", 124)
+                recipe = Recipe("Arroz", 2, [], "Cozinhe.", 124,
+                                steps=[{"title": "Cozinhar", "description": "Cozinhe o arroz."}])
                 with identidade.da_requisicao(124, 124), patch.object(RecipesRepository, "recipes_collection", collection):
                     for _ in range(2):
                         self.assertIsNone(identidade.executar_gravacao(
@@ -338,6 +339,50 @@ class RetrySideEffectTest(unittest.TestCase):
             self.assertTrue(identidade.escrita_incerta())
             self.assertIsNone(identidade.executar_gravacao("create_list", {"title": "A"}, action))
         self.assertEqual(action.call_count, 1)
+
+    def test_juiz_nega_antes_da_escrita_e_bloqueia_tentativas_no_turno(self):
+        action = Mock(return_value=True)
+        authorize = Mock(return_value=False)
+        with identidade.da_requisicao(124, 124, autorizador_gravacao=authorize):
+            self.assertIsNone(identidade.executar_gravacao(
+                "create_event", {"title": "Evento fora do pedido"}, action
+            ))
+            self.assertIsNone(identidade.executar_gravacao(
+                "create_event", {"title": "Outro evento"}, action
+            ))
+            self.assertTrue(identidade.gravacao_negada())
+        action.assert_not_called()
+        authorize.assert_called_once_with("create_event", {"title": "Evento fora do pedido"})
+
+    def test_falha_do_juiz_fecha_a_gravacao(self):
+        action = Mock(return_value=True)
+        authorize = Mock(side_effect=TimeoutError("juiz indisponível"))
+        with identidade.da_requisicao(124, 124, autorizador_gravacao=authorize):
+            self.assertIsNone(identidade.executar_gravacao(
+                "create_list", {"title": "Compras"}, action
+            ))
+            self.assertTrue(identidade.gravacao_negada())
+        action.assert_not_called()
+
+    def test_juiz_autoriza_e_escrita_roda_uma_vez(self):
+        action = Mock(return_value={"inserted_id": "abc"})
+        authorize = Mock(return_value=True)
+        with identidade.da_requisicao(124, 124, autorizador_gravacao=authorize):
+            first = identidade.executar_gravacao("create_list", {"title": "Compras"}, action)
+            second = identidade.executar_gravacao("create_list", {"title": "Compras"}, action)
+        self.assertEqual(first, {"inserted_id": "abc"})
+        self.assertEqual(second, first)
+        action.assert_called_once()
+        authorize.assert_called_once()
+
+    def test_autorizador_de_operacao_exige_veredito_exato(self):
+        with patch.object(flow.juiz_llm, "invoke", return_value=AIMessage(content="APROVAR")):
+            self.assertTrue(flow._juiz_autoriza_gravacao("Crie uma lista", "create_list", {"title": "Feira"}))
+        for content in ("NEGAR", "APROVAR porque sim", "talvez"):
+            with self.subTest(content=content), patch.object(
+                flow.juiz_llm, "invoke", return_value=AIMessage(content=content)
+            ):
+                self.assertFalse(flow._juiz_autoriza_gravacao("Crie uma lista", "create_list", {"title": "Feira"}))
 
     def test_reparos_compartilham_um_limite_e_requisicoes_nao(self):
         with identidade.da_requisicao(124, 124):

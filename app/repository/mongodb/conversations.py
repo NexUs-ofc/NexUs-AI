@@ -9,6 +9,10 @@ from ...controller.config import logging
 
 logger = logging.getLogger(__name__)
 
+
+class ConversationStoreUnavailable(RuntimeError):
+    """A conversa não pode seguir sem garantir leitura e gravação no MongoDB."""
+
 # Quanto tempo depois da ultima mensagem uma sessao sem session_id ainda e
 # continuada (ver sessao_recente).
 JANELA_SESSAO = timedelta(hours=2)
@@ -34,7 +38,7 @@ class ConversationsRepository:
 
         except PyMongoError:
             logger.exception("Erro ao criar sessão")
-            return None
+            raise ConversationStoreUnavailable("Não foi possível criar a conversa.")
 
     @staticmethod
     def sessao_recente(account_id: int) -> str | None:
@@ -58,7 +62,7 @@ class ConversationsRepository:
             )
         except PyMongoError:
             logger.exception(f"Erro ao buscar sessao recente da conta {account_id}")
-            return None
+            raise ConversationStoreUnavailable("Não foi possível recuperar a conversa.")
 
         if doc is None:
             return None
@@ -79,7 +83,7 @@ class ConversationsRepository:
             ) is not None
         except PyMongoError:
             logger.exception("Erro ao verificar propriedade da sessao")
-            return False
+            raise ConversationStoreUnavailable("Não foi possível validar a conversa.")
 
     @staticmethod
     def get_historico(session_id: str, account_id: int) -> list[dict]:
@@ -105,7 +109,7 @@ class ConversationsRepository:
 
         except PyMongoError:
             logger.exception("Erro ao buscar histórico")
-            return []
+            raise ConversationStoreUnavailable("Não foi possível carregar o histórico da conversa.")
 
     @staticmethod
     def sessao_ativa(session_id: str, account_id: int) -> bool:
@@ -130,7 +134,7 @@ class ConversationsRepository:
 
         except PyMongoError:
             logger.exception(f"Erro ao verificar sessão {session_id}")
-            return False
+            raise ConversationStoreUnavailable("Não foi possível validar a conversa.")
 
     @staticmethod
     def sessao_encerrada(session_id: str, account_id: int) -> bool:
@@ -175,9 +179,11 @@ class ConversationsRepository:
     @staticmethod
     def append_messages(session_id: str, user_msg: str, assistant_msg: str,
                         *, account_id: int, receita: dict | None = None, assunto: dict | None = None,
-                        trace_id: str | None = None):
+                        trace_id: str | None = None, strict: bool = False):
         if not ObjectId.is_valid(session_id):
-            return
+            if strict:
+                raise ConversationStoreUnavailable("Identificador da conversa inválido.")
+            return False
         try:
             logger.info(f"Salvando mensagens da sessão {session_id}")
             assistant = {"role": "assistant", "content": assistant_msg}
@@ -203,9 +209,17 @@ class ConversationsRepository:
             )
 
             logger.info(f"Mensagens da sessão {session_id} salvas, matched_count={result.matched_count}")
+            if result.matched_count == 0:
+                if strict:
+                    raise ConversationStoreUnavailable("A conversa não existe mais ou não pertence à conta.")
+                return False
+            return True
 
         except PyMongoError:
             logger.exception("Erro ao salvar mensagens")
+            if strict:
+                raise ConversationStoreUnavailable("Não foi possível salvar a resposta da conversa.")
+            return False
 
     @staticmethod
     def submit_section_feedback(session_id: str, account_id: int, rating: int, comment: str | None):
