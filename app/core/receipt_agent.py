@@ -209,6 +209,7 @@ def _build_response(
         review = (
             not it.get("raw_text")
             or not it.get("ean")
+            or bool(it.get("ean_candidates"))
             or it.get("unit_price") is None
             or name == UNKNOWN_NAME
         )
