@@ -21,9 +21,9 @@ from app.controller.config import logging
 from app.core.agents import AGENTES_DAS_SKILLS, faq_app
 from app.core.contexto_conversa import (
     assunto_do_turno,
-    pedido_lista_generico,
-    pedido_evento_novo,
     pedido_evento_composto,
+    pedido_evento_novo,
+    pedido_lista_generico,
     resolver_assunto,
 )
 from app.core.judge import Verdict, deterministic_verdict, evaluate_jev, privacy_verdict
@@ -40,9 +40,9 @@ from app.core.prompts.prompt_roteador import ROTEADOR_PROMPT_COMPLETO
 from app.core.provider_policy import transient
 from app.core.runtime_budget import (
     AGENT_RECURSION_LIMIT,
-    BudgetExceeded,
     MAX_MODEL_CALLS_PER_REQUEST,
     WORKFLOW_RECURSION_LIMIT,
+    BudgetExceeded,
     remaining,
     request_budget,
 )

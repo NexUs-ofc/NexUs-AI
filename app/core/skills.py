@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .contexto_conversa import pedido_evento_composto
-
 from .prompts.prompt_base import (
     ENTRADA_PADRAO,
     ENVELOPE_SAIDA,

@@ -17,11 +17,13 @@ def recomendar_receita(
 
 
     # Import aqui dentro: agents importa esta tool, e no topo seria circular.
+    import logging
+
+    from langgraph.errors import GraphRecursionError
+
     from ..auth import identidade
     from ..core.agents import AGENTES_DAS_SKILLS
     from ..core.runtime_budget import AGENT_RECURSION_LIMIT
-    import logging
-    from langgraph.errors import GraphRecursionError
     from ..schemas.flow import _restricoes_prontas
 
     assunto = identidade.assunto() or {}
