@@ -131,6 +131,9 @@ def prever_respostas_recomendadas(
         "temporariamente indisponivel",
         "nao consegui gerar uma receita completa",
         "nao consegui montar uma receita completa",
+        "nao foi possivel consultar o estoque",
+        "nao consegui consultar o estoque",
+        "falha ao consultar o estoque",
     ):
         return None
 
@@ -175,10 +178,10 @@ def prever_respostas_recomendadas(
         elegiveis.append(25)
 
     elif rota_n == "estoque":
-        if _contem(resposta_n, "estoque", "produto", "unidade", "voce tem", "voce possui"):
-            elegiveis.extend((28, 29, 31))
-        elif _contem(resposta_n, "vence", "vencimento", "validade"):
-            elegiveis.extend((29, 31))
+        # O próprio encaminhamento para estoque já torna estes próximos passos
+        # pertinentes. Não dependa de o LLM repetir literalmente "estoque" ou
+        # "unidade" na resposta (ele pode só listar os produtos encontrados).
+        elegiveis.extend((28, 29, 31))
 
     elif rota_n == "eventos":
         criou_evento = _contem(resposta_n, "criei o evento", "evento criado", "agendei o evento")

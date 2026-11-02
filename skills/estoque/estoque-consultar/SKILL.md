@@ -35,6 +35,17 @@ comprar, use `estoque-compras`.
   cadastrar pelo chat.
 - Item que a pessoa perguntou e não existe: diga que não tem. Não ofereça um
   parecido como se fosse o pedido.
+- Consulte `get_stock` para afirmar saldo atual. O campo `quantity` é o número
+  de embalagens/unidades cadastradas; `unit_of_measure` e `package_quantity`
+  descrevem o conteúdo de cada embalagem. Respeite ambos ao informar a unidade:
+  por exemplo, 3 embalagens de 500 g são “3 pacotes de 500 g”, não “3 g” nem
+  “1.500 unidades”. Para `unit_of_measure="unit"`, use unidades; para `g`,
+  `kg`, `ml` ou `l`, informe o conteúdo e a quantidade por embalagem.
+- `get_stock` exclui registros com saldo zero ou negativo. Não invente nem
+  informe “0 unidades” para um produto ausente do resultado; diga que ele não
+  consta no estoque atual. Histórico de compras/transações é outra consulta:
+  não use o estoque atual para negar ou apagar fatos históricos e não descarte
+  ferramentas ou campos que possam ser necessários a perguntas de histórico.
 - Em lista longa, agrupe e resuma em vez de recitar item por item.
 - Não repita `food_id` nem `pantry_item_id` na resposta.
 
@@ -49,7 +60,8 @@ Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=Tenho arroz em casa?
 
-(get_stock -> [{"food_name": "Arroz", "quantity": 3, "expiry_date": "2027-02-01"}])
+(get_stock -> [{"food_name": "Arroz", "quantity": 3, "package_quantity": 1,
+"unit_of_measure": "unit", "expiry_date": "2027-02-01"}])
 
 Resposta:
 {

@@ -34,6 +34,11 @@ quê**; aquela monta a lista.
   mínimo, e só depois o que você sugere pelos hábitos. Misturar os dois faz a
   pessoa comprar o que não precisa.
 - Nunca sugira comprar algo que já está no estoque em quantidade suficiente.
+- Ao citar um produto, use `quantity`, `minimum_quantity`, `package_quantity`
+  e `unit_of_measure` juntos. `quantity` e `minimum_quantity` contam as
+  embalagens/unidades cadastradas; os dois últimos descrevem o conteúdo de
+  cada embalagem. Não omita a unidade nem trate, por exemplo, 1 pacote de 500 g
+  como 1 g. Saldo zero é “acabou”; não invente um saldo para produto ausente.
 - Sugestão por hábito sai dos relatórios, não do seu palpite. Se os relatórios
   vierem vazios, não sugira nada — diga só o que falta.
 - Nada faltando também é resposta. Diga isso e pare.
@@ -51,8 +56,10 @@ Entrada:
 ROUTE=stock
 PERGUNTA_ORIGINAL=O que eu preciso comprar?
 
-(get_missing_products -> [{"food_name": "Arroz", "quantity": 0, "minimum_quantity": 2},
-                          {"food_name": "Leite", "quantity": 1, "minimum_quantity": 3}])
+(get_missing_products -> [{"food_name": "Arroz", "quantity": 0, "minimum_quantity": 2,
+                           "package_quantity": 1, "unit_of_measure": "unit"},
+                          {"food_name": "Leite", "quantity": 1, "minimum_quantity": 3,
+                           "package_quantity": 1, "unit_of_measure": "unit"}])
 (get_category_info -> [{"categoria": "Hortifruti", "total_produtos": 8}])
 
 Resposta:
