@@ -226,3 +226,48 @@ class ShoppingContextTest(unittest.TestCase):
             result = flow.agente_eventos(state)
         self.assertIn("duração", result["resposta_final"])
         invoke.assert_not_called()
+
+    def test_pedido_composto_passa_primeiro_pelo_agente_de_receitas_e_depois_eventos(self):
+        recipe = {
+            "title": "Frango ao molho", "serving_size": 4,
+            "ingredients": [{"name": "Frango", "required_quantity": "500 g"}],
+            "instructions": "Tempere e cozinhe o frango.",
+            "preparation_time_minutes": 40, "difficulty": "fácil",
+        }
+        request = (
+            "Amanhã farei um evento para 6 pessoas. Quero esse prato e essa receita salva, uma lista de compras "
+            "com ingredientes que eu compraria e o evento na minha casa às 14h, por 3 horas."
+        )
+        saved_recipe = {**recipe, "_id": "recipe-1"}
+        saved_list = {"_id": "list-1", "title": "Evento", "array_list": [
+            {"name": "Arroz", "quantity": 1, "unitOfMeasure": "kg", "checked": False}
+        ]}
+        recipe_evidence = [{"ferramenta": "salvar_receita", "conteudo": json.dumps({
+            "status": "sucesso", "receita": saved_recipe,
+        })}]
+        event_evidence = [
+            {"ferramenta": "create_event", "conteudo": "Evento criado"},
+            {"ferramenta": "create_list", "conteudo": json.dumps(saved_list)},
+        ]
+        event_response = json.dumps({
+            "dominio": "events", "intencao": "Criar lista de compras",
+            "resposta": "Concluído", "lista": saved_list,
+        })
+        state = {"trace_id": "trace-test", "historico": [
+            {"role": "assistant", "content": "Frango ao molho", "receita": recipe},
+        ], "mensagem": request, "evidencias": [], "input_tokens": 0, "output_tokens": 0}
+        with patch.object(flow, "span"), patch.object(
+            flow, "_invocar_com_confirmacao",
+            side_effect=[
+                (json.dumps({"intencao": "Salvar receita", "resposta": "Salva."}), 1, 1, recipe_evidence),
+                (event_response, 2, 2, event_evidence),
+            ],
+        ) as invoke:
+            result = flow.agente_eventos(state)
+
+        self.assertEqual(invoke.call_count, 2)
+        self.assertEqual(invoke.call_args_list[0].args[0], flow.AGENTES_DAS_SKILLS["receita-anterior"])
+        self.assertEqual(invoke.call_args_list[1].args[0], flow.AGENTES_DAS_SKILLS["evento-criar-completo"])
+        self.assertIn("RECEITA_SALVA_E_CONFIRMADA_PELO_AGENTE_DE_RECEITAS", invoke.call_args_list[1].args[1])
+        self.assertIn("Criei o evento", result["resposta_final"])
+        self.assertIn("Salvei a receita Frango ao molho", result["resposta_final"])

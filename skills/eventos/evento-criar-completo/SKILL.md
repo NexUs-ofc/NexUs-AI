@@ -5,7 +5,7 @@ metadata:
   dominio: events
   rota: eventos
   intencao: Criar evento, salvar receita e montar lista
-  ferramentas: [resolver_data, buscar_historico, buscar_receitas_usuario, salvar_receita, create_event, add_recipe, create_list]
+  ferramentas: [resolver_data, create_event, add_recipe, create_list]
   version: 1.0.0
 ---
 
@@ -20,10 +20,10 @@ gere outro prato para simplificar o pedido.
 
 ## Preparação antes de qualquer gravação
 
-1. Recupere a receita exata do histórico recente. Se não estiver completa no
-   contexto, use `buscar_historico`. Se não encontrar uma receita completa,
-   pergunte qual receita deve ser usada. Não salve, crie evento nem lista até
-   resolver essa referência.
+1. Receba a receita e o identificador confirmados pelo agente de receitas em
+   `RECEITA_SALVA_E_CONFIRMADA_PELO_AGENTE_DE_RECEITAS`. Se esse contexto não
+   existir, pare e peça a receita. Não crie evento nem lista sem uma receita
+   completa e salva confirmada.
 2. Resolva referências como “amanhã” e “às 14h” com `resolver_data`, passando
    a referência e a hora. Não calcule datas de cabeça.
 3. Reúna todos os dados obrigatórios do evento: título, descrição/tipo, data e
@@ -41,15 +41,11 @@ gere outro prato para simplificar o pedido.
 
 Quando todos os dados estiverem disponíveis:
 
-1. Verifique se a mesma receita já está salva com `buscar_receitas_usuario`.
-   Se já existir a mesma receita, reutilize-a e não crie duplicata. Caso
-   contrário, chame `salvar_receita` com o conteúdo completo que foi dado no
-   histórico: título, porções, ingredientes e quantidades, instruções, tempo,
-   dificuldade e etapas. Não invente nem complete detalhes ausentes.
-2. Só prossiga se a receita estiver recuperada ou salva com sucesso. Chame
-   `create_event` com os dados resolvidos. A data/hora precisa vir de
+1. O agente de receitas já verificou se havia uma cópia salva e confirmou o ID
+   da receita a usar; não repita essa tarefa nem crie outra cópia.
+2. Chame `create_event` com os dados resolvidos. A data/hora precisa vir de
    `resolver_data`; nunca invente duração.
-3. Use o id retornado por `create_event` e o id da receita salva para chamar
+3. Use o id retornado por `create_event` e o id da receita confirmada para chamar
    `add_recipe`. Isso vincula a receita ao evento e escala ingredientes para o
    número de pessoas do evento.
 4. Só após confirmar a receita vinculada, chame `create_list` com o id do

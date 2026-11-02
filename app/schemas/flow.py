@@ -482,6 +482,55 @@ def _evidencia_json(evidence: dict) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+def _receita_salva_das_evidencias(evidences: list[dict], receita_referenciada: dict) -> dict | None:
+    """Devolve apenas uma receita cujo ID veio de um retorno real da ferramenta."""
+    titulo = str(receita_referenciada.get("title") or receita_referenciada.get("titulo") or "")
+    chave_titulo = titulo.strip().casefold()
+    for evidence in reversed(evidences):
+        if evidence.get("ferramenta") == "salvar_receita":
+            result = _evidencia_json(evidence) or {}
+            saved = result.get("receita") if result.get("status") == "sucesso" else None
+            nome_salvo = str((saved or {}).get("title") or (saved or {}).get("titulo") or "").strip().casefold()
+            if isinstance(saved, dict) and saved.get("_id") and nome_salvo == chave_titulo:
+                return saved
+        elif evidence.get("ferramenta") == "buscar_receitas_usuario":
+            try:
+                results = json.loads(evidence.get("conteudo", ""))
+            except (ValueError, TypeError):
+                continue
+            if isinstance(results, list):
+                for saved in results:
+                    if (isinstance(saved, dict)
+                            and str(saved.get("title") or saved.get("titulo") or "").strip().casefold() == chave_titulo
+                            and saved.get("_id")):
+                        return saved
+    return None
+
+
+def _salvar_receita_referenciada(state: State, historico: list[dict]):
+    """Usa o agente de receitas para salvar/reutilizar o prato antes do evento."""
+    receita = _ultima_receita(historico)
+    skill = escolher_skill("receitas", "salve essa receita", "receita")[0]
+    request = (
+        "ROUTE=receitas\nPERGUNTA_ORIGINAL=Salve para o evento a receita a que a pessoa "
+        "se refere como esse prato/essa receita. Use a receita estruturada abaixo se disponível; "
+        "senão, identifique-a no histórico da conversa. Se já estiver salva, reutilize-a sem duplicar. "
+        "Se não houver receita completa ou a referência estiver ambígua, pergunte qual receita usar.\n"
+        "RECEITA_REFERENCIADA_NO_HISTORICO="
+        + (json.dumps(receita, ensure_ascii=False, default=str) if receita else "não há objeto estruturado disponível")
+    )
+    response, tokens_in, tokens_out, evidences = _invocar_com_confirmacao(
+        AGENTES_DAS_SKILLS[skill], request, _ultimos_turnos(historico, TURNOS_PARA_O_AGENTE), state["trace_id"],
+    )
+    envelope = _ler_envelope(response) or {}
+    if envelope.get("esclarecer"):
+        return None, str(envelope["esclarecer"]), tokens_in, tokens_out, evidences
+    saved = _receita_salva_das_evidencias(evidences, receita)
+    if not saved:
+        return None, "Não consegui confirmar que a receita foi salva. Confira suas receitas antes de repetir o pedido.", tokens_in, tokens_out, evidences
+    return saved, None, tokens_in, tokens_out, evidences
+
+
 def _invocar_com_confirmacao(agent, mensagem, historico, trace_id, revisao=""):
     """Não confirma escrita sem evidência, mesmo que o modelo afirme sucesso."""
     response, tokens_in, tokens_out, evidences = _invocar_agente(
@@ -1104,11 +1153,42 @@ def agente_eventos(state: State) -> State:
             state["evidencias"] = state.get("evidencias", [])
             return state
 
+        receita_salva = None
+        receita_confirmada = None
+        evidencias_receita = []
+        tokens_receita_in = tokens_receita_out = 0
+        pedido_composto = pedido_evento_composto(pedido_original)
+        if pedido_composto:
+            receita_salva, esclarecimento, tokens_receita_in, tokens_receita_out, evidencias_receita = (
+                _salvar_receita_referenciada(state, state.get("historico", []))
+            )
+            if not receita_salva:
+                resposta = json.dumps({
+                    "dominio": "events",
+                    "intencao": "Criar evento, salvar receita e lista de compras",
+                    "resposta": "",
+                    "esclarecer": esclarecimento,
+                }, ensure_ascii=False)
+                state["resposta_agente"] = resposta
+                state["resposta_final"] = _montar_sem_modelo(resposta)
+                state["lista_confirmada"] = False
+                state["evidencias"] = state.get("evidencias", []) + evidencias_receita
+                state["input_tokens"] = state.get("input_tokens", 0) + tokens_receita_in
+                state["output_tokens"] = state.get("output_tokens", 0) + tokens_receita_out
+                return state
+            receita_confirmada = receita_salva
+
         mensagem = (
             f"ROUTE=events\n"
             f"PERGUNTA_ORIGINAL={state['mensagem']}\n"
         )
         mensagem += _contexto_receita(state)
+        if receita_salva:
+            mensagem += (
+                "\nRECEITA_SALVA_E_CONFIRMADA_PELO_AGENTE_DE_RECEITAS="
+                + json.dumps(receita_salva, ensure_ascii=False, default=str)
+                + "\nUse exatamente esta receita salva para o evento; não gere nem salve outra receita."
+            )
 
         resposta_agente, input_tokens, output_tokens, evidencias = _invocar_com_confirmacao(
             AGENTES_DAS_SKILLS[_escolher_skill("eventos", state)],
@@ -1117,6 +1197,9 @@ def agente_eventos(state: State) -> State:
             state["trace_id"],
             state.get("veredito_juiz", ""),
         )
+        evidencias = evidencias_receita + evidencias
+        input_tokens += tokens_receita_in
+        output_tokens += tokens_receita_out
         envelope = _ler_envelope(resposta_agente) or {}
         if envelope.get("esclarecer"):
             state["resposta_final"] = _montar_sem_modelo(resposta_agente)
@@ -1131,7 +1214,10 @@ def agente_eventos(state: State) -> State:
                 and not str(e.get("conteudo") or "").lstrip().startswith("FALHA")
                 for e in evidencias
             )
-            receita_salva = None
+            receita_salva = (
+                str(receita_confirmada.get("title") or receita_confirmada.get("titulo") or "a receita")
+                if isinstance(receita_confirmada, dict) else None
+            )
             for evidence in reversed(evidencias):
                 if evidence.get("ferramenta") != "salvar_receita":
                     continue
@@ -1191,7 +1277,7 @@ def agente_eventos(state: State) -> State:
                 and not str(e.get("conteudo") or "").lstrip().startswith("FALHA")
                 for e in evidencias
             )
-            receita_salva = any(
+            receita_salva = isinstance(receita_confirmada, dict) or any(
                 e.get("ferramenta") == "salvar_receita"
                 and (_evidencia_json(e) or {}).get("status") == "sucesso"
                 for e in evidencias
