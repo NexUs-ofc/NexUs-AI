@@ -37,9 +37,8 @@ class PrivacyRegressionTest(unittest.TestCase):
 
     def test_lista_nao_persiste_marcador_no_titulo(self):
         for title in ("Lista [PII_TELEFONE_abc123]", "Lista [TELEFONE OMITIDO]"):
-            with self.subTest(title=title):
-                with self.assertRaises(ValueError):
-                    ShoppingList(124, title, [])
+            with self.subTest(title=title), self.assertRaises(ValueError):
+                ShoppingList(124, title, [])
 
 
 class RecipeRegressionTest(unittest.TestCase):
@@ -105,6 +104,71 @@ class RecipeRegressionTest(unittest.TestCase):
                 "instrucoes": "Acrescente água e sal.", "tempo_preparo_minutos": 15, "dificuldade": "fácil"})
         self.assertIn("FALHA", result)
         save.assert_not_called()
+
+
+class RecipeSaveContextTest(unittest.TestCase):
+    def test_salvar_reutiliza_o_objeto_estruturado_apresentado(self):
+        recipe = {
+            "titulo": "Arroz de forno",
+            "porcoes": 3,
+            "ingredientes": [
+                {"ingrediente": "Arroz", "quantidade_total": "300 g"},
+                {"ingrediente": "Leite", "quantidade_total": "200 ml"},
+            ],
+            "instrucoes": ["Misture o arroz e o leite.", "Asse por 20 minutos."],
+            "tempo_preparo_minutos": 35,
+            "dificuldade": "fácil",
+        }
+        with patch.object(identidade, "assunto", return_value={"tipo": "receita", "receita": recipe}):
+            args = flow._completar_argumentos_receita_referenciada({"dificuldade": "média"})
+
+        self.assertEqual(args["titulo"], "Arroz de forno")
+        self.assertEqual(args["serving_size"], 3)
+        self.assertEqual(args["ingredientes"], recipe["ingredientes"])
+        self.assertEqual(args["instrucoes"], "Misture o arroz e o leite.\nAsse por 20 minutos.")
+        self.assertEqual(args["tempo_preparo_minutos"], 35)
+        self.assertEqual(args["dificuldade"], "fácil")
+        self.assertEqual(len(args["steps"]), 2)
+        self.assertEqual(args["steps"][1]["description"], "Asse por 20 minutos.")
+
+    def test_campos_que_nao_estao_no_historico_podem_ser_completados_pelo_agente(self):
+        recipe = {
+            "title": "Chocolate quente",
+            "ingredients": [{"name": "Leite", "required_quantity": "200 ml"}],
+            "instructions": "Aqueça o leite.",
+        }
+        with patch.object(identidade, "assunto", return_value={"tipo": "receita", "receita": recipe}):
+            args = flow._completar_argumentos_receita_referenciada({
+                "serving_size": "1", "tempo_preparo_minutos": "5", "dificuldade": "fácil",
+            })
+
+        self.assertEqual(args["serving_size"], "1")
+        self.assertEqual(args["tempo_preparo_minutos"], "5")
+        self.assertEqual(args["ingredientes"], recipe["ingredients"])
+        self.assertEqual(args["steps"][0]["description"], "Aqueça o leite.")
+
+    def test_nao_substitui_uma_receita_que_nao_seja_o_assunto_atual(self):
+        with patch.object(identidade, "assunto", return_value={"tipo": "evento", "receita": {"title": "X"}}):
+            args = flow._completar_argumentos_receita_referenciada({"titulo": "Y"})
+        self.assertEqual(args, {"titulo": "Y"})
+
+    def test_normaliza_aliases_de_payload_do_modelo_e_unidades(self):
+        with patch.object(identidade, "assunto", return_value=None):
+            args = flow._completar_argumentos_receita_referenciada({
+                "title": "Chocolate quente",
+                "servings": "2",
+                "ingredients": [{"ingredient": "Leite", "quantity": 200, "unit": "ml"}],
+                "instructions": "Aqueça o leite.",
+                "estimated_time": "5 minutos",
+                "difficulty": "fácil",
+            })
+
+        self.assertEqual(args["titulo"], "Chocolate quente")
+        self.assertEqual(args["serving_size"], 2)
+        self.assertEqual(args["ingredientes"][0]["nome"], "Leite")
+        self.assertEqual(args["ingredientes"][0]["quantidade"], "200 ml")
+        self.assertEqual(args["tempo_preparo_minutos"], 5)
+        self.assertEqual(args["steps"][0]["description"], "Aqueça o leite.")
 
 
 class StockRegressionTest(unittest.TestCase):

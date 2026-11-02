@@ -164,7 +164,10 @@ def get_missing_products() -> str:
                     if row.food_id in foods
                     else None
                 ),
-                "quantity": row.quantity,
+                # Estoque residual antigo pode conter quantidade negativa. A
+                # consulta continua indicando que o item precisa ser reposto,
+                # mas nunca apresenta saldo abaixo de zero como se fosse real.
+                "quantity": max(row.quantity or 0, 0),
                 "minimum_quantity": row.minimum_quantity,
             }
             for row in rows

@@ -330,6 +330,60 @@ class ListMutationTest(unittest.TestCase):
         self.assertEqual(action.call_count, 2)
 
 class ConfirmedMutationTest(unittest.TestCase):
+    def test_receita_so_e_confirmada_quando_documento_existe_na_conta(self):
+        from app.schemas import flow
+
+        recipe_id = str(ObjectId())
+        claimed = json.dumps({"dominio": "receitas", "intencao": "Salvar receita",
+                              "resposta": "Salvei a receita."})
+        evidence = [{"ferramenta": "salvar_receita", "conteudo": json.dumps({
+            "status": "sucesso", "receita": {"_id": recipe_id, "title": "Chocolate"},
+        })}]
+        with identidade.da_requisicao(124, 124), patch.object(
+            flow, "_invocar_agente", return_value=(claimed, 0, 0, evidence)
+        ) as invoke, patch(
+            "app.repository.mongodb.recipes.RecipesRepository.get_recipe_by_id",
+            return_value=None,
+        ):
+            response, *_ = flow._invocar_com_confirmacao(
+                object(), "Salve a receita.", [], "teste",
+            )
+
+        self.assertEqual(invoke.call_count, 2)
+        self.assertIn("Não foi possível salvar", json.loads(response)["resposta"])
+        self.assertNotIn("Salvei a receita", response)
+
+    def test_resposta_de_salvamento_so_confirma_apos_recibo_e_leitura(self):
+        from app.schemas import flow
+
+        recipe_id = str(ObjectId())
+        claimed = json.dumps({
+            "dominio": "receitas", "intencao": "Salvar receita",
+            "resposta": "Propus o salvamento da Lasanha Rápida de Frigideira nas suas receitas.",
+        })
+        evidence = [{"ferramenta": "salvar_receita", "conteudo": json.dumps({
+            "status": "sucesso", "receita": {"_id": recipe_id, "title": "Lasanha Rápida de Frigideira"},
+        })}]
+        persisted = Mock()
+        persisted.to_dict.return_value = {"title": "Lasanha Rápida de Frigideira"}
+        persisted.id = recipe_id
+        with identidade.da_requisicao(124, 124), patch.object(
+            flow, "_invocar_agente", return_value=(claimed, 0, 0, evidence),
+        ), patch(
+            "app.repository.mongodb.recipes.RecipesRepository.get_recipe_by_id",
+            return_value=persisted,
+        ):
+            response, *_ = flow._invocar_com_confirmacao(
+                object(), "Salve essa receita.", [], "teste",
+            )
+
+        envelope = json.loads(response)
+        self.assertEqual(
+            envelope["resposta"],
+            "Salvei a receita Lasanha Rápida de Frigideira nas suas receitas.",
+        )
+        self.assertNotIn("Propus", envelope["resposta"])
+
     def test_nao_diz_que_marcou_quando_nao_executou_ferramenta(self):
         from app.schemas import flow
         claimed = json.dumps({"dominio": "events", "intencao": "Atualizar lista de compras",
@@ -348,10 +402,15 @@ class ConfirmedMutationTest(unittest.TestCase):
         from app.schemas import flow
         claimed = json.dumps({"intencao": "Salvar receita", "resposta": "Salvei."})
         with patch.object(flow, "_invocar_agente", return_value=(
-            claimed, 0, 0, [{"ferramenta": "salvar_receita", "conteudo": "FALHA: banco indisponível"}],
-        )):
+            claimed, 0, 0, [{
+                "ferramenta": "salvar_receita",
+                "conteudo": "FALHA: receita não salva. Informe quantidade e unidade dos ingredientes.",
+            }],
+        )) as invoke:
             response, *_ = flow._invocar_com_confirmacao(object(), "Salve.", [], "teste")
-        self.assertIn("Não consegui confirmar", json.loads(response)["resposta"])
+        self.assertIn("Não foi possível salvar", json.loads(response)["resposta"])
+        self.assertEqual(invoke.call_count, 2)
+        self.assertIn("Não peça à pessoa", invoke.call_args_list[1].args[4])
 
     def test_lista_exibida_reflete_retorno_real_da_atualizacao(self):
         from app.schemas import flow
@@ -520,6 +579,50 @@ class RecipeFlowRegressionTest(unittest.TestCase):
         self.assertIn("mesma família culinária", guidance)
         self.assertIn("Não há leite", guidance)
         self.assertIn("não o acrescente a sopa", guidance)
+
+    def test_leite_ausente_nao_autoriza_trocar_por_agua(self):
+        from app.schemas.flow import _orientacao_culinaria
+
+        guidance = _orientacao_culinaria(
+            "Faça um achocolatado quente com Nescau",
+            [{"food_name": "Nescau"}],
+        )
+        self.assertIn("preserve a versão culinária normal com leite", guidance)
+        self.assertIn("Nunca troque leite por água", guidance)
+
+    def test_nao_manda_comprar_ingrediente_confirmado_no_estoque(self):
+        from app.schemas.flow import _alinhar_receita_estoque, _montar_sem_modelo
+
+        response = json.dumps({
+            "dominio": "receitas",
+            "resposta": "Você pode preparar a bebida com o leite do estoque. Compre leite para completar a receita.",
+            "receita": {
+                "titulo": "Achocolatado quente",
+                "porcoes": 1,
+                "tempo_preparo_minutos": 5,
+                "dificuldade": "fácil",
+                "ingredientes": [
+                    {"nome": "Leite longa vida", "quantidade": "200 ml"},
+                    {"nome": "Nesquik", "quantidade": "2 colheres de sopa"},
+                ],
+                "instrucoes": ["Aqueça o leite.", "Misture o Nesquik e sirva."],
+            },
+        }, ensure_ascii=False)
+        evidence = [{"ferramenta": "ingredientes_para_comprar", "conteudo": json.dumps({
+            "conferencia": [
+                {"nome": "Leite longa vida", "comparacao_confirmada": True,
+                 "tem_suficiente": True, "dispensa_compra": False},
+                {"nome": "Nesquik", "comparacao_confirmada": False,
+                 "tem_suficiente": False, "dispensa_compra": False},
+            ],
+        }, ensure_ascii=False)}]
+
+        aligned = _alinhar_receita_estoque(response, evidence)
+        final = _montar_sem_modelo(aligned)
+
+        self.assertNotIn("Compre leite", final)
+        self.assertIn("Leite longa vida: 200 ml", final)
+        self.assertNotIn("Para comprar: Leite longa vida", final)
 
     def test_abobora_pedida_fica_ancorada_e_nao_recebe_achocolatado(self):
         from app.schemas.flow import _orientacao_culinaria

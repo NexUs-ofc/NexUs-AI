@@ -45,6 +45,13 @@ RECEITAS_PREAMBULO = """
     escolha no máximo um e não os misture em sopa, abóbora, carne ou prato salgado
     para “usar o estoque”. Leite só está disponível se vier no ESTOQUE_ATUAL_CONFIRMADO.
     Se faltar, marque como faltante. Água não vira leite silenciosamente.
+    Estoque ausente ou indisponível não autoriza adaptar a receita nem sugerir
+    substituições por conta própria. Preserve os ingredientes e a versão
+    culinariamente esperada do prato; marque os itens ausentes para comprar.
+    Só substitua um ingrediente se a pessoa pedir explicitamente a troca, uma
+    versão sem esse ingrediente, ou se a receita escolhida já usar naturalmente
+    outro ingrediente no lugar. Em particular, não substitua leite por água e
+    não ofereça essa troca sem pedido explícito.
 
     Exemplos de arbitragem obrigatórios:
     - “receita com abóbora” → mantenha abóbora como protagonista (sopa cremosa,

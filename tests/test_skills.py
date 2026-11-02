@@ -9,9 +9,21 @@ aviso virar falha.
 import unittest
 from dataclasses import FrozenInstanceError
 from typing import ClassVar
+from unittest.mock import patch
 
-from app.core.agents import AGENTES_DAS_SKILLS, CATALOGO_FERRAMENTAS
+from langchain_core.tools import tool
+
+from app.auth import identidade
+from app.core.agents import (
+    AGENTES_DAS_SKILLS,
+    CATALOGO_FERRAMENTAS,
+    OPERACOES_DE_ESCRITA,
+    TAVILY_HABILITADAS,
+    _ferramentas_da_skill,
+    adiar_operacao_tool,
+)
 from app.core.skills import SKILLS, Skill, catalogo, do_agente, escolher_skill
+from app.schemas import flow
 from app.schemas.flow import ROTAS, SKILL_PADRAO
 
 AGENTES_DE_DOMINIO = ("estoque", "receitas", "eventos")
@@ -53,7 +65,8 @@ class TestFerramentasDeclaradas(unittest.TestCase):
 
     def test_nenhuma_skill_declara_ferramenta_inexistente(self):
         for nome, skill in SKILLS.items():
-            faltando = [f for f in skill.ferramentas if f not in CATALOGO_FERRAMENTAS]
+            faltando = [f for f in skill.ferramentas
+                        if f not in CATALOGO_FERRAMENTAS and f not in TAVILY_HABILITADAS]
 
             with self.subTest(skill=nome):
                 self.assertEqual(faltando, [], f"{nome} declara {faltando}")
@@ -66,10 +79,141 @@ class TestFerramentasDeclaradas(unittest.TestCase):
 
         self.assertEqual(orfas, [], f"ferramentas que nenhuma skill usa: {orfas}")
 
+    def test_todas_as_operacoes_de_escrita_tem_ferramenta_registrada(self):
+        ausentes = OPERACOES_DE_ESCRITA - set(CATALOGO_FERRAMENTAS)
+        self.assertEqual(ausentes, set())
+
     def test_todo_agente_montado_recebe_as_ferramentas_da_skill(self):
         for nome in SKILLS:
             with self.subTest(skill=nome):
                 self.assertIn(nome, AGENTES_DAS_SKILLS)
+
+    def test_skills_com_escrita_so_recebem_a_ferramenta_de_adiamento(self):
+        for nome, skill in SKILLS.items():
+            ferramentas = {f.name for f in _ferramentas_da_skill(skill)}
+            escritas = set(skill.ferramentas) & OPERACOES_DE_ESCRITA
+            if escritas:
+                with self.subTest(skill=nome):
+                    self.assertTrue(escritas.isdisjoint(ferramentas))
+                    self.assertIn("adiar_operacao", ferramentas)
+                    self.assertTrue((set(skill.ferramentas) - OPERACOES_DE_ESCRITA).issubset(ferramentas))
+
+    def test_enum_da_ferramenta_de_adiamento_restringe_a_allowlist(self):
+        schema = adiar_operacao_tool.args_schema
+        self.assertEqual(set(schema.model_fields), {"operacao", "argumentos", "justificativa"})
+        schema_json = schema.model_json_schema()
+        self.assertEqual(set(schema_json["properties"]["operacao"]["enum"]), OPERACOES_DE_ESCRITA)
+        self.assertEqual(schema_json["properties"]["argumentos"]["type"], "object")
+        with self.assertRaises(ValueError):
+            schema.model_validate({
+                "operacao": "drop_database", "argumentos": {}, "justificativa": "apagar",
+            })
+
+    def test_tool_de_adiamento_fica_limitada_as_escritas_da_skill(self):
+        skill = SKILLS["lista-montar"]
+        defer_tool = next(tool for tool in _ferramentas_da_skill(skill)
+                          if tool.name == "adiar_operacao")
+        operation_schema = defer_tool.args_schema.model_json_schema()["properties"]["operacao"]
+        allowed = set(operation_schema.get("enum", [operation_schema.get("const")]))
+        self.assertEqual(allowed, {"create_list"})
+
+    def test_argumentos_adiados_usam_o_schema_especifico_da_operacao(self):
+        schema = adiar_operacao_tool.args_schema
+        proposta_payload = {
+            "operacao": "create_event",
+            "argumentos": {
+                "titulo": "Jantar", "descricao": "Jantar em família", "data": "2026-11-03",
+                "inicio": "14:00", "fim": "16:00",
+                "duracao": 120, "local": "Casa", "qtd_pessoas": 6,
+            },
+            "justificativa": "A pessoa pediu para criar este evento.",
+        }
+        proposta = schema.model_validate(proposta_payload)
+
+        self.assertEqual(proposta.operacao, "create_event")
+        with identidade.da_requisicao(124, 124):
+            adiar_operacao_tool.invoke(proposta_payload)
+            queued = identidade.obter_operacoes_pendentes()
+        self.assertEqual(queued[0]["operacao"], "create_event")
+        self.assertEqual(queued[0]["argumentos"].qtd_pessoas, 6)
+        self.assertNotIsInstance(queued[0]["argumentos"], dict)
+
+    def test_operacao_negada_nao_invoca_ferramenta_de_escrita(self):
+        writes = []
+
+        @tool("create_event")
+        def fake_create_event(titulo: str, descricao: str, data: str,
+                              duracao: int, local: str, qtd_pessoas: int) -> str:
+            """Fake write tool."""
+            writes.append(titulo)
+            return "ok"
+
+        with identidade.da_requisicao(124, 124):
+            identidade.adiar_operacao("create_event", {
+                "titulo": "Jantar", "descricao": "jantar", "data": "2026-11-03",
+                "inicio": "14:00", "duracao": 120, "local": "casa", "qtd_pessoas": 6,
+            }, "pedido")
+            with (patch.dict(CATALOGO_FERRAMENTAS, {"create_event": fake_create_event}),
+                  patch.object(flow, "_juiz_autoriza_gravacao", return_value=False)):
+                flow._executar_operacoes_adiadas("Crie um jantar", "test-denied")
+            self.assertEqual(writes, [])
+            self.assertEqual(identidade.relatorio_operacoes()[0]["status"], "negada")
+
+    def test_falha_da_ferramenta_no_banco_nao_vira_sucesso(self):
+        writes = []
+
+        @tool("create_event")
+        def fake_create_event(titulo: str, descricao: str, data: str,
+                              duracao: int, local: str, qtd_pessoas: int) -> str:
+            """Simula uma falha explícita do banco após aprovação do juiz."""
+            writes.append(titulo)
+            return "FALHA: banco indisponível"
+
+        with identidade.da_requisicao(124, 124):
+            identidade.adiar_operacao("create_event", {
+                "titulo": "Jantar", "descricao": "jantar", "data": "2026-11-03",
+                "inicio": "14:00", "duracao": 120, "local": "casa", "qtd_pessoas": 6,
+            }, "pedido")
+            with (patch.dict(CATALOGO_FERRAMENTAS, {"create_event": fake_create_event}),
+                  patch.object(flow, "_juiz_autoriza_gravacao", return_value=True)):
+                evidences = flow._executar_operacoes_adiadas("Crie um jantar", "test-db-error")
+
+            self.assertEqual(writes, ["Jantar"])
+            self.assertEqual(identidade.relatorio_operacoes()[0]["status"], "falhou")
+            self.assertTrue(identidade.gravacao_negada())
+            self.assertIn("FALHA: banco indisponível", evidences[0]["conteudo"])
+
+    def test_operacoes_dependentes_usam_id_real_da_operacao_aprovada(self):
+        writes = []
+
+        @tool("create_event")
+        def fake_create_event(titulo: str, descricao: str, data: str,
+                              duracao: int, local: str, qtd_pessoas: int) -> dict:
+            """Fake event write tool."""
+            writes.append(("evento", titulo))
+            return {"_id": "event-123"}
+
+        @tool("add_recipe")
+        def fake_add_recipe(event_id: str, titulo: str = "") -> str:
+            """Fake recipe write tool."""
+            writes.append(("receita", event_id))
+            return "ok"
+
+        with identidade.da_requisicao(124, 124):
+            identidade.adiar_operacao("create_event", {
+                "titulo": "Jantar", "descricao": "jantar", "data": "2026-11-03",
+                "inicio": "14:00", "duracao": 120, "local": "casa", "qtd_pessoas": 6,
+            }, "pedido")
+            identidade.adiar_operacao(
+                "add_recipe", {"event_id": "$op-1._id", "titulo": "Prato"}, "vincular",
+            )
+            with (patch.dict(CATALOGO_FERRAMENTAS, {
+                    "create_event": fake_create_event, "add_recipe": fake_add_recipe,
+                  }), patch.object(flow, "_juiz_autoriza_gravacao", return_value=True)):
+                flow._executar_operacoes_adiadas("Crie evento e vincule prato", "test-dependent")
+            self.assertEqual(writes, [("evento", "Jantar"), ("receita", "event-123")])
+            self.assertEqual([r["status"] for r in identidade.relatorio_operacoes()],
+                             ["concluida", "concluida"])
 
 
 class TestPromptMontado(unittest.TestCase):
@@ -164,6 +308,8 @@ class TestSkillPadrao(unittest.TestCase):
             ("estoque", "Quais produtos vencem esta semana?", None,
              "estoque-validade"),
             ("eventos", "Monte uma lista de compras", None, "lista-montar"),
+            ("eventos", "Monte uma lista de compras e prepare o evento, salve essa receita também", None,
+             "evento-criar-completo"),
         ]
         for agente, pedido, contexto, esperado in casos:
             with self.subTest(agente=agente, pedido=pedido):
@@ -251,5 +397,32 @@ class TestDataclass(unittest.TestCase):
         self.assertIsInstance(next(iter(SKILLS.values())), Skill)
 
 
+class TestBudgetFallback(unittest.TestCase):
+    def test_resposta_de_limite_informa_operacoes_ja_concluidas(self):
+        from contextlib import nullcontext
+
+        from app.core.runtime_budget import BudgetExceeded
+
+        def interromper(*args, **kwargs):
+            identidade.registrar_resultado_operacao("salvar_receita", "concluida")
+            raise BudgetExceeded("model_budget_exhausted")
+
+        with (patch.object(flow.ConversationsRepository, "sessao_recente", return_value=None),
+              patch.object(flow.ConversationsRepository, "create_session",
+                           return_value="507f1f77bcf86cd799439011"),
+              patch.object(flow.ConversationsRepository, "append_messages", return_value=True),
+              patch.object(flow.ceris_workflow, "invoke", side_effect=interromper),
+              patch.object(flow, "em_segundo_plano"),
+              patch.object(flow, "trace", return_value=nullcontext()),
+              patch.object(flow, "prever_respostas_recomendadas", return_value=[]),
+              patch.object(flow.logger, "exception")):
+            resposta = flow.executar_chat("Salve a receita e crie o evento", None, 124, 124)
+
+        self.assertIn("Concluí: salvamento da receita.", resposta["resposta"])
+        self.assertIn("limite de processamento", resposta["resposta"])
+
+
+
 if __name__ == "__main__":
     unittest.main()
+

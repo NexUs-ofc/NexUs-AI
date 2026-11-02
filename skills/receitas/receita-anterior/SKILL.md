@@ -28,6 +28,17 @@ Pedido de receita nova não é desta skill.
    `steps` como lista ordenada de objetos {"title": "Titulo curto", "description": "Texto completo da etapa"},
    tempo_preparo_minutos (minutos inteiros) e dificuldade (fácil, média ou difícil).
    Reutilize tempo e dificuldade da receita apresentada; não os invente ao salvar.
+   Se o histórico trouxer `ULTIMA_RECEITA_APRESENTADA`, use esse objeto como
+   fonte dos campos já apresentados: não peça à pessoa para repetir ingredientes,
+   quantidades, preparo, porções ou duração que já constam nele. Copie os
+   ingredientes completos e as quantidades sem resumir. Converta cada linha do
+   preparo em um objeto `steps` com `title` e `description`; preserve a ordem e
+   o texto. Se a receita tiver apenas `instructions`, use-as para construir
+   `steps`. Se um campo obrigatório realmente não estiver nem no objeto nem no
+   histórico, complete apenas o que puder ser inferido com segurança do preparo
+   apresentado; nunca invente ingredientes ou quantidades. Se não der para
+   recuperar um ingrediente ou sua quantidade, explique qual dado da receita
+   anterior está ausente, sem culpar a pessoa por uma validação interna.
    Não informe food_id: ingredientes são salvos pelo nome, sem criar alimentos. Se
    houver mais de uma e não der para saber qual, pergunte em `esclarecer`.
 2. Para ver as salvas: `buscar_receitas_usuario`.
@@ -41,6 +52,10 @@ Pedido de receita nova não é desta skill.
 - Não invente receita. Se não achar nem nas salvas nem no histórico, diga que
   não encontrou e ofereça gerar uma nova.
 - Se `salvar_receita` falhar, diga que não salvou. Nunca confirme sucesso sem o retorno da ferramenta.
+- Uma falha de validação da ferramenta é um problema do payload gerado pelo
+  agente ou do sistema; não peça à pessoa que preencha os campos da receita.
+  Informe objetivamente o dado que não pôde ser recuperado e mantenha a receita
+  apresentada na conversa como contexto.
 - Salve TODOS os ingredientes e passos, sem resumir quantidades ou modo de preparo.
 - Se não houver receita completa na conversa nem nas salvas, peça qual receita deseja guardar; não gere outra no lugar.
 - `buscar_receitas_usuario` devolve conteúdo completo e id. Para mostrar uma receita, repasse ingredientes, porções, preparo, tempo e dificuldade que existem. Campo ausente em receita antiga é desconhecido, não motivo para inventar.

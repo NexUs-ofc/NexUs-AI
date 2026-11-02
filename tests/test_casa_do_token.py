@@ -1,4 +1,4 @@
-from app.controller.chat import _casa_do_token
+from app.controller.chat import _casa_do_token, _conta_do_token
 
 
 def test_token_real_ignora_a_casa_informada_no_pedido():
@@ -21,5 +21,23 @@ def test_token_de_desenvolvimento_sem_casa_e_recusado():
     # Antes caia no default 1 em silencio.
     with pytest.raises(HTTPException) as erro:
         _casa_do_token({"user_id": 0}, None)
+
+    assert erro.value.status_code == 422
+
+
+def test_token_real_ignora_conta_informada_no_pedido():
+    assert _conta_do_token({"user_id": 3}, 1) == 3
+
+
+def test_token_de_desenvolvimento_usa_a_conta_informada():
+    assert _conta_do_token({"user_id": 0}, 124) == 124
+
+
+def test_token_de_desenvolvimento_sem_conta_e_recusado():
+    import pytest
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as erro:
+        _conta_do_token({"user_id": 0}, None)
 
     assert erro.value.status_code == 422

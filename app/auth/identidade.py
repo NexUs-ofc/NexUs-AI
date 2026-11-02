@@ -28,6 +28,9 @@ _somente_leitura: ContextVar[bool] = ContextVar("somente_leitura", default=False
 _reparos: ContextVar[list | None] = ContextVar("reparos", default=None)
 _autorizador_gravacao: ContextVar[object | None] = ContextVar("autorizador_gravacao", default=None)
 _gravacao_negada: ContextVar[bool] = ContextVar("gravacao_negada", default=False)
+_operacoes_pendentes: ContextVar[tuple | None] = ContextVar("operacoes_pendentes", default=None)
+_gravacao_aprovada: ContextVar[list | None] = ContextVar("gravacao_aprovada", default=None)
+_relatorio_operacoes: ContextVar[list | None] = ContextVar("relatorio_operacoes", default=None)
 _INCERTA = object()
 _NEGADA = object()
 logger = logging.getLogger(__name__)
@@ -49,6 +52,9 @@ def da_requisicao(perfil: int, conta: int, assunto: dict | None = None,
     marca_limite_reparos = _reparos.set([0, RLock()])
     marca_autorizador = _autorizador_gravacao.set(autorizador_gravacao)
     marca_gravacao_negada = _gravacao_negada.set(False)
+    marca_operacoes = _operacoes_pendentes.set(([], RLock()))
+    marca_permissoes = _gravacao_aprovada.set(None)
+    marca_relatorio = _relatorio_operacoes.set([])
 
     try:
         yield
@@ -62,6 +68,57 @@ def da_requisicao(perfil: int, conta: int, assunto: dict | None = None,
         _reparos.reset(marca_limite_reparos)
         _autorizador_gravacao.reset(marca_autorizador)
         _gravacao_negada.reset(marca_gravacao_negada)
+        _operacoes_pendentes.reset(marca_operacoes)
+        _gravacao_aprovada.reset(marca_permissoes)
+        _relatorio_operacoes.reset(marca_relatorio)
+
+
+def adiar_operacao(nome: str, argumentos, justificativa: str) -> str:
+    """Armazena os argumentos tipados da operação para validação do juiz."""
+    context = _operacoes_pendentes.get()
+    if context is None:
+        raise SemIdentidade("Nenhuma requisição definida para adiar a operação.")
+    if not isinstance(argumentos, dict) and not callable(getattr(argumentos, "model_dump", None)):
+        raise TypeError("Os argumentos adiados precisam corresponder ao schema da ferramenta.")
+    queue, lock = context
+    with lock:
+        operacao_id = f"op-{len(queue) + 1}"
+        queue.append({"id": operacao_id, "operacao": nome,
+                      "argumentos": deepcopy(argumentos), "justificativa": justificativa})
+    return f"Operação {operacao_id} registrada para validação; ainda não foi executada."
+
+
+def obter_operacoes_pendentes() -> list[dict]:
+    context = _operacoes_pendentes.get()
+    if context is None:
+        return []
+    queue, lock = context
+    with lock:
+        pending = deepcopy(queue)
+        queue.clear()
+    return pending
+
+
+def registrar_resultado_operacao(operacao: str, status: str, detalhe: str = "") -> None:
+    report = _relatorio_operacoes.get()
+    if report is not None:
+        report.append({"operacao": operacao, "status": status, "detalhe": detalhe})
+    if status != "concluida":
+        _gravacao_negada.set(True)
+
+
+def relatorio_operacoes() -> list[dict]:
+    return deepcopy(_relatorio_operacoes.get() or [])
+
+
+@contextmanager
+def permitir_gravacao_aprovada(operacao: str, dados: dict):
+    """Autoriza uma única gravação feita pela tool aprovada no dispatcher."""
+    mark = _gravacao_aprovada.set([1])
+    try:
+        yield
+    finally:
+        _gravacao_aprovada.reset(mark)
 
 
 def reservar_reparo() -> bool:
@@ -163,11 +220,15 @@ def executar_gravacao(operacao: str, dados: dict, acao):
     stable = {k: v for k, v in dados.items() if k not in {"created_at", "_id"}}
     key = (operacao, json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str))
     with lock:
+        grant = _gravacao_aprovada.get()
+        pre_aprovada = grant is not None and grant[0] > 0
+        if pre_aprovada:
+            grant[0] -= 1
         if key not in results:
             if _somente_leitura.get():
                 return None
             autorizar = _autorizador_gravacao.get()
-            if autorizar is not None:
+            if autorizar is not None and not pre_aprovada:
                 try:
                     aprovada = autorizar(operacao, deepcopy(stable))
                 except Exception as error:  # noqa: BLE001 -- falha do juiz bloqueia escrita.
