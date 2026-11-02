@@ -279,8 +279,8 @@ def scan_receipt(
     ocr = read_receipt(gray)
     parsed = deterministic_parse(ocr["lines"])
     # A passada funda custa duas leituras a mais. Se a primeira ja demorou,
-    # ela estoura o corte de 30s do DisCloud e a pessoa recebe erro em vez da
-    # leitura que ja tinha: melhor devolver o que foi lido.
+    # ela passa do orçamento definido para o OCR e a pessoa recebe erro em vez
+    # da leitura que ja tinha: melhor devolver o que foi lido.
     primeira_s = time.monotonic() - inicio
     if needs_deep_pass(parsed) and primeira_s <= DEEP_PASS_BUDGET_S:
         deep = read_receipt(gray, deep=True)

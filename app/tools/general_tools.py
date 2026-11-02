@@ -17,8 +17,13 @@ def recomendar_receita(
 
 
     # Import aqui dentro: agents importa esta tool, e no topo seria circular.
+    import logging
+
+    from langgraph.errors import GraphRecursionError
+
     from ..auth import identidade
     from ..core.agents import AGENTES_DAS_SKILLS
+    from ..core.runtime_budget import AGENT_RECURSION_LIMIT
     from ..schemas.flow import _restricoes_prontas
 
     assunto = identidade.assunto() or {}
@@ -38,9 +43,17 @@ def recomendar_receita(
     """
 
     request += contexto
-    response = AGENTES_DAS_SKILLS["receita-para-evento"].invoke({
-        "messages": [{"role": "user", "content": request}]
-    })
+    try:
+        response = AGENTES_DAS_SKILLS["receita-para-evento"].invoke(
+            {"messages": [{"role": "user", "content": request}]},
+            config={"recursion_limit": AGENT_RECURSION_LIMIT},
+        )
+    except GraphRecursionError:
+        logging.getLogger(__name__).warning(
+            "GraphRecursionError no agente de receita chamado pelo evento",
+            extra={"stage": "agent", "recursion_limit": AGENT_RECURSION_LIMIT},
+        )
+        return "FALHA: a recomendação excedeu o limite de etapas; não repita a mesma chamada."
 
     from ..core.llms import texto
 

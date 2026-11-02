@@ -9,13 +9,20 @@ from threading import Lock
 _budget: ContextVar[dict | None] = ContextVar("model_budget", default=None)
 logger = logging.getLogger(__name__)
 
+# Um ciclo ReAct costuma consumir um passo do grafo para o modelo e outro para
+# a ferramenta. O limite do agente precisa acompanhar as 12 chamadas de modelo
+# do orçamento compartilhado; 16 passos cortavam pedidos válidos após ~7 tools.
+MAX_MODEL_CALLS_PER_REQUEST = 12
+AGENT_RECURSION_LIMIT = MAX_MODEL_CALLS_PER_REQUEST * 2 + 8
+WORKFLOW_RECURSION_LIMIT = 32
+
 
 class BudgetExceeded(RuntimeError):
     status_code = 503
 
 
 @contextmanager
-def request_budget(seconds=60.0, calls=12, clock=time.monotonic):
+def request_budget(seconds=60.0, calls=MAX_MODEL_CALLS_PER_REQUEST, clock=time.monotonic):
     start = clock()
     context = {"deadline": start + seconds, "calls": 0, "limit": calls, "clock": clock, "lock": Lock()}
     mark = _budget.set(context)

@@ -1,5 +1,7 @@
 import json
 import unittest
+from concurrent.futures import Future
+from contextlib import nullcontext
 from datetime import datetime
 from unittest.mock import Mock, patch
 
@@ -98,6 +100,7 @@ class RecipeStorageTest(unittest.TestCase):
                     else:
                         self.assertIn("FALHA", response)
                     save.assert_not_called()
+
 
     def test_busca_de_salvas_devolve_receita_inteira_com_id(self):
         recipe = Recipe(
@@ -429,3 +432,301 @@ class TrustedListRenderingTest(unittest.TestCase):
         evidence = [{"ferramenta": "create_list",
                      "conteudo": json.dumps({"_id": str(ObjectId()), "array_list": []})}]
         self.assertIsNone(_lista_gravada(response, evidence))
+
+
+class RecipeFlowRegressionTest(unittest.TestCase):
+    def test_arvore_de_modo_do_estoque_respeita_negacao_exigencia_e_padrao(self):
+        from app.core.skills import classificar_modo_estoque, escolher_skill
+
+        pergunta_sem = "Me indique uma receita sem o que eu tenha no estoque"
+        self.assertEqual(classificar_modo_estoque(pergunta_sem), "ignorar")
+        self.assertEqual(escolher_skill("receitas", pergunta_sem)[0], "receita-sem-estoque")
+        self.assertEqual(classificar_modo_estoque("Faça uma receita usando o que tenho no estoque"), "exigir")
+        self.assertEqual(classificar_modo_estoque("Me indique uma receita"), "considerar")
+        self.assertEqual(classificar_modo_estoque("Faça uma receita sem leite"), "considerar")
+
+    def test_pedido_sem_estoque_nao_consulta_nem_injeta_historico_ou_disponibilidade(self):
+        from app.schemas import flow
+
+        recipe_response = json.dumps({
+            "dominio": "receitas", "intencao": "Sugerir receita",
+            "resposta": "Uma lasanha à bolonhesa é uma opção completa.",
+            "receita": {
+                "titulo": "Lasanha à bolonhesa", "porcoes": 4,
+                "ingredientes": [
+                    {"ingrediente": "Massa de lasanha", "quantidade_total": "250 g",
+                     "tem_suficiente": True},
+                    {"ingrediente": "Carne moída", "quantidade_total": "400 g",
+                     "tem_suficiente": False},
+                ],
+                "ingredientes_faltantes": ["Carne moída"],
+                "instrucoes": ["Prepare o molho.", "Monte as camadas e asse."],
+                "tempo_preparo_minutos": 50, "dificuldade": "média",
+            },
+        }, ensure_ascii=False)
+        captured = {}
+
+        class InlineExecutor:
+            @staticmethod
+            def submit(function, *args):
+                future = Future()
+                future.set_result(function(*args))
+                return future
+
+        def invoke_agent(*args):
+            captured["prompt"] = args[1]
+            captured["history"] = args[2]
+            return recipe_response, 1, 1, []
+
+        state = {
+            "trace_id": "0" * 32,
+            "mensagem": "Me indique uma receita sem o que eu tenha no estoque",
+            "historico": [{"role": "assistant", "content": "Tenho leite e Nescau."}],
+            "account_id": 124, "household_account_id": 124,
+            "input_tokens": 0, "output_tokens": 0, "evidencias": [],
+        }
+        with patch.object(flow, "span", return_value=nullcontext()), \
+                patch.object(flow, "_PROFILE_READS", InlineExecutor()), \
+                patch.object(flow, "_preferencias_prontas", return_value=""), \
+                patch.object(flow, "_restricoes_prontas", return_value="nenhuma restrição registrada"), \
+                patch.object(flow, "get_stock") as stock, \
+                patch.object(flow, "remaining", return_value=0), \
+                patch.object(flow, "_invocar_com_confirmacao", side_effect=invoke_agent):
+            result = flow.agente_receitas(state)
+
+        stock.invoke.assert_not_called()
+        self.assertIn("MODO_ESTOQUE=IGNORAR", captured["prompt"])
+        self.assertNotIn("ESTOQUE_ATUAL_CONFIRMADO", captured["prompt"])
+        self.assertNotIn("PREFERENCIAS=", captured["prompt"])
+        self.assertEqual(captured["history"], [])
+        self.assertFalse(any(e.get("ferramenta") == "get_stock" for e in result["evidencias"]))
+        envelope = json.loads(result["resposta_agente"])
+        self.assertNotIn("ingredientes_faltantes", envelope["receita"])
+        for ingredient in envelope["receita"]["ingredientes"]:
+            self.assertNotIn("tem_suficiente", ingredient)
+            self.assertNotIn("comparacao_confirmada", ingredient)
+        self.assertNotIn("falta comprar", result["resposta_final"])
+
+    def test_achocolatados_do_estoque_sao_uma_familia_e_nao_inventam_leite(self):
+        from app.schemas.flow import _orientacao_culinaria
+
+        guidance = _orientacao_culinaria(
+            "Faça uma receita usando o que tenho no estoque",
+            [
+                {"food_name": "achocolatado em pó, NESCAU"},
+                {"food_name": "Achocolatado Em Po Nesquik Lata Morango"},
+            ],
+        )
+        self.assertIn("mesma família culinária", guidance)
+        self.assertIn("Não há leite", guidance)
+        self.assertIn("não o acrescente a sopa", guidance)
+
+    def test_abobora_pedida_fica_ancorada_e_nao_recebe_achocolatado(self):
+        from app.schemas.flow import _orientacao_culinaria
+
+        guidance = _orientacao_culinaria(
+            "Quero uma receita com abóbora",
+            [{"food_name": "Nescau"}, {"food_name": "Nesquik"}],
+        )
+        self.assertIn("ÂNCORA DO PEDIDO", guidance)
+        self.assertIn("Não misture achocolatado/Nesquik à abóbora", guidance)
+
+    def test_arroz_ausente_e_marcado_como_compra_sem_substituicao_por_chocolate(self):
+        from app.schemas.flow import _orientacao_culinaria
+
+        guidance = _orientacao_culinaria(
+            "Me dê uma comida com arroz",
+            [{"food_name": "NESCAU"}, {"food_name": "Nesquik"}],
+        )
+        self.assertIn("arroz não consta no estoque confirmado", guidance)
+        self.assertIn("Não transforme o pedido em arroz doce com achocolatado", guidance)
+
+    def test_pedido_natural_de_receita_nao_depende_do_roteador_llm(self):
+        from app.schemas import flow
+
+        with patch.object(flow, "span", return_value=nullcontext()), \
+                patch.object(flow, "roteador_llm") as router:
+            for question in (
+                "Me dê uma comida com arroz",
+                "Faça uma receita usando itens do meu estoque",
+                "O que consigo preparar com o que tenho?",
+                "Sugira um prato usando o estoque",
+            ):
+                with self.subTest(question=question):
+                    state = {"trace_id": "0" * 32, "mensagem": question, "historico": []}
+                    result = flow.roteador(state)
+                    self.assertEqual(result["rota"], "receitas")
+
+        router.invoke.assert_not_called()
+
+    def test_pedido_de_prato_para_evento_continua_no_fluxo_de_eventos(self):
+        from langchain_core.messages import AIMessage
+
+        from app.schemas import flow
+
+        state = {"trace_id": "0" * 32, "mensagem": "Quero uma receita para o aniversário", "historico": []}
+        with patch.object(flow, "span", return_value=nullcontext()), \
+                patch.object(flow.roteador_llm, "invoke", return_value=AIMessage(content="eventos")):
+            result = flow.roteador(state)
+
+        self.assertEqual(result["rota"], "eventos")
+
+    def test_geracao_injeta_estoque_e_recalcula_suficiencia(self):
+        from app.schemas import flow
+
+        estoque = [{
+            "food_name": "Arroz", "quantity": 1, "package_quantity": None,
+            "unit_of_measure": "pacote", "expiry_date": "2099-01-01",
+        }]
+        envelope = {
+            "dominio": "receitas", "intencao": "Sugerir receita",
+            "resposta": "Você pode fazer arroz simples.",
+            "receita": {
+                "titulo": "Arroz simples", "porcoes": 2,
+                "ingredientes": [{"ingrediente": "Arroz", "quantidade_total": "1 pacote",
+                                  "tem_suficiente": False}],
+                "instrucoes": ["Cozinhe o arroz."],
+                "tempo_preparo_minutos": 20, "dificuldade": "fácil",
+            },
+        }
+        captured = {}
+
+        class InlineExecutor:
+            @staticmethod
+            def submit(function, *args):
+                future = Future()
+                future.set_result(function(*args))
+                return future
+
+        class FakeStockTool:
+            @staticmethod
+            def invoke(_arguments):
+                return json.dumps(estoque)
+
+        def invoke_agent(*args):
+            captured["prompt"] = args[1]
+            return json.dumps(envelope, ensure_ascii=False), 1, 1, []
+
+        state = {
+            "trace_id": "0" * 32, "mensagem": "Faça uma receita com os itens do meu estoque",
+            "historico": [], "account_id": 124, "household_account_id": 124,
+            "input_tokens": 0, "output_tokens": 0, "evidencias": [],
+        }
+        with patch.object(flow, "span", return_value=nullcontext()), \
+                patch.object(flow, "_PROFILE_READS", InlineExecutor()), \
+                patch.object(flow, "_preferencias_prontas", return_value=""), \
+                patch.object(flow, "_restricoes_prontas", return_value="nenhuma restrição registrada"), \
+                patch.object(flow, "get_stock", FakeStockTool()), \
+                patch.object(flow, "remaining", return_value=0), \
+                patch.object(flow, "_escolher_skill", return_value="receita-do-estoque"), \
+                patch.object(flow, "_invocar_com_confirmacao", side_effect=invoke_agent):
+            result = flow.agente_receitas(state)
+
+        self.assertIn('ESTOQUE_ATUAL_CONFIRMADO=' + json.dumps(estoque, ensure_ascii=False), captured["prompt"])
+        self.assertIn("ARBITRAGEM DE RECEITA", captured["prompt"])
+        self.assertIn("atenda primeiro ao objetivo", captured["prompt"])
+        self.assertIn("use o melhor item disponível como parte significativa", captured["prompt"])
+        self.assertIn('"tem_suficiente": true', result["resposta_agente"])
+        self.assertEqual(result["resposta_final"].count("Arroz"), 2)
+
+    def test_receita_incompleta_nao_deixa_pergunta_sem_estado_pendente(self):
+        from app.schemas.flow import _montar_sem_modelo
+
+        response = json.dumps({
+            "resposta": "", "receita": {
+                "titulo": "Arroz", "porcoes": 2,
+                "ingredientes": [{"ingrediente": "Arroz", "quantidade_total": "1 xícara"}],
+                "instrucoes": ["Cozinhe o arroz e adicione sal."],
+            },
+        }, ensure_ascii=False)
+
+        rendered = _montar_sem_modelo(response)
+        self.assertIn("Não vou apresentar essa versão incompleta", rendered)
+        self.assertNotIn("Posso completar", rendered)
+
+    def test_resposta_de_andamento_e_corrigida_antes_de_ser_exibida(self):
+        from app.schemas import flow
+
+        receita = {
+            "dominio": "receitas", "intencao": "Sugerir receita",
+            "resposta": "Arroz simples.",
+            "receita": {
+                "titulo": "Arroz simples", "porcoes": 2,
+                "ingredientes": [{"ingrediente": "Arroz", "quantidade_total": "1 pacote"}],
+                "instrucoes": ["Cozinhe o arroz."],
+                "tempo_preparo_minutos": 20, "dificuldade": "fácil",
+            },
+        }
+
+        class InlineExecutor:
+            @staticmethod
+            def submit(function, *args):
+                future = Future()
+                future.set_result(function(*args))
+                return future
+
+        class FakeStockTool:
+            @staticmethod
+            def invoke(_arguments):
+                return json.dumps([{
+                    "food_name": "Arroz", "quantity": 1,
+                    "package_quantity": None, "unit_of_measure": "pacote",
+                    "expiry_date": "2099-01-01",
+                }])
+
+        state = {
+            "trace_id": "0" * 32,
+            "mensagem": "Crie uma receita usando o que tenho no estoque",
+            "historico": [], "account_id": 124, "household_account_id": 124,
+            "input_tokens": 0, "output_tokens": 0, "evidencias": [],
+        }
+        with patch.object(flow, "span", return_value=nullcontext()), \
+                patch.object(flow, "_PROFILE_READS", InlineExecutor()), \
+                patch.object(flow, "_preferencias_prontas", return_value=""), \
+                patch.object(flow, "_restricoes_prontas", return_value="nenhuma restrição registrada"), \
+                patch.object(flow, "get_stock", FakeStockTool()), \
+                patch.object(flow, "remaining", return_value=60), \
+                patch.object(flow, "_escolher_skill", return_value="receita-do-estoque"), \
+                patch.object(flow, "_invocar_com_confirmacao", return_value=(
+                    "Consultei as preferências, mas preciso verificar seu estoque. Verificando o estoque",
+                    1, 1, [],
+                )), \
+                patch.object(flow, "_invocar_agente", return_value=(
+                    json.dumps(receita, ensure_ascii=False), 2, 2, [],
+                )) as repair:
+            result = flow.agente_receitas(state)
+
+        repair.assert_called_once()
+        self.assertIn("Arroz simples", result["resposta_final"])
+        self.assertNotIn("Verificando o estoque", result["resposta_final"])
+
+    def test_falha_na_comparacao_nao_usa_disponibilidade_alucinada(self):
+        from app.schemas import flow
+
+        response = json.dumps({
+            "dominio": "receitas", "intencao": "Sugerir receita",
+            "resposta": "Você já tem tudo.",
+            "receita": {
+                "titulo": "Arroz", "porcoes": 2,
+                "ingredientes": [{
+                    "ingrediente": "Arroz", "quantidade_total": "1 pacote",
+                    "tem_suficiente": True,
+                }],
+                "instrucoes": ["Cozinhe o arroz."],
+                "ingredientes_faltantes": ["Feijão"],
+            },
+        }, ensure_ascii=False)
+
+        aligned = flow._alinhar_receita_estoque(response, [{
+            "ferramenta": "ingredientes_para_comprar",
+            "conteudo": "FALHA: comparação do estoque não confirmada.",
+        }])
+        envelope = json.loads(aligned)
+        ingredient = envelope["receita"]["ingredientes"][0]
+        rendered = flow._formatar_receita(envelope["receita"])
+
+        self.assertIsNone(ingredient["tem_suficiente"])
+        self.assertFalse(ingredient["comparacao_confirmada"])
+        self.assertEqual(envelope["receita"]["ingredientes_faltantes"], [])
+        self.assertIn("quantidade no estoque a conferir", rendered)
+        self.assertNotIn("Para comprar:", rendered)

@@ -26,7 +26,10 @@ _assunto: ContextVar[dict | None] = ContextVar("assunto", default=None)
 _leituras: ContextVar[tuple | None] = ContextVar("leituras", default=None)
 _somente_leitura: ContextVar[bool] = ContextVar("somente_leitura", default=False)
 _reparos: ContextVar[list | None] = ContextVar("reparos", default=None)
+_autorizador_gravacao: ContextVar[object | None] = ContextVar("autorizador_gravacao", default=None)
+_gravacao_negada: ContextVar[bool] = ContextVar("gravacao_negada", default=False)
 _INCERTA = object()
+_NEGADA = object()
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +38,8 @@ class SemIdentidade(RuntimeError):
 
 
 @contextmanager
-def da_requisicao(perfil: int, conta: int, assunto: dict | None = None) -> Iterator[None]:
+def da_requisicao(perfil: int, conta: int, assunto: dict | None = None,
+                  autorizador_gravacao=None) -> Iterator[None]:
     marca_perfil = _perfil.set(perfil)
     marca_conta = _conta.set(conta)
     marca_gravacoes = _gravacoes.set(({}, RLock()))
@@ -43,6 +47,8 @@ def da_requisicao(perfil: int, conta: int, assunto: dict | None = None) -> Itera
     marca_leituras = _leituras.set(({}, RLock()))
     marca_reparo = _somente_leitura.set(False)
     marca_limite_reparos = _reparos.set([0, RLock()])
+    marca_autorizador = _autorizador_gravacao.set(autorizador_gravacao)
+    marca_gravacao_negada = _gravacao_negada.set(False)
 
     try:
         yield
@@ -54,6 +60,8 @@ def da_requisicao(perfil: int, conta: int, assunto: dict | None = None) -> Itera
         _leituras.reset(marca_leituras)
         _somente_leitura.reset(marca_reparo)
         _reparos.reset(marca_limite_reparos)
+        _autorizador_gravacao.reset(marca_autorizador)
+        _gravacao_negada.reset(marca_gravacao_negada)
 
 
 def reservar_reparo() -> bool:
@@ -83,6 +91,10 @@ def escrita_incerta() -> bool:
         return False
     with context[1]:
         return any(value is _INCERTA for value in context[0].values())
+
+
+def gravacao_negada() -> bool:
+    return _gravacao_negada.get()
 
 
 @contextmanager
@@ -154,6 +166,22 @@ def executar_gravacao(operacao: str, dados: dict, acao):
         if key not in results:
             if _somente_leitura.get():
                 return None
+            autorizar = _autorizador_gravacao.get()
+            if autorizar is not None:
+                try:
+                    aprovada = autorizar(operacao, deepcopy(stable))
+                except Exception as error:  # noqa: BLE001 -- falha do juiz bloqueia escrita.
+                    aprovada = False
+                    logger.warning("juiz de operação indisponível; escrita bloqueada",
+                                   extra={"stage": "write_control", "operation": operacao,
+                                          "error_type": type(error).__name__})
+                if aprovada is not True:
+                    results[key] = _NEGADA
+                    _somente_leitura.set(True)
+                    _gravacao_negada.set(True)
+                    logger.info("juiz negou ou não confirmou operação; escrita bloqueada",
+                                extra={"stage": "write_control", "operation": operacao})
+                    return None
             try:
                 result = acao()
             except Exception as error:  # noqa: BLE001 -- resultado de escrita desconhecido exige não repetir.
@@ -170,4 +198,4 @@ def executar_gravacao(operacao: str, dados: dict, acao):
                     with reads[1]:
                         reads[0].clear()
             return result
-        return None if results[key] is _INCERTA else results[key]
+        return None if results[key] is _INCERTA or results[key] is _NEGADA else results[key]

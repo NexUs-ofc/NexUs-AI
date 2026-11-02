@@ -11,7 +11,10 @@ from app.schemas.memory import encerrar_sessao
 from ..auth.dependencies import get_current_user
 from ..model.dto.chat_request import ChatRequest
 from ..model.dto.chat_response import ChatResponse
-from ..repository.mongodb.conversations import ConversationsRepository
+from ..repository.mongodb.conversations import (
+    ConversationsRepository,
+    ConversationStoreUnavailable,
+)
 
 router = APIRouter(prefix="/chat")
 logger = logging.getLogger(__name__)
@@ -47,12 +50,15 @@ def _casa_do_token(user: dict, informada: int | None) -> int | None:
 
 @router.post("/", response_model=ChatResponse)
 def send_message(request: ChatRequest, user: Annotated[dict, Depends(get_current_user)]):
-    resultado = executar_chat(
-        mensagem=request.mensagem,
-        session_id=request.session_id,
-        household_account_id=_casa_do_token(user, request.household_account_id),
-        account_id=user["user_id"],
-    )
+    try:
+        resultado = executar_chat(
+            mensagem=request.mensagem,
+            session_id=request.session_id,
+            household_account_id=_casa_do_token(user, request.household_account_id),
+            account_id=user["user_id"],
+        )
+    except ConversationStoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return ChatResponse(
         resposta=resultado["resposta"],

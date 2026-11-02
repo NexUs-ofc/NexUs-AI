@@ -13,11 +13,11 @@ orquestrador que escreve o texto final e um guardrail de saída.
 
 | camada | o que é |
 | --- | --- |
-| modelo | OpenAI `gpt-6-luna` nos nós do grafo, com Gemini e Groq como reservas ordenadas |
+| modelo | Provedor definido por `LLM_PROVIDER`; produção pode usar OpenAI, enquanto desenvolvimento/testes devem escolher Gemini ou Groq explicitamente |
 | embeddings | Gemini `gemini-embedding-2-preview`, para o Qdrant |
 | despensa | PostgreSQL: itens, produtos, categorias, perfis |
 | conversas e domínio | MongoDB: sessões, receitas, eventos, listas, métricas e traces |
-| base vetorial | Qdrant: FAQ, documentação, memória e preferências |
+| base vetorial | Qdrant: FAQ, memória de sessões encerradas e preferências |
 | tracing | LangSmith |
 
 ## Visão geral
@@ -96,16 +96,18 @@ O que o desenho não diz:
 
 ## Skills
 
-O que cada agente faz num pedido vem de Markdown, não de código:
+O roteiro especializado de cada agente vem de Markdown:
 
 ```
 skills/<agente>/<skill>/SKILL.md
 ```
 
 O frontmatter declara `name`, `description`, `dominio` e `ferramentas`; o
-corpo é o roteiro que entra no prompt. A pasta define o dono da skill, e quem
-escolhe entre elas é o próprio agente — a escolha costuma depender do que as
-ferramentas devolveram, e só ele tem isso na mão.
+corpo entra no prompt. A pasta define o domínio. Intenções reconhecíveis são
+encaminhadas deterministicamente por `app/core/skills.py` antes da chamada do
+agente; o modelo não escolhe a própria skill depois de consultar ferramentas.
+Uma skill pode declarar `ferramentas: []` quando o pedido proíbe consultas, como
+uma receita explicitamente independente do estoque.
 
 Ferramenta escrita errada no frontmatter não quebra nada: o loader avisa no
 log e segue sem ela. Já aconteceu de três skills de evento declararem
@@ -114,7 +116,9 @@ skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 `tests/test_skills.py` falha quando isso volta a acontecer.
 
 O chat de estoque consulta produtos, acompanha validade e remove itens com
-autorização. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
+autorização. Antes de uma ferramenta gravar, a operação e seus argumentos
+passam por uma autorização separada; falha, resposta ambígua ou negativa
+bloqueiam a persistência. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
 continua pelas telas do aplicativo, por cadastro manual, código de barras ou
 foto da nota fiscal.
 
@@ -193,10 +197,10 @@ Ou direto, do venv:
 python -m pytest -q tests
 ```
 
-A suíte não toca a rede: Mongo, Postgres, Groq e as ferramentas entram como
-dublês. O `startup` do app checa `pytest` em `sys.modules` e não aquece
-conexão nenhuma — antes disso, cada `TestClient` abria handshake com o Aiven e
-o Atlas e custava 25s por rodada sem testar nada.
+A suíte deve usar dublês para banco, modelos e ferramentas. A importação dos
+agentes pode carregar o MCP da Tavily, e spans de observabilidade podem gravar
+no Mongo se não forem substituídos nos testes; configure esses pontos antes de
+executar a suíte para mantê-la isolada.
 
 Os módulos novos são `unittest.TestCase`, e `python -m unittest discover -s tests`
 roda essa parte. Quatro módulos antigos são de função e só rodam sob pytest,
@@ -238,6 +242,25 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 Sem `JWT_SECRET_KEY` ou `API_KEY` o serviço não sobe, de propósito: faltando a
 chave, toda requisição tomaria 401 dizendo que a chave é inválida, e o erro
 pareceria do cliente em vez de configuração.
+
+## FAQ, memória e limites do assistente
+
+`scripts/bases/NexUs_FAQs.json` é a fonte que alimenta a coleção `nexus_faqs`.
+O agente de FAQ consulta somente essa coleção; Markdown e documentação técnica
+não completam respostas de FAQ. O JSON deve refletir apenas recursos observáveis
+no app e no backend. Afirmações de privacidade e retenção precisam coincidir
+com a política publicada pelo produto.
+
+Mensagens da conversa ativa ficam no Mongo, vinculadas à conta e à sessão. O
+prompt do agente recebe uma janela limitada do histórico para controlar custo e
+contexto; isso limita o que ele consegue recuperar espontaneamente numa conversa
+muito longa, mas não apaga as mensagens armazenadas. Ao encerrar uma sessão, o
+sistema pode salvar um resumo no Qdrant, filtrado pela conta, para buscas em
+conversas anteriores dessa mesma conta. Não existe uma memória global única
+compartilhada entre contas.
+
+Veja [escopo da IA, FAQ e memória](docs/escopo_ia_faq_memoria.md) para contratos,
+fontes e pontos que ainda dependem de confirmação do produto.
 
 
 ## Receitas salvas e listas de compras

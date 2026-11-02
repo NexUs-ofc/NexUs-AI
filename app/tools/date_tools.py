@@ -10,6 +10,7 @@ import calendar
 import json
 import re
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from langchain.tools import tool
 
@@ -50,7 +51,9 @@ QUANTIDADE_RELATIVA = re.compile(
 
 
 def _hoje() -> date:
-    return datetime.now().astimezone().date()
+    # Render executa em UTC; datas relativas precisam seguir o fuso do usuário
+    # no Brasil para "amanhã" não mudar perto da meia-noite local.
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).date()
 
 
 def _limpar(texto: str) -> str:

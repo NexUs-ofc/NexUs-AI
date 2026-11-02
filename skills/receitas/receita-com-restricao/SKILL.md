@@ -1,6 +1,6 @@
 ---
 name: Receita com restrição
-description: Adapta a receita à restrição alimentar da pessoa ou troca um ingrediente que ela pediu para substituir. Use quando houver alergia, dieta, intolerância, quando a pessoa disser que não gosta de um ingrediente, ou pedir explicitamente para trocar um ingrediente.
+description: Adapta ou confere uma receita existente conforme restrições, substituições ou pedido de completar/corrigir. Use para alergia, dieta, intolerância, troca de ingrediente ou para revisar uma receita cuja informação esteja incompleta.
 metadata:
   dominio: receitas
   rota: receitas
@@ -14,7 +14,8 @@ metadata:
 ## Quando assumir esta skill
 
 A pessoa tem restrição alimentar, alergia ou dieta, diz que não gosta de um
-ingrediente, ou pede para trocar um ingrediente específico da receita.
+ingrediente, pede para trocar um ingrediente específico, ou pede para revisar,
+completar ou corrigir uma receita existente.
 
 A restrição do perfil vem na linha RESTRICOES da entrada e vale mesmo que a
 pessoa não a repita no pedido.
@@ -26,8 +27,12 @@ pessoa não a repita no pedido.
 2. `get_stock`, para saber com o que ela conta.
 3. `buscar_historico` SOMENTE se ela se referir a algo dito em conversa
    anterior.
-4. `tavily_search` SOMENTE para achar o substituto de um ingrediente. Nunca
-   antes de `get_stock`, e nunca para buscar a receita inteira.
+4. Use `tavily_search` SOMENTE para achar o substituto de um ingrediente. Nunca
+   antes de `get_stock`, e nunca para buscar a receita inteira. Se a ferramenta
+   não estiver disponível, não diga que pesquisou nem invente fonte ou
+   confirmação: sugira apenas uma substituição culinária comum que conheça com
+   segurança. Se não tiver confiança, diga que não consegue confirmar um
+   substituto adequado.
 5. `escalar_quantidades` ao ajustar as quantidades do substituto.
 
 ## Regras
@@ -35,6 +40,19 @@ pessoa não a repita no pedido.
 - Restrição alimentar não é preferência: ingrediente proibido não entra na
   receita em nenhuma quantidade, nem como opcional, nem "a gosto".
 - Ao substituir, diga o que saiu, o que entrou e o que muda no preparo.
+- Ao revisar uma receita, preserve o prato e avalie somente a lacuna indicada.
+  Se houver uma receita completa no pedido ou no histórico, não a troque por
+  uma sugestão do estoque. Se só houver uma referência vaga (por exemplo,
+  "o preparo usa sal, mas não informa a quantidade") e não houver receita no
+  pedido nem no histórico, diga que precisa ver a receita para completá-la com
+  segurança. Não invente outro prato nem trate essa solicitação como receita
+  nova baseada no estoque.
+- "Está completa para ser salva?" é uma pergunta de avaliação, não autorização
+  para salvar. Explique o que está presente ou falta e nunca chame ferramenta
+  de gravação sem pedido explícito para salvar.
+- Quando a receita fornecida tiver dados suficientes para sugerir uma
+  quantidade ausente, identifique o valor como sugestão culinária, explique a
+  referência usada e não afirme que era o valor original da receita.
 - Se não houver substituto seguro para a restrição, diga isso. Não aproxime.
 - Você não dá conselho médico nem nutricional. Restrição informada é seguida,
   não avaliada nem questionada.

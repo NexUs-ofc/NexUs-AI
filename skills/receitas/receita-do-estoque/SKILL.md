@@ -29,10 +29,16 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
 2. `get_stock` já traz a validade de cada item, e você tem a data de hoje no
    contexto. O que está vencido ou vencendo sai dessa lista por comparação —
    não existe ferramenta a chamar para isso.
-3. Escolha o prato. Se a pessoa pediu um prato ou um tipo ("uma carne
-   gostosa"), é ele, guiado por PREFERENCIAS. Se o pedido é aberto ("o que
-   faço hoje?"), prefira um prato com o que ela já tem, priorizando validade
-   curta. Coerência vem antes de aproveitar estoque.
+3. Preserve primeiro o objetivo explícito. Se a pessoa pediu um prato ou tipo
+   específico ("uma carne gostosa"), faça esse prato. Se pediu explicitamente
+   uma receita com o que há no estoque, use os itens confirmados como base,
+   mesmo que sejam poucos ou pouco variados: escolha o preparo culinariamente
+   mais coerente que realmente os use e explique a limitação. Se pediu apenas
+   uma sugestão aberta, escolha uma receita adequada ao perfil. Considere os
+   itens compatíveis como preferência, mas não sacrifique a qualidade nem force
+   uma combinação estranha quando o estoque tiver pouca variedade. Só trate o
+   uso do estoque como requisito quando a pessoa pedir explicitamente uma receita
+   com o que tem nele.
 4. `escalar_quantidades` SOMENTE se a pessoa pediu um número de porções
    diferente do da receita.
 
@@ -46,19 +52,47 @@ Não assuma esta skill se houver restrição alimentar ou pedido de substituiç�
 - **Vencido não entra na receita** (compare `expiry_date` com a data de hoje),
   nem nos ingredientes nem nas `instrucoes`. Cite uma vez no fim, para
   descarte.
-- Se o não vencido não dá prato, diga o que dá, avise do vencido e ofereça a
-  lista de compras.
+- Quando o pedido exigir usar o estoque e houver poucos itens compatíveis,
+  procure um preparo real que use o melhor deles (por exemplo, bebida ou
+  sobremesa se só houver achocolatado), sem inventar combinações. Diga qual é
+  a limitação e o que falta. Não descarte o objetivo em favor de uma receita
+  genérica que ignora os itens disponíveis.
 - O estoque é base, não prisão. Se a pessoa pediu um prato, faça esse
   prato: o que ela não tem entra em `ingredientes_faltantes` e, em
   `recomendacao`, diga o que comprar ou o que do estoque substitui. Nunca
   finja que tem o que falta.
 - Item do estoque só entra se combina com o prato. Não force ingrediente na
   receita só porque ele está em casa.
+- Em pedido aberto sem exigência de usar o estoque, escolha primeiro um prato
+  coerente e agradável. Se os poucos itens disponíveis não derem uma boa receita,
+  deixe o estoque de lado em vez de inventar uma mistura; não afirme que os
+  ingredientes escolhidos estão disponíveis sem confirmação.
 - Ingrediente que a pessoa não tem entra em `ingredientes_faltantes`, nunca
   some da lista.
 - Se o estoque estiver vazio ou não der prato, sugira uma receita simples
   guiada por PREFERENCIAS, com tudo em `ingredientes_faltantes`, e ofereça
   montar a lista de compras.
+
+## Arbitragem de combinações
+
+Antes de fechar a receita, rascunhe duas ideias e escolha uma. Primeiro descarte
+as que não atendem ao objetivo e às restrições explícitos. Entre as restantes,
+prefira uma combinação culinariamente coerente que realmente aproveite o estoque
+quando isso foi pedido. Desconte pontos por ingredientes sem função e compras
+desnecessárias; nunca use mais itens como único critério de escolha.
+Mostre somente a opção escolhida, salvo se a pessoa pedir alternativas.
+
+- Se a pessoa nomear um prato ou ingrediente, ele é a âncora da receita. Não troque
+  o pedido para consumir algo aleatório que esteja na despensa.
+- Produtos da mesma função culinária não contam como diversidade. Nescau e Nesquik
+  juntos continuam sendo uma família de achocolatado; escolha um só.
+- Com estoque de achocolatado sem leite, prefira uma bebida ou sobremesa coerente,
+  marque leite como compra se a receita precisar dele e não o declare disponível.
+- Se o estoque não tiver variedade para uma refeição, diga isso diretamente e escolha
+  um lanche/bebida real que use o item disponível. Não invente prato principal.
+- Pedido de arroz sem arroz no estoque continua sendo uma receita de arroz com o arroz
+  marcado para compra; não use achocolatado como substituto nem alegue que veio do estoque.
+- Pedido de abóbora mantém a abóbora como protagonista e não combina com achocolatado.
 
 ## Conferência antes de responder
 
