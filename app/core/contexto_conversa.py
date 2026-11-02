@@ -14,8 +14,35 @@ def menciona_evento(texto: str) -> bool:
     return bool(re.search(r"\b(?:evento|churrasco|festa|aniversario)\b", normalizar(texto)))
 
 
+def pedido_evento_novo(texto: str) -> bool:
+    """Reconhece pedido de criação de um evento novo."""
+    texto = normalizar(texto)
+    verbos_evento = r"(?:crie?|criar|faca|fazer|farei|marque|marcar|agende|agendar|marcado|marcada|organize|organizar)"
+    return menciona_evento(texto) and bool(re.search(
+        rf"\b{verbos_evento}\b.{{0,60}}\bevento\b|\bevento\b.{{0,60}}\b{verbos_evento}\b", texto,
+    ))
+
+
+def pedido_evento_composto(texto: str) -> bool:
+    """Reconhece evento novo pedido junto de receita salva e compras."""
+    texto = normalizar(texto)
+    salva_receita = bool(re.search(
+        r"\breceita\b.{0,60}\b(?:salve?|salvar|salva|guardada|guardar)\b|"
+        r"\b(?:salve?|salvar|salva|guardar)\b.{0,60}\breceita\b", texto,
+    ))
+    lista_compras = bool(re.search(
+        r"\blista\b.{0,80}\b(?:compras?|ingredientes?)\b|"
+        r"\b(?:compras?|ingredientes?)\b.{0,80}\blista\b", texto,
+    ))
+    return pedido_evento_novo(texto) and salva_receita and lista_compras
+
+
 def pedido_lista_generico(texto: str) -> bool:
     texto = normalizar(texto).strip(" .!?\n")
+    if menciona_evento(texto) and re.search(r"\blista\b", texto) and re.search(
+        r"\b(?:compra|compras|ingrediente|ingredientes)\b", texto,
+    ):
+        return True
     return bool(re.fullmatch(
         r"(?:sim[, ]+)?(?:agora[, ]+)?(?:pode\s+)?(?:me\s+)?"
         r"(?:monte|monta|montar|crie|cria|criar|gere|gerar|faca|faz|fazer)\s+"
@@ -49,6 +76,13 @@ def _nova_receita(texto_normalizado: str) -> bool:
 
 
 def _referencia_assunto(texto_normalizado: str, assunto: dict) -> bool:
+    if (assunto.get("tipo") == "evento" and assunto.get("evento_pendente_criacao")
+            and re.fullmatch(
+                r"(?:\d+(?:[,.]\d+)?\s*(?:h|hora|horas|min|minuto|minutos)|"
+                r"(?:meia|uma|duas|tres|três|quatro)\s+horas?)\s*[.!? ]*",
+                texto_normalizado,
+            )):
+        return True
     # Uma confirmação curta responde à pergunta de esclarecimento anterior.
     # Sem este elo, "sim" virava um assunto novo e a receita perdia os dados
     # que a pessoa já tinha informado.
@@ -79,6 +113,8 @@ def _referencia_assunto(texto_normalizado: str, assunto: dict) -> bool:
 def resolver_assunto(historico: list[dict], mensagem: str) -> dict | None:
     atual = assunto_recente(historico)
     texto = normalizar(mensagem)
+    if pedido_evento_composto(mensagem):
+        return {"tipo": "evento", "pedido": mensagem}
     if menciona_evento(mensagem):
         if atual and atual["tipo"] == "evento" and _referencia_assunto(texto, atual):
             return atual
@@ -122,6 +158,11 @@ def assunto_do_turno(historico: list[dict], mensagem: str, envelope: dict,
         return pendente
     if de_evento:
         assunto = deepcopy(atual) if atual and atual["tipo"] == "evento" else {"tipo": "evento", "pedido": mensagem}
+        if not assunto.get("pedido"):
+            assunto["pedido"] = mensagem
+        intencao_evento = normalizar(str(envelope.get("intencao") or ""))
+        if "criar evento" in intencao_evento:
+            assunto["evento_pendente_criacao"] = bool(envelope.get("esclarecer"))
         if isinstance(evento, dict):
             anterior = assunto.get("evento") or {}
             old_id, new_id = anterior.get("_id") or anterior.get("id"), evento.get("_id") or evento.get("id")

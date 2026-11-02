@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage
 from app.auth import identidade
 from app.core.contexto_conversa import (
     assunto_do_turno,
+    pedido_evento_composto,
     pedido_lista_generico,
     resolver_assunto,
 )
@@ -185,3 +186,43 @@ class ShoppingContextTest(unittest.TestCase):
         sent = agent.invoke.call_args.args[0]["messages"][0]["content"]
         self.assertIn("alérgicos", sent)
         self.assertIn("porco", sent)
+
+    def test_pedido_composto_da_prioridade_ao_fluxo_de_eventos(self):
+        request = (
+            "Bom, amanha farei um evento para 6 pessoas, quero esse prato, gostaria de ter "
+            "essa receita salva, uma lista de compras com ingredientes que eu compraria, "
+            "e o evento marcado na minha casa para as 14h"
+        )
+        self.assertTrue(pedido_evento_composto(request))
+        self.assertTrue(pedido_lista_generico(request))
+        self.assertEqual(flow.decidir_rota({"mensagem": request, "rota": "receitas", "historico": []}), "eventos")
+        self.assertEqual(flow._escolher_skill("eventos", {"mensagem": request, "historico": []}),
+                         "evento-criar-completo")
+
+    def test_pergunta_duracao_antes_de_qualquer_escrita(self):
+        request = (
+            "Amanha farei um evento para 6 pessoas, quero esse prato, gostaria de ter "
+            "essa receita salva, uma lista de compras com ingredientes que eu compraria, "
+            "e o evento marcado na minha casa para as 14h"
+        )
+        state = {"trace_id": "trace-test", "historico": [], "mensagem": request,
+                 "evidencias": [], "input_tokens": 0, "output_tokens": 0}
+        with patch.object(flow, "span"), patch.object(flow, "_invocar_com_confirmacao") as invoke:
+            result = flow.agente_eventos(state)
+        self.assertIn("duração", result["resposta_final"])
+        invoke.assert_not_called()
+
+    def test_resposta_de_duracao_mantem_pedido_composto_pendente(self):
+        pending = {"tipo": "evento", "pedido": "Crie evento, salve a receita e monte lista de compras",
+                   "evento_pendente_criacao": True}
+        history = [{"role": "assistant", "content": "Qual a duração?", "assunto": pending}]
+        self.assertEqual(resolver_assunto(history, "2 horas"), pending)
+
+    def test_resposta_de_duracao_nao_confunde_horario_com_duracao(self):
+        request = "Amanha farei evento e marque para as 14h"
+        state = {"trace_id": "trace-test", "historico": [], "mensagem": request,
+                 "evidencias": [], "input_tokens": 0, "output_tokens": 0}
+        with patch.object(flow, "span"), patch.object(flow, "_invocar_com_confirmacao") as invoke:
+            result = flow.agente_eventos(state)
+        self.assertIn("duração", result["resposta_final"])
+        invoke.assert_not_called()

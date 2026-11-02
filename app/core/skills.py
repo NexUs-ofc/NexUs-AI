@@ -20,6 +20,8 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from .contexto_conversa import pedido_evento_composto
+
 from .prompts.prompt_base import (
     ENTRADA_PADRAO,
     ENVELOPE_SAIDA,
@@ -184,6 +186,8 @@ def escolher_skill(agente: str, pedido: str, contexto_tipo: str | None = None) -
         return "estoque-consultar", "consulta de estoque; padrão somente leitura"
 
     if agente == "eventos":
+        if pedido_evento_composto(pedido):
+            return "evento-criar-completo", "pedido composto: evento, receita salva e lista de compras"
         if re.search(r"\b(lista|listas)\b", texto):
             if re.search(r"\b(marcar|marque|comprad[oa]|renome|adicion|remov|tirar|progresso|como esta|status)\w*\b", texto):
                 return "lista-gerenciar", "consulta ou alteração de lista existente"
