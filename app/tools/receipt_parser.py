@@ -160,7 +160,7 @@ def parse_items(lines: list[str]) -> list[dict]:
         if m or e or code_text:
             if code_text:
                 digits = re.sub(r"[OGQILSZB]", lambda c: {"O": "0", "G": "6", "Q": "0", "I": "1", "L": "1", "S": "5", "Z": "2", "B": "8"}[c.group().upper()], code_text)
-                idx, ean = None, digits if ean_valid(digits) else None
+                _idx, ean = None, digits if ean_valid(digits) else None
                 if ean is None:
                     candidatos = ean_candidates(digits)
                     ean = candidatos[0] if len(candidatos) == 1 else None
