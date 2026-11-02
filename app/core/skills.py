@@ -196,7 +196,8 @@ def escolher_skill(agente: str, pedido: str, contexto_tipo: str | None = None) -
                 r"\b(receita|receitas|cardapio|menu|prato|adicion|remov|vincul|associad)\w*\b", texto):
             return "evento-receitas", "cardápio ou relação de receitas de evento"
         if re.search(r"\b(vou fazer|vamos fazer|vou organizar|planej|cri(?:e|a|ar)\s+(?:um\s+)?evento|"
-                     r"novo evento|marque um evento|organizar um evento|organize\s+(?:uma\s+)?festa)\w*\b", texto):
+                     r"novo evento|marque um evento|organizar\s+(?:um\s+)?(?:evento|festa)|"
+                     r"organize\s+(?:uma\s+)?festa)\w*\b", texto):
             return "evento-criar", "planejamento de um evento novo"
         return "evento-gerenciar", "consulta ou gestão de evento existente; padrão sem criação"
 

@@ -11,7 +11,7 @@ from dataclasses import FrozenInstanceError
 from typing import ClassVar
 
 from app.core.agents import AGENTES_DAS_SKILLS, CATALOGO_FERRAMENTAS
-from app.core.skills import SKILLS, Skill, catalogo, do_agente
+from app.core.skills import SKILLS, Skill, catalogo, do_agente, escolher_skill
 from app.schemas.flow import ROTAS, SKILL_PADRAO
 
 AGENTES_DE_DOMINIO = ("estoque", "receitas", "eventos")
@@ -27,7 +27,7 @@ class TestCarregamento(unittest.TestCase):
                 self.assertTrue(skill.titulo, "sem 'name'")
                 self.assertTrue(skill.descricao, "sem 'description'")
                 self.assertTrue(skill.dominio, "sem 'dominio'")
-                self.assertTrue(skill.ferramentas, "sem 'ferramentas'")
+                self.assertIsInstance(skill.ferramentas, tuple, "'ferramentas' deve ser lista")
                 self.assertTrue(skill.corpo.strip(), "corpo vazio")
 
     def test_a_pasta_define_o_agente(self):
@@ -148,6 +148,28 @@ class TestSkillPadrao(unittest.TestCase):
     def test_o_padrao_cobre_todo_agente_de_dominio(self):
         self.assertEqual(set(SKILL_PADRAO), set(AGENTES_DE_DOMINIO))
 
+    def test_escolha_deterministica_preserva_objetivo_da_skill(self):
+        casos = [
+            ("receitas", "Faça uma receita com o que tenho no estoque", None,
+             "receita-do-estoque"),
+            ("receitas", "Faça uma receita sem leite", None,
+             "receita-com-restricao"),
+            ("receitas", "Complete esta receita: falta a quantidade de sal", None,
+             "receita-com-restricao"),
+            ("receitas", "Esta receita está completa para ser salva?", None,
+             "receita-com-restricao"),
+            ("receitas", "Salve essa receita", "receita", "receita-anterior"),
+            ("eventos", "A receita está associada ao evento?", "evento",
+             "evento-receitas"),
+            ("estoque", "Quais produtos vencem esta semana?", None,
+             "estoque-validade"),
+            ("eventos", "Monte uma lista de compras", None, "lista-montar"),
+        ]
+        for agente, pedido, contexto, esperado in casos:
+            with self.subTest(agente=agente, pedido=pedido):
+                nome, _ = escolher_skill(agente, pedido, contexto)
+                self.assertEqual(nome, esperado)
+
     FERRAMENTAS_DE_ESCRITA: ClassVar[set[str]] = {
         "remove_product", "create_event", "cancel_event",
         "create_list", "update_list", "salvar_receita", "add_recipe",
@@ -174,6 +196,9 @@ class TestSkillPadrao(unittest.TestCase):
             {"add_product", "resolver_alimento", "get_foods", "estimar_validade"}.isdisjoint(ferramentas)
         )
         self.assertNotIn("estoque-registrar", SKILLS)
+
+    def test_skill_sem_estoque_nao_recebe_ferramentas(self):
+        self.assertEqual(SKILLS["receita-sem-estoque"].ferramentas, ())
 
     @unittest.expectedFailure
     def test_o_padrao_de_eventos_deveria_so_ler(self):
