@@ -1,8 +1,13 @@
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from queue import Empty, Queue
+from threading import Thread
+from typing import Literal
 
 from langchain.agents import create_agent
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field, ValidationError, create_model
 
 from ..tools.calc_tools import (
     calcular_percentual,
@@ -30,6 +35,7 @@ from ..tools.mongodb_tools import (
     remove_recipe,
     renomear_lista,
     update_description,
+    update_list,
 )
 from ..tools.pg_tools import (
     get_brand_info,
@@ -59,6 +65,13 @@ from .skills import SKILLS
 logger = logging.getLogger(__name__)
 
 TAVILY_HABILITADAS = {"tavily_search"}
+TAVILY_CARREGAMENTO_TIMEOUT_S = 5
+
+OPERACOES_DE_ESCRITA = {
+    "remove_product", "salvar_receita", "create_event", "postpone_event",
+    "update_description", "cancel_event", "add_recipe", "remove_recipe",
+    "create_list", "update_list", "alterar_item_lista", "renomear_lista",
+}
 
 
 def _reserva_do_modelo(reservas):
@@ -72,8 +85,9 @@ def _reserva_do_modelo(reservas):
 
 
 async def _carregar_tavily():
-
-    all_tools = await load_tavily_tools()
+    all_tools = await asyncio.wait_for(
+        load_tavily_tools(), timeout=TAVILY_CARREGAMENTO_TIMEOUT_S,
+    )
     return [_com_versao_sincrona(t) for t in all_tools if t.name in TAVILY_HABILITADAS]
 
 
@@ -99,26 +113,39 @@ def _com_versao_sincrona(tool):
 
 
 def carregar_tavily_tools():
+    resultado = Queue(maxsize=1)
 
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        tem_loop = False
-    else:
-        tem_loop = True
+    def carregar():
+        try:
+            resultado.put((True, asyncio.run(_carregar_tavily())))
+        except Exception as error:  # noqa: BLE001 -- a busca externa e opcional.
+            resultado.put((False, error))
 
-    try:
-        if not tem_loop:
-            return asyncio.run(_carregar_tavily())
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(asyncio.run, _carregar_tavily()).result()
-    except Exception:
-        logger.exception(
-            "Não foi possível carregar as tools da Tavily; "
-            "o agente de receitas segue sem busca na web."
+    # Uma chamada MCP que ignora cancelamento nao pode manter vivo o processo
+    # de reload do Uvicorn. A thread e daemon e o servidor segue sem busca web
+    # quando a Tavily nao responde dentro do prazo.
+    worker = Thread(target=carregar, name="tavily-tools-load", daemon=True)
+    worker.start()
+    worker.join(timeout=TAVILY_CARREGAMENTO_TIMEOUT_S + 1)
+    if worker.is_alive():
+        logger.warning(
+            "Tempo limite ao carregar as ferramentas Tavily; o agente continuará sem busca na web."
         )
         return []
+
+    try:
+        sucesso, valor = resultado.get_nowait()
+    except Empty:
+        logger.warning("A Tavily terminou sem retornar ferramentas; busca web desabilitada.")
+        return []
+    if sucesso:
+        return valor
+
+    logger.error(
+        "Não foi possível carregar as tools da Tavily; o agente de receitas segue sem busca na web.",
+        exc_info=(type(valor), valor, valor.__traceback__),
+    )
+    return []
 
 
 tavily_tools = carregar_tavily_tools()
@@ -171,6 +198,7 @@ CATALOGO_FERRAMENTAS = {
         add_recipe,
         remove_recipe,
         create_list,
+        update_list,
         get_list,
         renomear_lista,
         alterar_item_lista,
@@ -182,6 +210,96 @@ CATALOGO_FERRAMENTAS = {
     )
 }
 
+_FERRAMENTAS_DE_ESCRITA_AUSENTES = OPERACOES_DE_ESCRITA - set(CATALOGO_FERRAMENTAS)
+if _FERRAMENTAS_DE_ESCRITA_AUSENTES:
+    raise RuntimeError(
+        "Operações de escrita sem ferramenta registrada: "
+        + ", ".join(sorted(_FERRAMENTAS_DE_ESCRITA_AUSENTES))
+    )
+
+
+def _schema_argumentos_operacao(nome: str):
+    ferramenta = CATALOGO_FERRAMENTAS.get(nome)
+    if ferramenta is None:
+        raise ValueError(f"Operação sem ferramenta: {nome}")
+    schema = ferramenta.args_schema
+    if not isinstance(schema, type) or not issubclass(schema, BaseModel):
+        raise TypeError(f"A ferramenta {nome} precisa declarar um schema Pydantic.")
+    if nome == "create_event":
+        # A criação do evento aceita início/fim em texto e os normaliza para
+        # `data`; preserve os dois campos na proposta tipada.
+        schema = create_model(
+            "PropostaCreateEventArguments",
+            __base__=schema,
+            inicio=(str | None, None),
+            fim=(str | None, None),
+        )
+    return schema
+
+
+def _montar_schema_adiamento(operacoes: set[str] | None = None):
+    """Schema compacto, com operações permitidas específicas para cada skill."""
+    nomes = tuple(sorted(operacoes or OPERACOES_DE_ESCRITA))
+    ausentes = set(nomes) - OPERACOES_DE_ESCRITA
+    if not nomes or ausentes:
+        raise ValueError(f"Operações de adiamento inválidas: {sorted(ausentes)}")
+    tipo_operacao = Literal.__getitem__(nomes)
+    nome_modelo = "AdiamentoInput_" + "_".join(nomes)
+    return create_model(
+        nome_modelo,
+        operacao=(tipo_operacao, Field(description="Operação autorizada por esta skill.")),
+        argumentos=(dict[str, object], Field(description=(
+            "Parâmetros da operação selecionada. Informe somente os campos exigidos "
+            "pela ferramenta dessa operação."
+        ))),
+        justificativa=(str, Field(min_length=1, description="Pedido do usuário que justifica a operação.")),
+    )
+
+
+def _registrar_adiamento(operacao, argumentos, justificativa, schema, operacoes_permitidas):
+    from ..auth import identidade
+
+    try:
+        proposta = schema.model_validate({
+            "operacao": operacao,
+            "argumentos": argumentos,
+            "justificativa": justificativa,
+        })
+        if proposta.operacao not in operacoes_permitidas:
+            return "FALHA: esta skill não pode propor essa operação."
+        argumentos_tipados = _schema_argumentos_operacao(proposta.operacao).model_validate(
+            proposta.argumentos,
+        )
+    except ValidationError as error:
+        return f"FALHA: parâmetros inválidos para {operacao}: {error.errors(include_url=False)}"
+    if not proposta.justificativa.strip():
+        return "FALHA: informe por que esta operação atende ao pedido atual."
+    return identidade.adiar_operacao(
+        proposta.operacao, argumentos_tipados, proposta.justificativa,
+    )
+
+
+AdiamentoInput = _montar_schema_adiamento()
+
+
+@tool("adiar_operacao", args_schema=AdiamentoInput)
+def adiar_operacao_tool(operacao: str, argumentos: dict[str, object], justificativa: str) -> str:
+    """Propõe uma operação; o juiz valida antes de qualquer gravação."""
+    return _registrar_adiamento(
+        operacao, argumentos, justificativa, AdiamentoInput, OPERACOES_DE_ESCRITA,
+    )
+
+
+def _criar_tool_adiamento(operacoes: set[str]):
+    """Cria a única ferramenta de escrita da skill, limitada às operações dela."""
+    schema = _montar_schema_adiamento(operacoes)
+
+    def adiar(operacao: str, argumentos: dict[str, object], justificativa: str) -> str:
+        """Propõe uma operação permitida nesta skill para validação do juiz."""
+        return _registrar_adiamento(operacao, argumentos, justificativa, schema, operacoes)
+
+    return tool("adiar_operacao", args_schema=schema)(adiar)
+
 PREAMBULO_DO_AGENTE = {
     "receitas": RECEITAS_PREAMBULO,
     "eventos": EVENTS_PREAMBULO,
@@ -190,7 +308,8 @@ PREAMBULO_DO_AGENTE = {
 
 
 def _ferramentas_da_skill(skill):
-    faltando = [n for n in skill.ferramentas if n not in CATALOGO_FERRAMENTAS]
+    faltando = [n for n in skill.ferramentas
+                if n not in CATALOGO_FERRAMENTAS and n not in TAVILY_HABILITADAS]
 
     if faltando:
         logger.warning(
@@ -199,7 +318,12 @@ def _ferramentas_da_skill(skill):
             ", ".join(faltando),
         )
 
-    return [CATALOGO_FERRAMENTAS[n] for n in skill.ferramentas if n in CATALOGO_FERRAMENTAS]
+    ferramentas = [CATALOGO_FERRAMENTAS[n] for n in skill.ferramentas
+                   if n in CATALOGO_FERRAMENTAS and n not in OPERACOES_DE_ESCRITA]
+    operacoes_da_skill = set(skill.ferramentas) & OPERACOES_DE_ESCRITA
+    if operacoes_da_skill:
+        ferramentas.append(_criar_tool_adiamento(operacoes_da_skill))
+    return ferramentas
 
 
 def _montar_agentes_das_skills():
@@ -214,7 +338,17 @@ def _montar_agentes_das_skills():
                 estoque_reserva if skill.agente == "estoque" else specialist_reserva
             ),
             tools=_ferramentas_da_skill(skill),
-            system_prompt=skill.prompt(preambulo),
+            system_prompt=(skill.prompt(preambulo) +
+                           "\n\nAUTORIZAÇÃO DE ESCRITAS: consultas continuam disponíveis. "
+                           "Para qualquer alteração, use somente adiar_operacao e escolha uma "
+                           "das operações permitidas nesta skill. Envie os campos diretos "
+                           "{operacao, argumentos, justificativa}; argumentos contém somente "
+                           "os parâmetros da ferramenta selecionada. Nunca proponha uma operação "
+                           "de outra skill. "
+                           "A mensagem de retorno é apenas um recibo de proposta, nunca confirmação "
+                           "de sucesso. Em operações dependentes, use $op-N.campo para referenciar "
+                           "o resultado de uma proposta anterior. Só afirme sucesso após receber "
+                           "a evidência do executor."),
         )
 
     return agentes

@@ -4,7 +4,7 @@ from datetime import date
 from difflib import SequenceMatcher
 
 QTY_RE = re.compile(
-    r"(\d+(?:[.,]\d{1,3})?)[\s\-.*:]*(UN|UND|KG|G|L|LT|ML|PC|PCT|CX|FD|DZ)[\s\-.*:]*[XxK×][\s\-.*:]*(\d+[.,]\s?\d{2})",
+    r"(\d+(?:[.,]\d{1,3})?)[\s\-.*:]*(UNID|UND|UN|KG|G|ML|LT|L|PC|PCT|CX|FD|DZ|SACO|SAC|SC|POT|P[O0]|P[IT]|PT|TP)[\s\-.*:]*(?:[XxK×�][\s\-.*:]*)?(\d+[.,]\s?\d{2})",
     re.IGNORECASE,
 )
 ITEM_RE = re.compile(r"^\s*(\d{1,3})?\s*(\d{7,15})\s*([A-Za-z].*)$")
@@ -77,10 +77,18 @@ def split_index_ean(digits: str, expected_idx: int) -> tuple[int | None, str | N
     return None, None
 
 
+def _is_item_header(line: str) -> bool:
+    up = norm(line)
+    colunas = ("COD", "DESCR", "QTD", "UNID", "PREC", "TOTAL", "ITEM")
+    return sum(token in up for token in colunas) >= 3 and ("DESCR" in up or "COD" in up)
+
+
 def parse_header(lines: list[str]) -> dict:
     store, cnpj, purchase = None, None, None
     for ln in lines[:15]:
         up = ln.upper()
+        if _is_item_header(ln):
+            continue
         if any(k in up for k in HEADER_STOP):
             break
         if store is None and re.search(r"[A-Z]{4,}", up) and not CNPJ_RE.search(ln):
@@ -115,11 +123,12 @@ def parse_items(lines: list[str]) -> list[dict]:
     start = 0
     for i, ln in enumerate(lines):
         up = ln.upper()
-        if any(k in up for k in ("DESCRICAO", "CODIGO")) or ("QTD" in up and "TOTAL" not in up):
+        if _is_item_header(ln) or any(k in up for k in ("DESCRICAO", "CODIGO")) or ("QTD" in up and "TOTAL" not in up):
             start = i + 1
             continue
         if re.search(r"(?<!SUB)TOTAL", up):
             break
+
     items: list[dict] = []
     pending: dict | None = None
     orphan_desc: str | None = None
@@ -127,16 +136,43 @@ def parse_items(lines: list[str]) -> list[dict]:
     for ln in lines[start:]:
         if re.search(r"(?<!SUB)TOTAL", ln.upper()):
             break
+
         q = QTY_RE.search(ln)
-        m = ITEM_RE.match(ln) if not q else None
-        e = EAN_ONLY_RE.match(ln) if not q and not m else None
-        if m or e:
-            digits = (m or e).group(2)
-            _idx, ean = split_index_ean(((m or e).group(1) or "") + digits, seq)
-            if ean is None and ean_valid(digits):
-                ean = digits
-            raw_ean = ean or (digits[-13:] if len(digits) >= 13 else digits)
-            desc = clean_desc(m.group(3)) if m else ""
+        # Em muitos cupons codigo, descricao, quantidade e preco aparecem na
+        # MESMA linha. Separar o prefixo antes de procurar EAN impede que a
+        # presenca da quantidade esconda o produto e acabe criando item vazio.
+        prefix = ln[: q.start()].strip() if q else ln.strip()
+        m = ITEM_RE.match(prefix) if prefix else None
+        e = EAN_ONLY_RE.match(prefix) if prefix and not m else None
+        code_text = None
+        desc_text = None
+        if not m and not e and prefix:
+            # O OCR por vezes cola a descricao ao EAN e troca um digito do
+            # codigo por O/G/I/S. Recupera o limite do GTIN antes do texto.
+            for tamanho in (14, 13, 12, 8):
+                if len(prefix) <= tamanho:
+                    continue
+                candidato, resto = prefix[:tamanho], prefix[tamanho:]
+                if re.fullmatch(r"[0-9OGQILSZB]+", candidato, re.IGNORECASE) and re.match(r"^[A-Za-z]", resto):
+                    code_text, desc_text = candidato, resto
+                    break
+
+        if m or e or code_text:
+            if code_text:
+                digits = re.sub(r"[OGQILSZB]", lambda c: {"O": "0", "G": "6", "Q": "0", "I": "1", "L": "1", "S": "5", "Z": "2", "B": "8"}[c.group().upper()], code_text)
+                _idx, ean = None, digits if ean_valid(digits) else None
+                if ean is None:
+                    candidatos = ean_candidates(digits)
+                    ean = candidatos[0] if len(candidatos) == 1 else None
+                raw_ean = ean or digits
+                desc = clean_desc(desc_text or "")
+            else:
+                digits = ((m or e).group(1) or "") + (m or e).group(2)
+                _idx, ean = split_index_ean(digits, seq)
+                if ean is None and ean_valid(digits):
+                    ean = digits
+                raw_ean = ean or (digits[-13:] if len(digits) >= 13 else digits)
+                desc = clean_desc(m.group(3)) if m else ""
             if len(re.findall(r"[A-Za-z]", desc)) < 4 and orphan_desc:
                 desc = orphan_desc
             orphan_desc = None
@@ -151,10 +187,21 @@ def parse_items(lines: list[str]) -> list[dict]:
             }
             items.append(pending)
             seq += 1
-            continue
+        elif q and prefix and looks_like_desc(prefix):
+            # Alguns caixas imprimem o sequencial do item junto do nome.
+            prefix = re.sub(r"^\d{1,6}(?=[A-Za-z])", "", prefix)
+            # Alguns cupons nao imprimem EAN: "PAO MINEIRO 1 UN X 6,49".
+            # O parser antigo descartava a descricao porque testava a linha
+            # completa (que ja continha quantidade) como texto de produto.
+            orphan_desc = clean_desc(prefix)
+
         if q:
             qty, unit, price = to_float(q.group(1)), q.group(2).lower(), to_float(q.group(3))
-            unit = {"und": "un", "pc": "un", "pct": "un", "cx": "un", "fd": "un", "dz": "un", "lt": "l"}.get(unit, unit)
+            unit = {
+                "und": "un", "unid": "un", "pc": "un", "pct": "un", "cx": "un",
+                "fd": "un", "dz": "un", "sc": "un", "sac": "un", "saco": "un",
+                "po": "un", "p0": "un", "pot": "un", "pt": "un", "pi": "un", "tp": "un", "lt": "l",
+            }.get(unit, unit)
             if pending and pending["quantity"] is None:
                 pending.update(quantity=qty, unit=unit, unit_price=price)
             else:
@@ -162,13 +209,15 @@ def parse_items(lines: list[str]) -> list[dict]:
                     {"raw_text": orphan_desc or "", "ean": None, "raw_ean": None, "ean_candidates": [],
                      "quantity": qty, "unit": unit, "unit_price": price}
                 )
-                orphan_desc = None
             pending = None
+            orphan_desc = None
+            continue
+
+        if m or e or code_text:
             continue
         if looks_like_desc(ln):
             orphan_desc = clean_desc(ln)
     return items
-
 
 def repair_and_merge(items: list[dict]) -> tuple[list[dict], list[str]]:
     warnings: list[str] = []

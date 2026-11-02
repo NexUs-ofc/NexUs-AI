@@ -12,6 +12,10 @@ mcp_client = MultiServerMCPClient(
         "tavily": {
             "transport": "streamable_http",
             "url": "https://mcp.tavily.com/mcp",
+            # tools/list e uma dependência opcional no startup. Limite a conexão
+            # e o stream para que um MCP indisponível não prenda o processo.
+            "timeout": 5,
+            "sse_read_timeout": 5,
             "headers": {
                 "Authorization": f"Bearer {TAVILY_API_KEY}"
             },

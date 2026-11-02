@@ -42,6 +42,11 @@ class ShoppingContextTest(unittest.TestCase):
         self.source = resolver_assunto(self.history, "Monte uma lista de compras")
         self.source["lista_evento"] = True
 
+    def test_pedido_composto_com_prepare_do_evento_e_reconhecido(self):
+        self.assertTrue(pedido_evento_composto(
+            "Monte uma lista de compras e prepare o evento, salve essa receita também por favor"
+        ))
+
     def test_lista_generica_prioriza_churrasco_e_preserva_restricao(self):
         context = flow._contexto_receita({"historico": self.history, "mensagem": "Monte uma lista de compras"})
         self.assertIn("Churrasco de sábado", context)
@@ -136,7 +141,9 @@ class ShoppingContextTest(unittest.TestCase):
         self.assertEqual(len(captured), 1)
         self.assertEqual(captured[0]["title"], self.event.title)
         self.assertEqual(captured[0]["event_id"], str(self.key))
+        self.assertEqual(captured[0]["date"], "2026-11-01")
         self.assertEqual([i["name"] for i in captured[0]["array_list"]], ["Picanha", "Arroz"])
+        self.assertEqual(json.loads(result)["date"], "2026-11-01")
         self.assertEqual([i["quantity"] for i in captured[0]["array_list"]], [2, 500])
         self.assertEqual(json.loads(result)["title"], self.event.title)
 

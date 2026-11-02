@@ -116,9 +116,17 @@ skill de receitas para evento sem a ferramenta que lhe dá nome. Hoje
 `tests/test_skills.py` falha quando isso volta a acontecer.
 
 O chat de estoque consulta produtos, acompanha validade e remove itens com
-autorização. Antes de uma ferramenta gravar, a operação e seus argumentos
-passam por uma autorização separada; falha, resposta ambígua ou negativa
-bloqueiam a persistência. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
+autorização. A consulta de estoque atual usa `get_stock`, que exclui saldos
+zerados ou negativos. A skill de compras pode mostrar quantidade zero quando a
+pessoa pergunta o que precisa repor; essa lista representa faltas, não itens
+disponíveis. As ferramentas também devolvem `package_quantity` e
+`unit_of_measure`, para a resposta distinguir, por exemplo, unidades de
+pacotes de 500 g. Consultas atuais não substituem consultas ao histórico de
+transações.
+
+Antes de uma ferramenta gravar, a operação e seus argumentos passam por uma
+autorização separada; falha, resposta ambígua ou negativa bloqueiam a
+persistência. Nenhum agente adiciona produtos ao estoque pelo chat. A inclusão
 continua pelas telas do aplicativo, por cadastro manual, código de barras ou
 foto da nota fiscal.
 
@@ -126,7 +134,7 @@ foto da nota fiscal.
 
 | método | rota | autenticação | o que faz |
 | --- | --- | --- | --- |
-| `POST` | `/chat/` | `X-API-Key` + `Authorization: Bearer` | roda o grafo e devolve `resposta` e `session_id` |
+| `POST` | `/chat/` | `X-API-Key` + `Authorization: Bearer` | roda o grafo e devolve `resposta`, `session_id` e, quando houver próximo passo útil, até três `respostas_recomendadas` |
 | `DELETE` | `/chat/{session_id}` | `X-API-Key` + `Authorization: Bearer` | encerra a sessão e resume a memória |
 | `POST` | `/receipt/scan` | `X-API-Key` + `Authorization: Bearer` | lê a imagem da nota e devolve os itens |
 | `GET` | `/health/` | nenhuma | liveness, sem tocar em dependência externa |
@@ -155,6 +163,33 @@ quem tivesse a URL gastava OCR e três idas ao Groq por requisição.
 Falha do provedor não vira 500 opaco: cota estourada sai como `429`, rede
 caindo como `503`, recusa do Groq como `502`, cada um com a mensagem do
 provedor no corpo.
+
+### Limite de falhas de autenticação
+
+Dez respostas `401` consecutivas do mesmo IP em uma janela de 15 minutos
+fazem as requisições seguintes receberem `429` e o header `Retry-After`; o
+bloqueio dura 15 minutos. Uma resposta diferente de `401` limpa a sequência.
+No Render, o endereço vem do header `CF-Connecting-IP`; em execução local,
+usa-se o endereço da conexão. O estado do limitador fica na memória de cada
+processo, então reiniciar o serviço limpa os bloqueios e réplicas distintas não
+compartilham contadores. Se o serviço passar a escalar horizontalmente, mover
+esse estado para um armazenamento compartilhado antes de depender de uma cota
+global por IP.
+
+### Respostas recomendadas no chat
+
+O campo opcional `respostas_recomendadas` contém de uma a três frases que
+podem ser enviadas como próxima mensagem. O servidor omite o campo quando não
+há uma sugestão adequada ou quando a consulta falha. No Android, cada frase é
+apresentada como um atalho; tocar nele envia o texto como uma mensagem normal.
+
+### Leitura de nota fiscal
+
+O parser determinístico aceita linhas em que código, descrição, quantidade,
+unidade e preço vêm colados pelo OCR, além de abreviações comuns de unidade.
+Quando há mais de uma leitura plausível de código de barras, o produto fica
+marcado para revisão em vez de ser tratado como identificado com certeza. A
+conferência de produtos e quantidades continua necessária antes do cadastro.
 
 ## Rodando
 
@@ -196,6 +231,11 @@ Ou direto, do venv:
 ```bash
 python -m pytest -q tests
 ```
+
+Em Pull Requests direcionadas à `main`, o workflow `AI CI` executa `ruff check
+app/`, compila os módulos Python com `compileall` e valida a presença e o JSON
+das bases. Ele não executa chamadas reais aos provedores de LLM nem a suíte de
+integração completa.
 
 A suíte deve usar dublês para banco, modelos e ferramentas. A importação dos
 agentes pode carregar o MCP da Tavily, e spans de observabilidade podem gravar
