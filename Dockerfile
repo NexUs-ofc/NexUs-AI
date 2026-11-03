@@ -29,7 +29,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 1000 ceris
+    && useradd --create-home --uid 10001 ceris
 
 COPY --from=builder /opt/venv /opt/venv
 
@@ -47,14 +47,14 @@ RUN pip install -r requirements-dev.txt
 
 COPY --chown=ceris:ceris tests ./tests
 
-USER ceris
+USER 10001:10001
 
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
 
 
 FROM base AS runtime
 
-USER ceris
+USER 10001:10001
 
 EXPOSE 8000
 
