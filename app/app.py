@@ -10,6 +10,7 @@ from .auth.unauthorized_rate_limit import UnauthorizedRateLimiter, ip_cliente
 from .controller.admin import router as admin_router
 from .controller.chat import router as chat_router
 from .controller.health import router as health_router
+from .controller.photobooth import router as photobooth_router
 from .controller.receipt import router as receipt_router
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,7 @@ def falha_inesperada(request: Request, exc: Exception) -> JSONResponse:
 
 app.include_router(chat_router)
 app.include_router(receipt_router)
+app.include_router(photobooth_router)
 app.include_router(health_router, tags=["Health"])
 app.include_router(admin_router, tags=["Admin"])
 

@@ -102,7 +102,8 @@ O roteiro especializado de cada agente vem de Markdown:
 skills/<agente>/<skill>/SKILL.md
 ```
 
-O frontmatter declara `name`, `description`, `dominio` e `ferramentas`; o
+O frontmatter declara 
+ame`, `description`, `dominio` e `ferramentas`; o
 corpo entra no prompt. A pasta define o domínio. Intenções reconhecíveis são
 encaminhadas deterministicamente por `app/core/skills.py` antes da chamada do
 agente; o modelo não escolhe a própria skill depois de consultar ferramentas.
@@ -137,6 +138,8 @@ foto da nota fiscal.
 | `POST` | `/chat/` | `X-API-Key` + `Authorization: Bearer` | roda o grafo e devolve `resposta`, `session_id` e, quando houver próximo passo útil, até três `respostas_recomendadas` |
 | `DELETE` | `/chat/{session_id}` | `X-API-Key` + `Authorization: Bearer` | encerra a sessão e resume a memória |
 | `POST` | `/receipt/scan` | `X-API-Key` + `Authorization: Bearer` | lê a imagem da nota e devolve os itens |
+| `GET` | `/photobooth/status` | `X-PhotoBooth-Key` | estado seguro da instância Green API |
+| `POST` | `/photobooth/send` | `X-PhotoBooth-Key` | envia a foto JPEG composta como imagem e legenda WhatsApp |
 | `GET` | `/health/` | nenhuma | liveness, sem tocar em dependência externa |
 | `GET` | `/admin/session` | `X-Admin-Key` | confirma a chave no login do painel |
 | `GET` | `/admin/metrics?dias=7` | `X-Admin-Key` | a página da IA no painel, a partir do Mongo |
@@ -269,7 +272,8 @@ bloco em `argv`) e `tests/varredura_rotas.py` (varre todas as rotas do
 | `MONGODB_URI` | conversas, domínio, métricas e traces |
 | `QDRANT_DATABASE_URL`, `QDRANT_API_KEY` | base vetorial |
 | `JWT_SECRET_KEY` | os mesmos bytes do NexUs-Auth: hex de 64 caracteres ou Base64, nunca menos de 32 bytes |
-| `JWT_ALGORITHM`, `JWT_ISSUER` | padrão `HS256` e `nexus-auth` |
+| `JWT_ALGORITHM`, `JWT_ISSUER` | padrão `HS256` e 
+exus-auth` |
 | `API_KEY` | chave do `X-API-Key` no `/chat`; aceita lista separada por vírgula, para rotação |
 | `ADMIN_API_KEY` | chave do painel (`X-Admin-Key`), a mesma em todos os serviços; `TRACING_API_KEY` continua aceita no lugar |
 | `VALID_TOKENS` | atalho de desenvolvimento: tokens aceitos sem conferir assinatura. Vazio em produção |
@@ -285,7 +289,8 @@ pareceria do cliente em vez de configuração.
 
 ## FAQ, memória e limites do assistente
 
-`scripts/bases/NexUs_FAQs.json` é a fonte que alimenta a coleção `nexus_faqs`.
+`scripts/bases/NexUs_FAQs.json` é a fonte que alimenta a coleção 
+exus_faqs`.
 O agente de FAQ consulta somente essa coleção; Markdown e documentação técnica
 não completam respostas de FAQ. O JSON deve refletir apenas recursos observáveis
 no app e no backend. Afirmações de privacidade e retenção precisam coincidir
@@ -335,7 +340,9 @@ python scripts/scan_receipt.py nota.png     # leitor de nota pela linha de coman
 
 As bases que eles consomem ficam em `scripts/bases/`. A recarga usa IDs
 estáveis, publica todos os lotes e somente depois remove os documentos
-obsoletos da respectiva coleção (`nexus_faqs` ou `nexus_docs`). Reexecutar não
+obsoletos da respectiva coleção (
+exus_faqs` ou 
+exus_docs`). Reexecutar não
 acumula duplicatas. Uma falha de upload preserva os documentos anteriores.
 As coleções de memória e preferências não são alteradas. O PDF normativo
 possui uma cópia de texto em `scripts/bases/NexUs_doc.txt` para revisão.
@@ -353,9 +360,11 @@ modelo, 429 do Groq por hora, decisões do juiz, bloqueios dos guardrails e
 chamadas de cada tool. Só JSON — a apresentação é do painel.
 
 Para isso cada requisição grava, além do tempo e dos tokens, o modelo, o tipo
-do erro, a decisão do juiz (`aprovado`, `devolvido` ou `nao_confirmado`)
+do erro, a decisão do juiz (`aprovado`, `devolvido` ou 
+ao_confirmado`)
 e se o guardrail de entrada ou de saída bloqueou. A
-leitura de nota grava uma métrica com a rota `nota_fiscal`, que fica fora do
+leitura de nota grava uma métrica com a rota 
+ota_fiscal`, que fica fora do
 volume do chat.
 
 ## Jev, retries e controle de alucinações
@@ -369,7 +378,8 @@ confiança ≥ 0,6, fidelidade normalizada ≥ 0,85, confiança do score ≥ 0,5
 relevância ≥ 0,7 e segurança ≥ 0,9.
 
 Antes do score, código verifica recibos de ações anunciadas. Pedido, argumentos
-da chamada, `false`, `null` e falha de ferramenta não são prova de gravação.
+da chamada, `false`, 
+ull` e falha de ferramenta não são prova de gravação.
 Incerteza ou falha do Jev escala uma única vez ao LLM; indisponibilidade ou
 veredito inválido não aprovam a resposta. Reprovação após o único reparo encerra
 com mensagem honesta, sem novos ciclos.
@@ -445,3 +455,9 @@ ofuscação de dados pessoais.
 ## Containers e Kubernetes
 
 Consulte o [guia de containers e Kubernetes](docs/containers.md) para build, configuração e execução em qualquer cluster.
+
+## PhotoBooth Expotech e Green API
+
+A rota `POST /photobooth/send` recebe `name`, `phone`, `consent=true` e `photo` (`multipart/form-data`). A API valida a chave própria da cabine, o consentimento, o telefone e o JPEG; confere se a instância Green API está `authorized`; então envia a foto com a legenda `Obrigado por visitar nosso stand [nome]!💜`. A resposta `202` com `idMessage` confirma que a mídia entrou na fila da Green API, não que já foi entregue.
+
+Configure no servidor as variáveis `GREENAPI_API_URL`, `GREENAPI_MEDIA_URL`, `GREENAPI_ID_INSTANCE`, `GREENAPI_API_TOKEN_INSTANCE` e `PHOTOBOOTH_API_KEY` listadas em `.env.example`. Copie os dois endereços e o identificador da instância do painel Green API; mantenha o token só no servidor. A instância precisa estar autorizada no WhatsApp. `GET /photobooth/status` informa `stateInstance` sem revelar credenciais. Não use a chave da cabine como token Green API.
